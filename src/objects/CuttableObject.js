@@ -1,6 +1,8 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { SceneObject } from './SceneObject.js';
 
+const visibleBoundsCache = new Map();
+
 export class CuttableObject extends SceneObject {
   static DEFAULT_MINIMUM_CUT_WIDTH = 5;
   static DEFAULT_ALLOWED_CUT_ORIENTATIONS = ['vertical', 'horizontal'];
@@ -178,6 +180,9 @@ export class CuttableObject extends SceneObject {
       cutGap: this.cutGap,
       allowedCutOrientations: this.allowedCutOrientations,
     });
+    if (this.displayName) {
+      object.displayName = this.displayName;
+    }
     this.copyCuttableRotationTo(object);
 
     return object;
@@ -379,6 +384,13 @@ export class CuttableObject extends SceneObject {
   }
 
   getPieceVisibleTextureBounds(piece) {
+    const cacheKey = `${this.textureKey}|${piece.cropX},${piece.cropY},${piece.cropWidth},${piece.cropHeight}`;
+    const cached = visibleBoundsCache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
     const texture = this.scene.textures.get(this.textureKey);
     const source = texture?.getSourceImage?.();
 
@@ -428,12 +440,16 @@ export class CuttableObject extends SceneObject {
       return this.getPieceCropBounds(piece);
     }
 
-    return {
+    const bounds = {
       left: piece.cropX + left,
       right: piece.cropX + right,
       top: piece.cropY + top,
       bottom: piece.cropY + bottom,
     };
+
+    visibleBoundsCache.set(cacheKey, bounds);
+
+    return bounds;
   }
 
   getPieceCropBounds(piece) {

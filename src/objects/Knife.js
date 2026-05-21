@@ -7,9 +7,9 @@ const PIXEL = 2.5;
 const KNIFE_ROTATION = Phaser.Math.DegToRad(90);
 const KNIFE_TIP_LOCAL_X = -7.5;
 const KNIFE_TIP_LOCAL_Y = -75;
-const BLADE_HOLD_WIDTH = 38;
-const BLADE_HOLD_HEIGHT = 112;
-const BLADE_HOLD_OFFSET_Y = -24;
+const HANDLE_HOLD_WIDTH = 26;
+const HANDLE_HOLD_HEIGHT = 48;
+const HANDLE_HOLD_OFFSET_Y = 56;
 
 export class Knife extends CuttingObject {
   constructor(scene, x, y) {
@@ -54,7 +54,7 @@ export class Knife extends CuttingObject {
     this.sprite.setRotation(KNIFE_ROTATION);
     this.addDraggablePart(this.sprite);
     this.setCutTipOffset(KNIFE_TIP_LOCAL_X, KNIFE_TIP_LOCAL_Y);
-    this.setBladeHoldArea(BLADE_HOLD_WIDTH, BLADE_HOLD_HEIGHT, 0, BLADE_HOLD_OFFSET_Y);
+    this.setHoldArea(HANDLE_HOLD_WIDTH, HANDLE_HOLD_HEIGHT, 0, HANDLE_HOLD_OFFSET_Y);
     this.setDepth(this.restDepth);
   }
 

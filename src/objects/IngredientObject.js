@@ -8,14 +8,19 @@ export class IngredientObject extends RotatableObject {
 
     this.isIngredient = true;
     this.softness = 0.9;
-    this.restShadowOffset = 12;
-    this.dragShadowOffset = 18;
+    this.restShadowOffset = 6;
+    this.dragShadowOffset = 6;
     this.computedShadeParts = new Map();
-    this.computedShadeDarkAlpha = 0.68;
+    this.computedShadeDarkAlpha = 0.34;
     this.computedShadeLightAlpha = 0.16;
     this.computedShadePixelSize = 2;
     this.computedShadeBottomCoverage = 0.25;
+    this.computedShadeMaxPixels = 20;
     this.computedShadeDarken = 0.5;
+    this.computedShadeFadeTween = null;
+    this.computedShadeSpinFrames = null;
+    this.computedShadeSpinFrameRate = 60;
+    this.computedShadeRotationOverride = null;
   }
 
   addDraggablePart(part) {
@@ -30,9 +35,32 @@ export class IngredientObject extends RotatableObject {
 
   setObjectRotation(angle) {
     super.setObjectRotation(angle);
-    this.refreshComputedShade();
 
     return this;
+  }
+
+  refreshRotatedGeometry(options = {}) {
+    super.refreshRotatedGeometry(options);
+
+    if (options.transient) {
+      this.applyComputedShadeSpinFrame();
+    } else {
+      this.refreshComputedShade();
+    }
+
+    return this;
+  }
+
+  beforeObjectRotationTween(endRotation) {
+    this.stopComputedShadeFade();
+    this.createComputedShadeSpinFrames(this.rotation ?? 0, endRotation);
+    this.setComputedShadeAlpha(1);
+  }
+
+  afterObjectRotationTween() {
+    this.refreshComputedShade();
+    this.clearComputedShadeSpinFrames();
+    this.setComputedShadeAlpha(1);
   }
 
   addComputedShadePart(part) {
@@ -81,9 +109,175 @@ export class IngredientObject extends RotatableObject {
     return this;
   }
 
+  createComputedShadeSpinFrames(startRotation, endRotation) {
+    this.clearComputedShadeSpinFrames();
+
+    if (!this.computedShadeParts?.size) {
+      return this;
+    }
+
+    const frameCount = Math.max(
+      2,
+      Math.ceil((this.rotationDuration / 1000) * this.computedShadeSpinFrameRate),
+    );
+    const frames = [];
+    const previousOverride = this.computedShadeRotationOverride;
+
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+      const progress = frameCount === 1 ? 1 : frameIndex / (frameCount - 1);
+      const rotation = startRotation + (endRotation - startRotation) * progress;
+      const partTextures = new Map();
+
+      this.computedShadeRotationOverride = rotation;
+      const profile = this.getComputedShadeProfile();
+
+      if (!profile) {
+        continue;
+      }
+
+      this.computedShadeParts.forEach((shade, part) => {
+        if (!part.active || !shade.active) {
+          return;
+        }
+
+        const sourceData = this.getPartShadowSourceData(part);
+        const key = sourceData ? this.createComputedShadeTexture(sourceData, profile) : null;
+
+        if (key) {
+          partTextures.set(part, key);
+        }
+      });
+
+      frames.push({ rotation, partTextures });
+    }
+
+    this.computedShadeRotationOverride = previousOverride;
+
+    if (frames.length) {
+      this.computedShadeSpinFrames = {
+        startRotation,
+        endRotation,
+        frames,
+        currentFrameIndex: -1,
+      };
+      this.applyComputedShadeSpinFrame();
+    }
+
+    return this;
+  }
+
+  applyComputedShadeSpinFrame() {
+    const spinFrames = this.computedShadeSpinFrames;
+
+    if (!spinFrames?.frames.length) {
+      return this;
+    }
+
+    const span = spinFrames.endRotation - spinFrames.startRotation;
+    const rawProgress = Math.abs(span) < 0.0001
+      ? 1
+      : ((this.rotation ?? 0) - spinFrames.startRotation) / span;
+    const progress = Math.max(0, Math.min(1, rawProgress));
+    const frameIndex = Math.min(
+      spinFrames.frames.length - 1,
+      Math.max(0, Math.round(progress * (spinFrames.frames.length - 1))),
+    );
+
+    if (frameIndex === spinFrames.currentFrameIndex) {
+      return this;
+    }
+
+    const frame = spinFrames.frames[frameIndex];
+
+    spinFrames.currentFrameIndex = frameIndex;
+    frame.partTextures.forEach((key, part) => {
+      const shade = this.computedShadeParts.get(part);
+
+      if (!shade?.active) {
+        return;
+      }
+
+      shade.setTexture(key);
+      this.copyComputedShadeCrop(part, shade);
+      this.syncComputedShadePart(part, shade);
+      shade.setAlpha(1);
+    });
+
+    return this;
+  }
+
+  clearComputedShadeSpinFrames() {
+    if (!this.computedShadeSpinFrames?.frames) {
+      this.computedShadeSpinFrames = null;
+      return this;
+    }
+
+    this.computedShadeSpinFrames.frames.forEach((frame) => {
+      frame.partTextures.forEach((key) => {
+        if (key && this.scene.textures.exists(key)) {
+          this.scene.textures.remove(key);
+        }
+      });
+      frame.partTextures.clear();
+    });
+
+    this.computedShadeSpinFrames = null;
+
+    return this;
+  }
+
+  getComputedShadeTargets() {
+    if (!this.computedShadeParts?.size) {
+      return [];
+    }
+
+    return [...this.computedShadeParts.values()].filter((shade) => shade.active);
+  }
+
+  setComputedShadeAlpha(alpha) {
+    this.stopComputedShadeFade();
+    this.getComputedShadeTargets().forEach((shade) => {
+      shade.setAlpha(alpha);
+    });
+
+    return this;
+  }
+
+  fadeComputedShadeTo(alpha, duration, ease) {
+    const targets = this.getComputedShadeTargets();
+
+    this.stopComputedShadeFade();
+
+    if (!targets.length) {
+      return this;
+    }
+
+    this.computedShadeFadeTween = this.scene.tweens.add({
+      targets,
+      alpha,
+      duration,
+      ease,
+      onComplete: () => {
+        this.computedShadeFadeTween = null;
+      },
+    });
+
+    return this;
+  }
+
+  stopComputedShadeFade() {
+    if (!this.computedShadeFadeTween) {
+      return;
+    }
+
+    this.computedShadeFadeTween.stop();
+    this.computedShadeFadeTween = null;
+  }
+
   getComputedShadeProfile() {
     let minY = Infinity;
     let maxY = -Infinity;
+    const bottomByX = new Map();
 
     this.computedShadeParts.forEach((_shade, part) => {
       const sourceData = this.getPartShadowSourceData(part);
@@ -92,9 +286,16 @@ export class IngredientObject extends RotatableObject {
         return;
       }
 
-      this.forEachVisibleSourcePixel(part, sourceData, (_x, _y, screenY) => {
+      this.forEachVisibleSourcePixel(part, sourceData, (_x, _y, screenX, screenY) => {
         minY = Math.min(minY, screenY);
         maxY = Math.max(maxY, screenY);
+
+        const bucket = Math.round(screenX);
+        const existing = bottomByX.get(bucket);
+
+        if (existing === undefined || screenY > existing) {
+          bottomByX.set(bucket, screenY);
+        }
       });
     });
 
@@ -106,7 +307,40 @@ export class IngredientObject extends RotatableObject {
       minY,
       maxY,
       spanY: Math.max(1, maxY - minY),
+      bottomByX,
     };
+  }
+
+  getLocalBottomY(profile, screenX) {
+    if (!profile.bottomByX || profile.bottomByX.size === 0) {
+      return profile.maxY;
+    }
+
+    const bucket = Math.round(screenX);
+    let best = profile.bottomByX.get(bucket);
+
+    if (best !== undefined) {
+      return best;
+    }
+
+    for (let offset = 1; offset <= 3; offset += 1) {
+      const lower = profile.bottomByX.get(bucket - offset);
+      const upper = profile.bottomByX.get(bucket + offset);
+
+      if (lower !== undefined && (best === undefined || lower > best)) {
+        best = lower;
+      }
+
+      if (upper !== undefined && (best === undefined || upper > best)) {
+        best = upper;
+      }
+
+      if (best !== undefined) {
+        return best;
+      }
+    }
+
+    return profile.maxY;
   }
 
   updateComputedShadePart(part, shade, profile) {
@@ -117,20 +351,28 @@ export class IngredientObject extends RotatableObject {
       return;
     }
 
-    const {
-      frameWidth,
-      frameHeight,
-      cropX,
-      cropY,
-    } = sourceData;
+    const key = this.createComputedShadeTexture(sourceData, profile);
+
+    if (!key) {
+      shade.setAlpha(0);
+      return;
+    }
+
+    this.replaceComputedShadeTexture(shade, key);
+    this.copyComputedShadeCrop(part, shade);
+    this.syncComputedShadePart(part, shade);
+    shade.setAlpha(1);
+  }
+
+  createComputedShadeTexture(sourceData, profile) {
+    const { frameWidth, frameHeight, cropX, cropY } = sourceData;
     const key = `computed-ingredient-shade-${computedShadeTextureId}`;
     const texture = this.scene.textures.createCanvas(key, frameWidth, frameHeight);
 
     computedShadeTextureId += 1;
 
     if (!texture) {
-      shade.setAlpha(0);
-      return;
+      return null;
     }
 
     const context = texture.getContext();
@@ -141,14 +383,16 @@ export class IngredientObject extends RotatableObject {
     this.paintComputedShadeBlocks(context, sourceData, cropX, cropY, profile);
 
     texture.refresh();
-    this.replaceComputedShadeTexture(shade, key);
-    this.copyComputedShadeCrop(part, shade);
-    this.syncComputedShadePart(part, shade);
-    shade.setAlpha(1);
+
+    return key;
   }
 
   paintComputedShadeBlocks(context, sourceData, cropX, cropY, profile) {
     const blockSize = Math.max(1, this.computedShadePixelSize);
+    const bandHeight = Math.min(
+      profile.spanY * this.computedShadeBottomCoverage,
+      this.computedShadeMaxPixels,
+    );
 
     for (let blockY = 0; blockY < sourceData.sourceHeight; blockY += blockSize) {
       for (let blockX = 0; blockX < sourceData.sourceWidth; blockX += blockSize) {
@@ -160,8 +404,11 @@ export class IngredientObject extends RotatableObject {
 
         const shadeProgress = (block.screenY - profile.minY) / profile.spanY;
         const lightAlpha = Math.max(0, (0.28 - shadeProgress) / 0.28) * this.computedShadeLightAlpha;
-        const darkStart = 1 - this.computedShadeBottomCoverage;
-        const darkProgress = Math.max(0, Math.min(1, (shadeProgress - darkStart) / this.computedShadeBottomCoverage));
+        const localBottomY = this.getLocalBottomY(profile, block.screenX);
+        const distanceFromBottom = localBottomY - block.screenY;
+        const darkProgress = bandHeight > 0
+          ? Math.max(0, Math.min(1, 1 - distanceFromBottom / bandHeight))
+          : 0;
         const darkAlpha = darkProgress * this.computedShadeDarkAlpha;
 
         if (lightAlpha > darkAlpha && lightAlpha > 0.015) {
@@ -188,6 +435,7 @@ export class IngredientObject extends RotatableObject {
     } = sourceData;
     const width = Math.min(blockSize, sourceWidth - blockX);
     const height = Math.min(blockSize, sourceHeight - blockY);
+    let screenXTotal = 0;
     let screenYTotal = 0;
     let redTotal = 0;
     let greenTotal = 0;
@@ -203,7 +451,10 @@ export class IngredientObject extends RotatableObject {
           continue;
         }
 
-        screenYTotal += this.getComputedShadeScreenY(sourceData, x, y);
+        const point = this.getComputedShadeScreenPoint(sourceData, x, y);
+
+        screenXTotal += point.screenX;
+        screenYTotal += point.screenY;
         redTotal += imageData.data[pixelIndex];
         greenTotal += imageData.data[pixelIndex + 1];
         blueTotal += imageData.data[pixelIndex + 2];
@@ -218,6 +469,7 @@ export class IngredientObject extends RotatableObject {
     return {
       width,
       height,
+      screenX: screenXTotal / visiblePixels,
       screenY: screenYTotal / visiblePixels,
       color: {
         r: redTotal / visiblePixels,
@@ -250,7 +502,7 @@ export class IngredientObject extends RotatableObject {
     const scaleX = part.scaleX ?? 1;
     const scaleY = part.scaleY ?? 1;
     const partRotation = part.rotation ?? 0;
-    const objectRotation = this.rotation ?? 0;
+    const objectRotation = this.computedShadeRotationOverride ?? this.rotation ?? 0;
     const partSin = Math.sin(partRotation);
     const partCos = Math.cos(partRotation);
     const objectSin = Math.sin(objectRotation);
@@ -264,7 +516,7 @@ export class IngredientObject extends RotatableObject {
           continue;
         }
 
-        const screenY = this.getComputedShadeScreenY(sourceData, x, y, {
+        const point = this.getComputedShadeScreenPoint(sourceData, x, y, {
           part,
           originX,
           originY,
@@ -276,12 +528,12 @@ export class IngredientObject extends RotatableObject {
           objectCos,
         });
 
-        callback(x, y, screenY);
+        callback(x, y, point.screenX, point.screenY);
       }
     }
   }
 
-  getComputedShadeScreenY(sourceData, x, y, transforms = null) {
+  getComputedShadeScreenPoint(sourceData, x, y, transforms = null) {
     const {
       cropX,
       cropY,
@@ -294,7 +546,7 @@ export class IngredientObject extends RotatableObject {
     const scaleX = transforms?.scaleX ?? part?.scaleX ?? 1;
     const scaleY = transforms?.scaleY ?? part?.scaleY ?? 1;
     const partRotation = part?.rotation ?? 0;
-    const objectRotation = this.rotation ?? 0;
+    const objectRotation = this.computedShadeRotationOverride ?? this.rotation ?? 0;
     const partSin = transforms?.partSin ?? Math.sin(partRotation);
     const partCos = transforms?.partCos ?? Math.cos(partRotation);
     const objectSin = transforms?.objectSin ?? Math.sin(objectRotation);
@@ -306,7 +558,10 @@ export class IngredientObject extends RotatableObject {
     const objectX = (part?.x ?? 0) + localPartX * partCos - localPartY * partSin;
     const objectY = (part?.y ?? 0) + localPartX * partSin + localPartY * partCos;
 
-    return objectX * objectSin + objectY * objectCos;
+    return {
+      screenX: objectX * objectCos - objectY * objectSin,
+      screenY: objectX * objectSin + objectY * objectCos,
+    };
   }
 
   syncComputedShadePart(part, shade) {
@@ -352,6 +607,9 @@ export class IngredientObject extends RotatableObject {
     if (!this.computedShadeParts) {
       return;
     }
+
+    this.stopComputedShadeFade();
+    this.clearComputedShadeSpinFrames();
 
     this.computedShadeParts.forEach((shade) => {
       const key = shade.computedShadeTextureKey;

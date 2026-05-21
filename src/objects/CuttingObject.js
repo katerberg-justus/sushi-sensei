@@ -19,14 +19,24 @@ export class CuttingObject extends RotatableObject {
   }
 
   handleDragStart(pointer) {
-    super.handleDragStart(pointer);
+    if (!super.handleDragStart(pointer)) {
+      return false;
+    }
+
     this.lastCutPoint = this.getCutPoint();
+    return true;
   }
 
   handleDrag(pointer, dragX, dragY) {
+    if (!this.isDragging) {
+      return false;
+    }
+
     const previousCutPoint = this.lastCutPoint || this.getCutPoint();
 
-    super.handleDrag(pointer, dragX, dragY);
+    if (!super.handleDrag(pointer, dragX, dragY)) {
+      return false;
+    }
 
     const nextCutPoint = this.getCutPoint();
     const distance = Phaser.Math.Distance.Between(
@@ -44,11 +54,14 @@ export class CuttingObject extends RotatableObject {
       });
       this.lastCutPoint = nextCutPoint;
     }
+
+    return true;
   }
 
   handleDragEnd(pointer) {
-    super.handleDragEnd(pointer);
+    const endedDrag = super.handleDragEnd(pointer);
     this.lastCutPoint = null;
+    return endedDrag;
   }
 
   showCutTrace(start, end) {
@@ -120,7 +133,7 @@ export class CuttingObject extends RotatableObject {
     return this;
   }
 
-  setBladeHoldArea(width, height, offsetX = 0, offsetY = 0) {
+  setHoldArea(width, height, offsetX = 0, offsetY = 0) {
     this.setCenteredHitbox(width, height, offsetX, offsetY);
 
     return this;

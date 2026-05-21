@@ -31,8 +31,10 @@ export const COLORS = {
   riceShadow: 0xd4c7ae,
   riceGrain: 0xcfc3ac,
   riceStroke: 0xd9d2c6,
-  salmon: 0xf25f4c,
-  salmonStroke: 0xb93a30,
+  salmon: 0xff9476,
+  salmonStroke: 0xd66449,
 };
 
 export const FONT_FAMILY = 'Arial, sans-serif';
+export const FONT_FAMILY_PIXEL = '"Press Start 2P", monospace';
+export const BITMAP_FONT_PIXEL = 'press-start-2p';

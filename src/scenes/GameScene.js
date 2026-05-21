@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { COLORS, SCENE_KEYS } from '../game/constants.js';
+import { BITMAP_FONT_PIXEL, COLORS, SCENE_KEYS } from '../game/constants.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
 import { Knife } from '../objects/Knife.js';
@@ -20,11 +20,218 @@ export class GameScene extends Phaser.Scene {
     board.setDisplaySize(width, height);
 
     this.riceBall = new RiceBall(this, width * 0.34, height * 0.48);
+    this.riceBall.displayName = 'Rice Ball';
     this.cuttableSalmon = new CuttableSalmon(this, width * 0.51, height * 0.47);
+    this.cuttableSalmon.displayName = 'Salmon';
     this.cuttableTamago = new CuttableTamago(this, width * 0.67, height * 0.48);
+    this.cuttableTamago.displayName = 'Tamago';
     this.cuttableObjects = [this.cuttableSalmon, this.cuttableTamago];
     this.knife = new Knife(this, width * 0.5, height * 0.72);
+    this.knife.displayName = 'Knife';
     this.knife.on('cutstroke', this.handleCutStroke, this);
+
+    this.createNameSignboard();
+    this.positionNameSignboard();
+    this.scale.on('resize', this.positionNameSignboard, this);
+    this.input.keyboard.on('keydown-R', this.resetScene, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.positionNameSignboard, this);
+      this.input.keyboard.off('keydown-R', this.resetScene, this);
+    });
+    this.input.on('gameobjectover', this.handleObjectOver, this);
+    this.input.on('gameobjectout', this.handleObjectOut, this);
+  }
+
+  resetScene() {
+    this.scene.restart();
+  }
+
+  positionNameSignboard() {
+    if (!this.nameSignboard) {
+      return;
+    }
+
+    const sm = this.scale;
+    const gameWidth = sm.gameSize.width;
+    const gameHeight = sm.gameSize.height;
+    const parentWidth = sm.parentSize?.width || gameWidth;
+    const parentHeight = sm.parentSize?.height || gameHeight;
+    const zoom = Math.max(parentWidth / gameWidth, parentHeight / gameHeight) || 1;
+    const visibleWidth = Math.min(gameWidth, parentWidth / zoom);
+    const visibleHeight = Math.min(gameHeight, parentHeight / zoom);
+    const visibleLeft = (gameWidth - visibleWidth) / 2;
+    const visibleBottom = (gameHeight + visibleHeight) / 2;
+    const margin = 12;
+
+    const restX = Math.round(visibleLeft + margin);
+    const restY = Math.round(visibleBottom - margin - this.nameSignboard.signboardHeight);
+
+    this.nameSignboard.restX = restX;
+    this.nameSignboard.restY = restY;
+    this.nameSignboard.setX(restX);
+
+    if (!this.nameSignboard.visible) {
+      this.nameSignboard.setY(restY);
+    }
+  }
+
+  createNameSignboard() {
+    const PX = 4;
+    const boardCols = 44;
+    const boardRows = 10;
+    const boardWidth = boardCols * PX;
+    const boardHeight = boardRows * PX;
+
+    const container = this.add.container(0, 0);
+    container.setDepth(500);
+    container.setVisible(false);
+    container.signboardWidth = boardWidth;
+    container.signboardHeight = boardHeight;
+
+    const graphics = this.add.graphics();
+    const px = (col, row, w = 1, h = 1) => graphics.fillRect(col * PX, row * PX, w * PX, h * PX);
+
+    const outline = 0x6b4a32;
+    const plankDark = 0x8a5a3a;
+    const plankBase = 0xa67148;
+    const plankMid = 0xb9835a;
+    const plankHighlight = 0xd6a075;
+    const grainShadow = 0x6e4327;
+    const ironDark = 0x5a3a22;
+    const ironLight = 0xd8c0a0;
+
+    graphics.fillStyle(outline, 1);
+    px(0, 1, boardCols, boardRows - 2);
+    px(1, 0, boardCols - 2, 1);
+    px(1, boardRows - 1, boardCols - 2, 1);
+
+    graphics.fillStyle(plankDark, 1);
+    px(1, 1, boardCols - 2, boardRows - 2);
+
+    graphics.fillStyle(plankBase, 1);
+    px(2, 2, boardCols - 4, boardRows - 4);
+
+    graphics.fillStyle(plankMid, 1);
+    px(2, 3, boardCols - 4, boardRows - 6);
+
+    graphics.fillStyle(plankHighlight, 1);
+    px(2, 2, boardCols - 4, 1);
+
+    graphics.fillStyle(grainShadow, 1);
+    px(2, boardRows - 3, boardCols - 4, 1);
+
+    graphics.fillStyle(ironDark, 1);
+    px(3, 2, 2, 2);
+    px(boardCols - 5, 2, 2, 2);
+    px(3, boardRows - 4, 2, 2);
+    px(boardCols - 5, boardRows - 4, 2, 2);
+
+    graphics.fillStyle(ironLight, 1);
+    px(3, 2, 1, 1);
+    px(boardCols - 5, 2, 1, 1);
+    px(3, boardRows - 4, 1, 1);
+    px(boardCols - 5, boardRows - 4, 1, 1);
+
+    container.add(graphics);
+
+    const text = this.add.bitmapText(
+      Math.round(boardWidth / 2),
+      Math.round(boardHeight / 2) - 1,
+      BITMAP_FONT_PIXEL,
+      '',
+      8,
+    );
+
+    text.setOrigin(0.5);
+    text.setTint(0xf1d9a8);
+    container.add(text);
+
+    this.nameSignboard = container;
+    this.nameSignboardText = text;
+  }
+
+  handleObjectOver(_pointer, gameObject) {
+    const name = gameObject?.displayName;
+
+    if (!name || !gameObject.isIngredient || !this.nameSignboard) {
+      return;
+    }
+
+    this.nameSignboardText.setText(name);
+    this.showNameSignboard();
+  }
+
+  handleObjectOut(_pointer, gameObject) {
+    if (!this.nameSignboard) {
+      return;
+    }
+
+    if (gameObject && !gameObject.isIngredient) {
+      return;
+    }
+
+    if (gameObject && this.nameSignboardText.text !== gameObject.displayName) {
+      return;
+    }
+
+    this.hideNameSignboard();
+  }
+
+  showNameSignboard() {
+    const board = this.nameSignboard;
+
+    if (!board || board.isShowing) {
+      return;
+    }
+
+    if (this.nameSignboardTween) {
+      this.nameSignboardTween.stop();
+    }
+
+    const restY = board.restY ?? board.y;
+    const slideOffset = 14;
+
+    board.isShowing = true;
+    board.setVisible(true);
+    board.setAlpha(0);
+    board.setY(restY + slideOffset);
+
+    this.nameSignboardTween = this.tweens.add({
+      targets: board,
+      y: restY,
+      alpha: 1,
+      duration: 220,
+      ease: 'Cubic.Out',
+    });
+  }
+
+  hideNameSignboard() {
+    const board = this.nameSignboard;
+
+    if (!board || !board.isShowing) {
+      return;
+    }
+
+    if (this.nameSignboardTween) {
+      this.nameSignboardTween.stop();
+    }
+
+    const restY = board.restY ?? board.y;
+    const slideOffset = 14;
+
+    board.isShowing = false;
+
+    this.nameSignboardTween = this.tweens.add({
+      targets: board,
+      y: restY + slideOffset,
+      alpha: 0,
+      duration: 160,
+      ease: 'Cubic.In',
+      onComplete: () => {
+        board.setVisible(false);
+        board.setY(restY);
+      },
+    });
   }
 
   handleCutStroke(stroke) {

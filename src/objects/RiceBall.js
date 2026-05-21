@@ -24,6 +24,8 @@ export class RiceBall extends IngredientObject {
     shadowCore.setTint(0x6f5d48);
 
     const shadow = scene.add.container(0, this.restShadowOffset, [shadowEdge, shadowCore]);
+    shadow.compositionOffsetX = 0;
+    shadow.compositionOffsetY = 14;
     shadow.setPixelBlurProgress = (progress) => {
       shadowEdge.setAlpha(Phaser.Math.Linear(0, this.shadowEdgeAlpha, progress));
       shadowCore.setAlpha(Phaser.Math.Linear(0, this.shadowCoreAlpha, progress));
