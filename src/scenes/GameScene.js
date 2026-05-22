@@ -1,9 +1,11 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { BITMAP_FONT_PIXEL, COLORS, SCENE_KEYS } from '../game/constants.js';
+import { CuttableFish } from '../objects/CuttableFish.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
 import { Knife } from '../objects/Knife.js';
 import { Nigiri } from '../objects/Nigiri.js';
+import { NoriSheet } from '../objects/NoriSheet.js';
 import { RiceBall } from '../objects/RiceBall.js';
 
 export class GameScene extends Phaser.Scene {
@@ -21,14 +23,39 @@ export class GameScene extends Phaser.Scene {
     const board = this.add.image(0, 0, 'pixel-cutting-board').setOrigin(0);
     board.setDisplaySize(width, height);
 
-    this.riceBall = new RiceBall(this, width * 0.34, height * 0.48);
-    this.riceBall.displayName = 'Rice Ball';
-    this.cuttableSalmon = new CuttableSalmon(this, width * 0.51, height * 0.47);
-    this.cuttableSalmon.displayName = 'Salmon';
-    this.cuttableTamago = new CuttableTamago(this, width * 0.67, height * 0.48);
+    this.riceBalls = Array.from({ length: 10 }, (_value, index) => {
+      const columns = 2;
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const inwardLean = row * -8;
+      const riceBall = new RiceBall(
+        this,
+        width * 0.12 + column * 54 + inwardLean,
+        height * 0.26 + row * 45,
+      );
+
+      riceBall.displayName = 'Rice Ball';
+      return riceBall;
+    });
+    [this.riceBall] = this.riceBalls;
+    this.cuttableSalmon = new CuttableSalmon(this, width * 0.32, height * 0.42);
+    this.cuttableMaguro = new CuttableFish(this, width * 0.45, height * 0.42, { fishType: 'maguro' });
+    this.cuttableHamachi = new CuttableFish(this, width * 0.58, height * 0.42, { fishType: 'hamachi' });
+    this.cuttableTai = new CuttableFish(this, width * 0.71, height * 0.42, { fishType: 'tai' });
+    this.cuttableUnagi = new CuttableFish(this, width * 0.84, height * 0.42, { fishType: 'unagi' });
+    this.cuttableTamago = new CuttableTamago(this, width * 0.45, height * 0.58);
     this.cuttableTamago.displayName = 'Tamago';
-    this.nigiri = new Nigiri(this, width * 0.82, height * 0.48, { fishType: 'salmon' });
-    this.cuttableObjects = [this.cuttableSalmon, this.cuttableTamago];
+    this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58);
+    this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, { fishType: 'salmon' });
+    this.cuttableObjects = [
+      this.cuttableSalmon,
+      this.cuttableMaguro,
+      this.cuttableHamachi,
+      this.cuttableTai,
+      this.cuttableUnagi,
+      this.cuttableTamago,
+      this.noriSheet,
+    ];
     this.knife = new Knife(this, width * 0.5, height * 0.72);
     this.knife.displayName = 'Knife';
     this.knife.on('cutstroke', this.handleCutStroke, this);

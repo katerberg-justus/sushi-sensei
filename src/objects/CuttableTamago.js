@@ -33,6 +33,13 @@ export class CuttableTamago extends IngredientObject {
     this.restDepth = 20;
     this.variantIndex = variantIndex;
 
+    this.stackCategory = 'fish';
+    this.fishType = 'tamago';
+    this.fishDisplayName = 'Tamago';
+    this.acceptedStackCategories = ['wasabi'];
+    this.maxStackedItems = 1;
+    this.stackOffsetX = 0;
+
     CuttableObject.setupCuttable(this, textureKey, cropWidth, cropHeight, PIXEL, options);
 
     if (!options.skipInitialPiece && (cropX !== 0 || cropY !== 0)) {

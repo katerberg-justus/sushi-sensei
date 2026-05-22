@@ -1,4 +1,5 @@
 import { COLORS } from '../game/constants.js';
+import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
 import { IngredientObject } from './IngredientObject.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
@@ -10,21 +11,15 @@ const NIGIRI_HEIGHT = 27;
 const NIGIRI_WEIGHT_GRAMS = 34;
 
 const FISH_STYLES = {
-  salmon: {
-    displayName: 'Salmon',
-    base: COLORS.salmon,
-    stroke: COLORS.salmonStroke,
-    highlight: 0xffa384,
-    fat: 0xffd7c7,
-    glint: 0xffeadf,
-  },
-  tuna: {
-    displayName: 'Tuna',
-    base: 0xc94d5d,
-    stroke: 0x963744,
-    highlight: 0xe36c78,
-    fat: 0xf2a3a9,
-    glint: 0xffc9cc,
+  ...CUTTABLE_FISH_STYLES,
+  tuna: { ...CUTTABLE_FISH_STYLES.maguro, displayName: 'Tuna' },
+  tamago: {
+    displayName: 'Tamago',
+    base: 0xf1c35b,
+    stroke: 0xd49d3f,
+    highlight: 0xf6d56d,
+    fat: 0xfadf85,
+    glint: 0xffedaa,
   },
 };
 
@@ -103,6 +98,13 @@ export class Nigiri extends IngredientObject {
     context.fillRect(3, 10, 2, 5);
     context.fillRect(27, 9, 2, 6);
 
+    if (fishStyle.edgeAccent) {
+      context.fillStyle = toHexColor(fishStyle.edgeAccent);
+      context.fillRect(6, 6, 20, 1);
+      context.fillRect(4, 9, 24, 1);
+      context.fillRect(6, 17, 20, 1);
+    }
+
     context.fillStyle = toHexColor(fishStyle.highlight);
     [
       { x: 9, y: 6, w: 6 },
@@ -121,6 +123,21 @@ export class Nigiri extends IngredientObject {
         );
       }
     });
+
+    if (fishStyle.glaze) {
+      context.fillStyle = toHexColor(fishStyle.glaze);
+      context.fillRect(6, 9, 21, 1);
+      context.fillRect(5, 13, 22, 1);
+      context.fillRect(8, 17, 16, 1);
+
+      context.fillStyle = toHexColor(fishStyle.grill);
+      [10, 17, 24].forEach((x, index) => {
+        const top = 7 + jitter(1);
+
+        context.fillRect(x + jitter(1), top, 1, 3 + (index % 2));
+        context.fillRect(x + jitter(1), top + 6 + jitter(1), 1, 2 + (index % 2));
+      });
+    }
 
     context.fillStyle = toHexColor(fishStyle.fat);
     [

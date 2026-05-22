@@ -274,6 +274,10 @@ export class CuttableObject extends SceneObject {
         options.visualVariation = visualVariation;
       }
 
+      if (this.fishType) {
+        options.fishType = this.fishType;
+      }
+
       return new this.constructor(this.scene, position.x, position.y, options);
     }
 

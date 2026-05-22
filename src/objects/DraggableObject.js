@@ -71,6 +71,9 @@ export class DraggableObject extends SceneObject {
     this.suppressedDragPointerId = null;
     this.dragAnchorX = x;
     this.dragAnchorY = y;
+    this.dragFollowSmoothing = 0.18;
+    this.dragSnapDistance = 0.75;
+    this.dragUpdateHandler = null;
     this.dragShadowOffset = 6;
     this.restShadowOffset = 6;
     this.dragShadowAlpha = 0.72;
@@ -939,6 +942,8 @@ export class DraggableObject extends SceneObject {
       this.snapBackTween = null;
     }
 
+    this.stopDragPositionUpdates();
+
     if (this.shadow) {
       const shadow = this.shadow;
 
@@ -1083,6 +1088,7 @@ export class DraggableObject extends SceneObject {
     this.applyDragDepth();
     this.lastValidX = this.x;
     this.lastValidY = this.y;
+    this.startDragPositionUpdates();
     this.tweenDragLift(this.dragLift, this.dragLiftDuration, 'Quad.easeOut');
     return true;
   }
@@ -1094,7 +1100,6 @@ export class DraggableObject extends SceneObject {
 
     this.dragAnchorX = dragX;
     this.dragAnchorY = dragY;
-    this.updateDragPosition();
 
     if (this.canOccupyPosition(dragX, dragY)) {
       this.lastValidX = dragX;
@@ -1146,6 +1151,7 @@ export class DraggableObject extends SceneObject {
     }
 
     this.isDragging = false;
+    this.stopDragPositionUpdates();
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {
         this.applyRestingDepth();
@@ -1194,6 +1200,7 @@ export class DraggableObject extends SceneObject {
     this.stopDropImpact();
     this.ensureCompositionShadowReady();
     this.applyDragDepth();
+    this.startDragPositionUpdates();
     this.tweenDragLift(this.dragLift, this.dragLiftDuration, 'Quad.easeOut');
 
     this.manualDragMoveHandler = (movePointer) => {
@@ -1206,7 +1213,6 @@ export class DraggableObject extends SceneObject {
 
       this.dragAnchorX = x;
       this.dragAnchorY = y;
-      this.updateDragPosition();
 
       if (this.canOccupyPosition(x, y)) {
         this.lastValidX = x;
@@ -1239,6 +1245,7 @@ export class DraggableObject extends SceneObject {
     this.manualDragUpHandler = null;
     this.isManualDrag = false;
     this.isDragging = false;
+    this.stopDragPositionUpdates();
 
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {
@@ -1516,8 +1523,53 @@ export class DraggableObject extends SceneObject {
     );
   }
 
-  updateDragPosition() {
-    this.setPosition(this.dragAnchorX, this.dragAnchorY);
+  startDragPositionUpdates() {
+    if (this.dragUpdateHandler || !this.scene?.events) {
+      return;
+    }
+
+    this.dragUpdateHandler = (_time, delta) => {
+      if (this.isDragging) {
+        this.updateDragPosition(delta);
+      }
+    };
+
+    this.scene.events.on('update', this.dragUpdateHandler);
+  }
+
+  stopDragPositionUpdates() {
+    if (!this.dragUpdateHandler || !this.scene?.events) {
+      this.dragUpdateHandler = null;
+      return;
+    }
+
+    this.scene.events.off('update', this.dragUpdateHandler);
+    this.dragUpdateHandler = null;
+  }
+
+  updateDragPosition(delta = 16.67, snap = false) {
+    if (snap || !this.isDragging) {
+      this.setPosition(this.dragAnchorX, this.dragAnchorY);
+      return;
+    }
+
+    const frameRatio = Math.max(delta, 0) / 16.67;
+    const alpha = 1 - Math.pow(1 - this.dragFollowSmoothing, frameRatio);
+    const nextX = Phaser.Math.Linear(this.x, this.dragAnchorX, alpha);
+    const nextY = Phaser.Math.Linear(this.y, this.dragAnchorY, alpha);
+    const distance = Phaser.Math.Distance.Between(
+      nextX,
+      nextY,
+      this.dragAnchorX,
+      this.dragAnchorY,
+    );
+
+    if (distance <= this.dragSnapDistance) {
+      this.setPosition(this.dragAnchorX, this.dragAnchorY);
+      return;
+    }
+
+    this.setPosition(nextX, nextY);
   }
 
   tweenDragLift(targetLift, duration, ease, onComplete = null) {
@@ -1532,10 +1584,6 @@ export class DraggableObject extends SceneObject {
       ease,
       onUpdate: () => {
         this.setDragLift(this.currentLift);
-
-        if (this.isDragging) {
-          this.updateDragPosition();
-        }
       },
       onComplete: () => {
         this.dragLiftTween = null;

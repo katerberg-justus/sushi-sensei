@@ -1173,14 +1173,78 @@ export class IngredientObject extends RotatableObject {
     this.add(this.kneadMeter);
   }
 
+  getKneadMeterBounds() {
+    const bounds = this.getLocalVisualBounds();
+
+    (this.stackChildren ?? []).forEach((child) => {
+      const childBounds = child?.getLocalVisualBounds?.();
+
+      if (!childBounds) {
+        return;
+      }
+
+      Phaser.Geom.Rectangle.MergeRect(
+        bounds,
+        new Phaser.Geom.Rectangle(
+          child.x + childBounds.x,
+          child.y + childBounds.y,
+          childBounds.width,
+          childBounds.height,
+        ),
+      );
+    });
+
+    return bounds;
+  }
+
+  getLocalVisualBounds() {
+    const bounds = new Phaser.Geom.Rectangle(
+      this.hitbox.x,
+      this.hitbox.y,
+      this.hitbox.width,
+      this.hitbox.height,
+    );
+    const parts = this.draggableParts?.filter((part) => !part?.excludeFromCompositionShadow) ?? [];
+
+    if (!parts.length) {
+      return bounds;
+    }
+
+    const firstPart = parts[0];
+    const firstBounds = this.getPartLocalBounds(firstPart);
+
+    bounds.setTo(firstBounds.x, firstBounds.y, firstBounds.width, firstBounds.height);
+
+    parts.slice(1).forEach((part) => {
+      Phaser.Geom.Rectangle.MergeRect(bounds, this.getPartLocalBounds(part));
+    });
+
+    return bounds;
+  }
+
+  getPartLocalBounds(part) {
+    const width = part.compositionWidth ?? part.displayWidth ?? part.width ?? 0;
+    const height = part.compositionHeight ?? part.displayHeight ?? part.height ?? 0;
+    const centerX = part.x + (part.compositionOffsetX ?? 0);
+    const centerY = part.y + (part.compositionOffsetY ?? 0);
+
+    return new Phaser.Geom.Rectangle(
+      centerX - width / 2,
+      centerY - height / 2,
+      width,
+      height,
+    );
+  }
+
   updateKneadMeter() {
     if (!this.kneadMeter) {
       return;
     }
 
-    const centerX = this.hitbox.x + this.hitbox.width / 2;
-    const centerY = this.hitbox.y + this.hitbox.height / 2;
-    const radius = Math.max(this.hitbox.width, this.hitbox.height) * 0.62;
+    const bounds = this.getKneadMeterBounds();
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    const radius = Math.hypot(bounds.width / 2, bounds.height / 2) + 7;
     const startAngle = -Math.PI / 2;
     const endAngle = startAngle + Math.PI * 2 * this.kneadProgress;
 
