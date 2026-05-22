@@ -8,6 +8,7 @@ const SALMON_BASE_KEY = 'cuttable-salmon-pixel';
 const SALMON_VARIANT_POOL = 6;
 const SALMON_WIDTH = 58;
 const SALMON_HEIGHT = 28;
+const SALMON_WEIGHT_GRAMS = 56;
 
 export class CuttableSalmon extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -16,6 +17,7 @@ export class CuttableSalmon extends IngredientObject {
       height: SALMON_HEIGHT,
       pool: SALMON_VARIANT_POOL,
       paint: CuttableSalmon.paintTexture,
+      shapeNoise: { chipChance: 0.035, bumpChance: 0.024 },
     });
 
     const cropX = options.cropX ?? 0;
@@ -25,12 +27,16 @@ export class CuttableSalmon extends IngredientObject {
     const displayWidth = cropWidth * PIXEL;
     const displayHeight = cropHeight * PIXEL;
 
-    super(scene, x, y, displayWidth, displayHeight);
+    super(scene, x, y, displayWidth, displayHeight, options);
     this.setCenteredHitbox(displayWidth, displayHeight);
+    this.ownWeightGrams = options.weightGrams
+      ?? CuttableSalmon.getPieceWeightGrams(cropWidth, cropHeight);
     this.restDepth = 20;
     this.variantIndex = variantIndex;
 
     this.stackCategory = 'fish';
+    this.fishType = 'salmon';
+    this.fishDisplayName = 'Salmon';
     this.acceptedStackCategories = ['wasabi'];
     this.maxStackedItems = 1;
     this.stackOffsetX = 0;
@@ -48,6 +54,13 @@ export class CuttableSalmon extends IngredientObject {
     }
 
     this.refreshCompositionShadow();
+  }
+
+  static getPieceWeightGrams(cropWidth, cropHeight) {
+    const wholeArea = SALMON_WIDTH * SALMON_HEIGHT;
+    const pieceArea = cropWidth * cropHeight;
+
+    return (pieceArea / wholeArea) * SALMON_WEIGHT_GRAMS;
   }
 
   static paintTexture(context, rng) {

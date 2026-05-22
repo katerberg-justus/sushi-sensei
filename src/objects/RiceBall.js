@@ -1,5 +1,6 @@
 import { COLORS } from '../game/constants.js';
 import { IngredientObject } from './IngredientObject.js';
+import { Nigiri } from './Nigiri.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 1.8;
@@ -8,6 +9,7 @@ const RICE_BALL_VARIANT_POOL = 6;
 const RICE_BALL_WIDTH = 30;
 const RICE_BALL_HEIGHT = 26;
 const TOPPING_SIZE_TOLERANCE = 0.4;
+const RICE_BALL_WEIGHT_GRAMS = 20;
 
 export class RiceBall extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -16,10 +18,12 @@ export class RiceBall extends IngredientObject {
       height: RICE_BALL_HEIGHT,
       pool: RICE_BALL_VARIANT_POOL,
       paint: RiceBall.paintTexture,
+      shapeNoise: { chipChance: 0.026, bumpChance: 0.018 },
     });
 
-    super(scene, x, y, 54, 46);
+    super(scene, x, y, 54, 46, options);
     this.setCenteredHitbox(54, 46, 0, 3);
+    this.ownWeightGrams = options.weightGrams ?? RICE_BALL_WEIGHT_GRAMS;
     this.variantIndex = variantIndex;
     this.computedShadePixelSize = 1;
     this.computedShadeBottomProfileSmoothing = 2;
@@ -29,7 +33,7 @@ export class RiceBall extends IngredientObject {
     this.stackOffsetX = 0;
     this.stackOffsetY = -10;
     this.kneadableStackCategory = 'fish';
-    this.finishedStackDisplayName = 'Salmon Nigiri';
+    this.finishedStackDisplayName = 'Nigiri';
 
     this.sprite = scene.add.image(0, 0, textureKey);
     this.sprite.setScale(PIXEL);
@@ -38,6 +42,30 @@ export class RiceBall extends IngredientObject {
     this.addDraggablePart(this.sprite);
     this.refreshCompositionShadow();
     this.applyRestingDepth();
+  }
+
+  createKneadedStackResult(topping) {
+    if (topping?.stackCategory !== 'fish') {
+      return null;
+    }
+
+    const cuttableObjects = this.scene.cuttableObjects;
+    const cuttableIndex = Array.isArray(cuttableObjects) ? cuttableObjects.indexOf(topping) : -1;
+
+    if (cuttableIndex !== -1) {
+      cuttableObjects.splice(cuttableIndex, 1);
+    }
+
+    const fishType = topping.fishType ?? 'salmon';
+    const nigiri = new Nigiri(this.scene, this.x, this.y, {
+      fishType,
+      weightGrams: this.weightGrams,
+      variant: topping.variantIndex ?? this.variantIndex,
+    });
+
+    nigiri.setObjectRotation(this.rotation ?? 0);
+
+    return nigiri;
   }
 
   acceptsStackPlacement(other, placement = {}) {

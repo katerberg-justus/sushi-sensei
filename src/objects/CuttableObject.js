@@ -2,6 +2,7 @@ import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { SceneObject } from './SceneObject.js';
 
 const visibleBoundsCache = new Map();
+const visiblePixelCountCache = new Map();
 
 export class CuttableObject extends SceneObject {
   static DEFAULT_MINIMUM_CUT_WIDTH = 5;
@@ -157,6 +158,8 @@ export class CuttableObject extends SceneObject {
         ];
       }
 
+      this.assignCutPieceWeights(cutPieces);
+
       return true;
     });
 
@@ -254,16 +257,24 @@ export class CuttableObject extends SceneObject {
 
   createReplacementCuttable(position, piece) {
     if (this.addDraggablePart && this.constructor !== CuttableObject) {
-      return new this.constructor(this.scene, position.x, position.y, {
+      const visualVariation = this.getIngredientVisualVariation?.();
+      const options = {
         cropX: piece.cropX,
         cropY: piece.cropY,
         cropWidth: piece.cropWidth,
         cropHeight: piece.cropHeight,
         visibleBounds: piece.visibleBounds,
+        weightGrams: piece.weightGrams,
         minimumCutWidth: this.minimumCutWidth,
         variant: this.variantIndex,
         skipInitialPiece: true,
-      });
+      };
+
+      if (visualVariation) {
+        options.visualVariation = visualVariation;
+      }
+
+      return new this.constructor(this.scene, position.x, position.y, options);
     }
 
     return new CuttableObject(
@@ -426,6 +437,30 @@ export class CuttableObject extends SceneObject {
     return piece;
   }
 
+  assignCutPieceWeights(pieces) {
+    if (!Array.isArray(pieces) || !pieces.length || !Number.isFinite(this.ownWeightGrams)) {
+      return pieces;
+    }
+
+    const visiblePixelCounts = pieces.map((piece) => this.getPieceVisiblePixelCount(piece));
+    const totalVisiblePixels = visiblePixelCounts.reduce((sum, count) => sum + count, 0);
+    const fallbackArea = pieces.reduce(
+      (sum, piece) => sum + piece.cropWidth * piece.cropHeight,
+      0,
+    );
+    const parentWeight = this.ownWeightGrams;
+
+    pieces.forEach((piece, index) => {
+      const proportion = totalVisiblePixels > 0
+        ? visiblePixelCounts[index] / totalVisiblePixels
+        : (piece.cropWidth * piece.cropHeight) / fallbackArea;
+
+      piece.weightGrams = parentWeight * proportion;
+    });
+
+    return pieces;
+  }
+
   intersectVisibleBounds(parentBounds, cropX, cropY, cropWidth, cropHeight) {
     if (!parentBounds) {
       return null;
@@ -560,6 +595,75 @@ export class CuttableObject extends SceneObject {
     piece.visibleBounds = bounds;
 
     return bounds;
+  }
+
+  getPieceVisiblePixelCount(piece) {
+    if (Number.isFinite(piece.visiblePixelCount)) {
+      return piece.visiblePixelCount;
+    }
+
+    const cacheKey = `${this.textureKey}|${piece.cropX},${piece.cropY},${piece.cropWidth},${piece.cropHeight}`;
+    const cached = visiblePixelCountCache.get(cacheKey);
+
+    if (cached !== undefined) {
+      piece.visiblePixelCount = cached;
+      return cached;
+    }
+
+    const texture = this.scene.textures.get(this.textureKey);
+    const source = texture?.getSourceImage?.();
+    const supportsCanvasElement = typeof HTMLCanvasElement !== 'undefined';
+    const canvas = supportsCanvasElement && source instanceof HTMLCanvasElement
+      ? source
+      : supportsCanvasElement && source?.canvas instanceof HTMLCanvasElement
+        ? source.canvas
+        : null;
+
+    if (!canvas) {
+      const fallbackCount = piece.cropWidth * piece.cropHeight;
+
+      visiblePixelCountCache.set(cacheKey, fallbackCount);
+      piece.visiblePixelCount = fallbackCount;
+      return fallbackCount;
+    }
+
+    const context = canvas.getContext('2d');
+
+    if (!context) {
+      const fallbackCount = piece.cropWidth * piece.cropHeight;
+
+      visiblePixelCountCache.set(cacheKey, fallbackCount);
+      piece.visiblePixelCount = fallbackCount;
+      return fallbackCount;
+    }
+
+    const bounds = piece.visibleBounds ?? this.getPieceVisibleTextureBounds(piece);
+    const left = Math.max(piece.cropX, Math.floor(bounds.left));
+    const right = Math.min(piece.cropX + piece.cropWidth, Math.ceil(bounds.right));
+    const top = Math.max(piece.cropY, Math.floor(bounds.top));
+    const bottom = Math.min(piece.cropY + piece.cropHeight, Math.ceil(bounds.bottom));
+
+    if (right <= left || bottom <= top) {
+      visiblePixelCountCache.set(cacheKey, 0);
+      piece.visiblePixelCount = 0;
+      return 0;
+    }
+
+    const width = right - left;
+    const height = bottom - top;
+    const imageData = context.getImageData(left, top, width, height);
+    let visiblePixels = 0;
+
+    for (let index = 3; index < imageData.data.length; index += 4) {
+      if (imageData.data[index] > 0) {
+        visiblePixels += 1;
+      }
+    }
+
+    visiblePixelCountCache.set(cacheKey, visiblePixels);
+    piece.visiblePixelCount = visiblePixels;
+
+    return visiblePixels;
   }
 
   getPieceCropBounds(piece) {

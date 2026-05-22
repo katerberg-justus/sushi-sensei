@@ -4,12 +4,18 @@ import { holdSharedTexture, releaseSharedTexture } from './DraggableObject.js';
 
 let computedShadeTextureId = 0;
 const DEFAULT_STACK_OFFSET_Y = -4;
+const DEFAULT_VISUAL_VARIATION = {
+  uniformScaleRange: 0.024,
+  stretchRange: 0.036,
+  scaleNoiseRange: 0.01,
+};
 
 export class IngredientObject extends RotatableObject {
-  constructor(scene, x, y, width, height) {
+  constructor(scene, x, y, width, height, options = {}) {
     super(scene, x, y, width, height);
 
     this.isIngredient = true;
+    this._ownWeightGrams = IngredientObject.normalizeWeightGrams(options.weightGrams ?? 0);
     this.softness = 0.9;
     this.restShadowOffset = 6;
     this.dragShadowOffset = 6;
@@ -58,9 +64,47 @@ export class IngredientObject extends RotatableObject {
     this.computedShadeSpinFrames = null;
     this.computedShadeSpinFrameRate = 60;
     this.computedShadeRotationOverride = null;
+    this.ingredientVisualVariation = this.createIngredientVisualVariation(options.visualVariation);
+  }
+
+  static normalizeWeightGrams(weightGrams) {
+    const numericWeight = Number(weightGrams);
+
+    if (!Number.isFinite(numericWeight)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.round(numericWeight * 10) / 10);
+  }
+
+  get ownWeightGrams() {
+    return this._ownWeightGrams ?? 0;
+  }
+
+  set ownWeightGrams(weightGrams) {
+    this._ownWeightGrams = IngredientObject.normalizeWeightGrams(weightGrams);
+  }
+
+  get weightGrams() {
+    return this.getTotalWeightGrams();
+  }
+
+  set weightGrams(weightGrams) {
+    this.ownWeightGrams = weightGrams;
+  }
+
+  getTotalWeightGrams() {
+    const childrenWeight = (this.stackChildren ?? []).reduce(
+      (total, child) => total + (child?.weightGrams ?? 0),
+      0,
+    );
+
+    return IngredientObject.normalizeWeightGrams(this.ownWeightGrams + childrenWeight);
   }
 
   addDraggablePart(part) {
+    this.applyIngredientVisualVariation(part);
+
     const addedPart = super.addDraggablePart(part);
 
     if (!part.excludeFromComputedShade) {
@@ -68,6 +112,56 @@ export class IngredientObject extends RotatableObject {
     }
 
     return addedPart;
+  }
+
+  createIngredientVisualVariation(variation) {
+    if (variation === false) {
+      return null;
+    }
+
+    if (variation && typeof variation === 'object') {
+      return {
+        scaleX: variation.scaleX ?? 1,
+        scaleY: variation.scaleY ?? 1,
+        rotation: variation.rotation ?? 0,
+      };
+    }
+
+    const randomRange = (range) => (Math.random() * 2 - 1) * range;
+    const uniformScale = randomRange(DEFAULT_VISUAL_VARIATION.uniformScaleRange);
+    const stretch = randomRange(DEFAULT_VISUAL_VARIATION.stretchRange);
+    const scaleNoise = randomRange(DEFAULT_VISUAL_VARIATION.scaleNoiseRange);
+
+    return {
+      scaleX: 1 + uniformScale + stretch,
+      scaleY: 1 + uniformScale - stretch * 0.65 + scaleNoise,
+      rotation: 0,
+    };
+  }
+
+  getIngredientVisualVariation() {
+    if (!this.ingredientVisualVariation) {
+      return null;
+    }
+
+    return { ...this.ingredientVisualVariation };
+  }
+
+  applyIngredientVisualVariation(part) {
+    const variation = this.ingredientVisualVariation;
+
+    if (!variation || !part || part.ingredientVisualVariationApplied) {
+      return part;
+    }
+
+    part.ingredientVisualVariationApplied = true;
+    part.setScale(
+      (part.scaleX ?? 1) * variation.scaleX,
+      (part.scaleY ?? 1) * variation.scaleY,
+    );
+    part.setRotation((part.rotation ?? 0) + variation.rotation);
+
+    return part;
   }
 
   setObjectRotation(angle) {
@@ -449,11 +543,11 @@ export class IngredientObject extends RotatableObject {
       const lower = profile.bottomByX.get(bucket - offset);
       const upper = profile.bottomByX.get(bucket + offset);
 
-      if (lower !== undefined) {
+      if (lower !== undefined && !nearestLower) {
         nearestLower = { value: lower, distance: offset };
       }
 
-      if (upper !== undefined) {
+      if (upper !== undefined && !nearestUpper) {
         nearestUpper = { value: upper, distance: offset };
       }
 
@@ -993,8 +1087,15 @@ export class IngredientObject extends RotatableObject {
 
   completeKneading() {
     const topping = this.getKneadTopping();
+    const result = this.createKneadedStackResult?.(topping);
 
     this.finishKneading();
+
+    if (result) {
+      this.replaceWithKneadedStackResult(result);
+      return;
+    }
+
     this.stackLocked = true;
     this.isFinishedStack = true;
     this.kneadProgress = 1;
@@ -1018,6 +1119,26 @@ export class IngredientObject extends RotatableObject {
     }
 
     this.playFinishedStackPulse();
+  }
+
+  replaceWithKneadedStackResult(result) {
+    if (!result) {
+      return;
+    }
+
+    result.setDepth(Math.max(result.depth ?? 0, this.depth ?? 0));
+    result.applyRestingDepth?.();
+    result.playFinishedStackPulse?.();
+
+    const children = [...(this.stackChildren ?? [])];
+
+    this.stackChildren = [];
+    children.forEach((child) => {
+      child.stackParent = null;
+      child.destroy();
+    });
+
+    this.destroy();
   }
 
   finishKneading() {

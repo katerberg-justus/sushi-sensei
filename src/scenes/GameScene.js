@@ -3,6 +3,7 @@ import { BITMAP_FONT_PIXEL, COLORS, SCENE_KEYS } from '../game/constants.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
 import { Knife } from '../objects/Knife.js';
+import { Nigiri } from '../objects/Nigiri.js';
 import { RiceBall } from '../objects/RiceBall.js';
 
 export class GameScene extends Phaser.Scene {
@@ -26,6 +27,7 @@ export class GameScene extends Phaser.Scene {
     this.cuttableSalmon.displayName = 'Salmon';
     this.cuttableTamago = new CuttableTamago(this, width * 0.67, height * 0.48);
     this.cuttableTamago.displayName = 'Tamago';
+    this.nigiri = new Nigiri(this, width * 0.82, height * 0.48, { fishType: 'salmon' });
     this.cuttableObjects = [this.cuttableSalmon, this.cuttableTamago];
     this.knife = new Knife(this, width * 0.5, height * 0.72);
     this.knife.displayName = 'Knife';
@@ -92,8 +94,8 @@ export class GameScene extends Phaser.Scene {
     const visibleArea = this.getVisibleGameArea();
     const margin = 12;
 
-    const restX = Math.round(visibleArea.left + margin);
-    const restY = Math.round(visibleArea.bottom - margin - this.nameSignboard.signboardHeight);
+    const restX = Math.round(visibleArea.left + visibleArea.width / 2);
+    const restY = Math.round(visibleArea.bottom - margin - this.nameSignboard.signboardHeight / 2);
 
     this.nameSignboard.restX = restX;
     this.nameSignboard.restY = restY;
@@ -105,74 +107,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   createNameSignboard() {
-    const PX = 4;
-    const boardCols = 44;
-    const boardRows = 10;
-    const boardWidth = boardCols * PX;
-    const boardHeight = boardRows * PX;
+    const labelHeight = 8;
 
     const container = this.add.container(0, 0);
     container.setDepth(500);
     container.setVisible(false);
-    container.signboardWidth = boardWidth;
-    container.signboardHeight = boardHeight;
-
-    const graphics = this.add.graphics();
-    const px = (col, row, w = 1, h = 1) => graphics.fillRect(col * PX, row * PX, w * PX, h * PX);
-
-    const outline = 0x6b4a32;
-    const plankDark = 0x8a5a3a;
-    const plankBase = 0xa67148;
-    const plankMid = 0xb9835a;
-    const plankHighlight = 0xd6a075;
-    const grainShadow = 0x6e4327;
-    const ironDark = 0x5a3a22;
-    const ironLight = 0xd8c0a0;
-
-    graphics.fillStyle(outline, 1);
-    px(0, 1, boardCols, boardRows - 2);
-    px(1, 0, boardCols - 2, 1);
-    px(1, boardRows - 1, boardCols - 2, 1);
-
-    graphics.fillStyle(plankDark, 1);
-    px(1, 1, boardCols - 2, boardRows - 2);
-
-    graphics.fillStyle(plankBase, 1);
-    px(2, 2, boardCols - 4, boardRows - 4);
-
-    graphics.fillStyle(plankMid, 1);
-    px(2, 3, boardCols - 4, boardRows - 6);
-
-    graphics.fillStyle(plankHighlight, 1);
-    px(2, 2, boardCols - 4, 1);
-
-    graphics.fillStyle(grainShadow, 1);
-    px(2, boardRows - 3, boardCols - 4, 1);
-
-    graphics.fillStyle(ironDark, 1);
-    px(3, 2, 2, 2);
-    px(boardCols - 5, 2, 2, 2);
-    px(3, boardRows - 4, 2, 2);
-    px(boardCols - 5, boardRows - 4, 2, 2);
-
-    graphics.fillStyle(ironLight, 1);
-    px(3, 2, 1, 1);
-    px(boardCols - 5, 2, 1, 1);
-    px(3, boardRows - 4, 1, 1);
-    px(boardCols - 5, boardRows - 4, 1, 1);
-
-    container.add(graphics);
+    container.signboardHeight = labelHeight;
 
     const text = this.add.bitmapText(
-      Math.round(boardWidth / 2),
-      Math.round(boardHeight / 2) - 1,
+      0,
+      0,
       BITMAP_FONT_PIXEL,
       '',
-      8,
+      labelHeight,
     );
 
     text.setOrigin(0.5);
-    text.setTint(0xf1d9a8);
+    text.setTint(0xffffff);
     container.add(text);
 
     this.nameSignboard = container;
@@ -214,7 +165,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.nameSignboardText.setText(name);
+    this.nameSignboardObject = gameObject;
+    this.nameSignboardText.setText(this.getIngredientSignboardText(gameObject));
     this.showNameSignboard();
   }
 
@@ -227,11 +179,46 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (gameObject && this.nameSignboardText.text !== gameObject.displayName) {
+    if (gameObject && this.nameSignboardObject !== gameObject) {
       return;
     }
 
+    this.nameSignboardObject = null;
     this.hideNameSignboard();
+  }
+
+  getIngredientSignboardText(gameObject) {
+    const name = this.getStackedIngredientName(gameObject);
+    const weightGrams = gameObject?.weightGrams;
+
+    if (!Number.isFinite(weightGrams) || weightGrams <= 0) {
+      return name;
+    }
+
+    const roundedWeight = Number.isInteger(weightGrams)
+      ? weightGrams.toString()
+      : weightGrams.toFixed(1);
+
+    return `${name} ${roundedWeight}g`;
+  }
+
+  getStackedIngredientName(gameObject) {
+    const names = this.getStackedIngredientNames(gameObject);
+
+    return names.join(' + ');
+  }
+
+  getStackedIngredientNames(gameObject) {
+    if (!gameObject) {
+      return [];
+    }
+
+    const names = gameObject.displayName ? [gameObject.displayName] : [];
+    const childNames = (gameObject.stackChildren ?? []).flatMap((child) => (
+      this.getStackedIngredientNames(child)
+    ));
+
+    return [...names, ...childNames];
   }
 
   showNameSignboard() {
