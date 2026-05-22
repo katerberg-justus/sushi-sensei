@@ -62,13 +62,17 @@ export class GameScene extends Phaser.Scene {
 
     this.createNameSignboard();
     this.positionNameSignboard();
+    this.createDragDebugPanel();
+    this.positionDragDebugPanel();
     this.createFpsCounter();
     this.positionFpsCounter();
     this.scale.on('resize', this.positionNameSignboard, this);
+    this.scale.on('resize', this.positionDragDebugPanel, this);
     this.scale.on('resize', this.positionFpsCounter, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.positionNameSignboard, this);
+      this.scale.off('resize', this.positionDragDebugPanel, this);
       this.scale.off('resize', this.positionFpsCounter, this);
       this.input.keyboard.off('keydown-R', this.resetScene, this);
     });
@@ -169,6 +173,34 @@ export class GameScene extends Phaser.Scene {
     this.frameDeltaCounter.setDepth(1000);
 
     this.nextFpsUpdateAt = 0;
+  }
+
+  createDragDebugPanel() {
+    this.dragDebugText = this.add.bitmapText(0, 0, BITMAP_FONT_PIXEL, 'DRAG DEBUG\nidle', 8);
+    this.dragDebugText.setOrigin(0, 0);
+    this.dragDebugText.setTint(0x173027);
+    this.dragDebugText.setDepth(1000);
+  }
+
+  positionDragDebugPanel() {
+    if (!this.dragDebugText) {
+      return;
+    }
+
+    const visibleArea = this.getVisibleGameArea();
+
+    this.dragDebugText.setPosition(
+      Math.round(visibleArea.left + 10),
+      Math.round(visibleArea.top + 10),
+    );
+  }
+
+  setDragDebugInfo(lines = []) {
+    if (!this.dragDebugText) {
+      return;
+    }
+
+    this.dragDebugText.setText(['DRAG DEBUG', ...lines].slice(0, 8).join('\n'));
   }
 
   positionFpsCounter() {

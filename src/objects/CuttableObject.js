@@ -278,6 +278,10 @@ export class CuttableObject extends SceneObject {
         options.fishType = this.fishType;
       }
 
+      if (this.getCuttableReplacementOptions) {
+        Object.assign(options, this.getCuttableReplacementOptions(piece));
+      }
+
       return new this.constructor(this.scene, position.x, position.y, options);
     }
 

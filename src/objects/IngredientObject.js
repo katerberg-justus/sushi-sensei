@@ -45,8 +45,21 @@ export class IngredientObject extends RotatableObject {
     this.kneadPointerUpHandler = null;
     this.kneadMeter = null;
     this.kneadPulseTween = null;
+    this.spreadableStackCategory = null;
+    this.spreadRequiredStrokes = 6;
+    this.spreadStrokeDistance = 18;
+    this.spreadProgress = 0;
+    this.spreadStrokeCount = 0;
+    this.spreadGestureAnchor = null;
+    this.spreadPointerId = null;
+    this.spreadUsesTouch = false;
+    this.spreadPointerMoveHandler = null;
+    this.spreadPointerUpHandler = null;
+    this.spreadPulseTween = null;
+    this.spreadChildBaseScale = null;
     this.finishedStackDisplayName = 'Nigiri';
 
+    this.on('pointerdown', this.handleSpreadPointerDown, this);
     this.on('pointerdown', this.handleKneadPointerDown, this);
     this.on('pointerdown', this.handleStackLongPressDown, this);
     this.on('pointerup', this.cancelStackLongPress, this);
@@ -842,6 +855,232 @@ export class IngredientObject extends RotatableObject {
     this.computedShadeParts.clear();
   }
 
+  handleSpreadPointerDown(pointer) {
+    if (!this.canStartSpreading() || !this.isSpreadStartPointer(pointer)) {
+      return;
+    }
+
+    pointer.event?.preventDefault?.();
+    this.beginSpreading(pointer);
+  }
+
+  canStartSpreading() {
+    if (this.isFinishedStack || this.stackLocked || !this.spreadableStackCategory) {
+      return false;
+    }
+
+    return Boolean(this.getSpreadIngredient());
+  }
+
+  getSpreadIngredient() {
+    if (!this.stackChildren?.length) {
+      return null;
+    }
+
+    return this.stackChildren.find((child) => (
+      child?.stackCategory === this.spreadableStackCategory
+    )) ?? null;
+  }
+
+  isSpreadStartPointer(pointer) {
+    return this.isRightButtonPointer(pointer) || this.isTwoFingerTouchPointer(pointer);
+  }
+
+  beginSpreading(pointer) {
+    if (this.isSpreading) {
+      return false;
+    }
+
+    const position = this.getSpreadPointerPosition(pointer);
+
+    if (!position) {
+      return false;
+    }
+
+    const spreadIngredient = this.getSpreadIngredient();
+
+    this.cancelStackLongPress();
+    this.cancelActiveDragForKneading();
+
+    this.isSpreading = true;
+    this.spreadUsesTouch = this.isTouchPointer(pointer);
+    this.spreadPointerId = this.getDragPointerId(pointer);
+    this.spreadGestureAnchor = position;
+    this.spreadStrokeCount = 0;
+    this.spreadProgress = 0;
+    this.spreadChildBaseScale = spreadIngredient
+      ? { scaleX: spreadIngredient.scaleX || 1, scaleY: spreadIngredient.scaleY || 1 }
+      : null;
+    this.suppressedDragPointerId = this.spreadPointerId;
+
+    this.setStackHighlight(true);
+    this.showKneadMeter();
+    this.updateSpreadMeter();
+
+    this.spreadPointerMoveHandler = (movePointer) => {
+      this.handleSpreadPointerMove(movePointer);
+    };
+    this.spreadPointerUpHandler = (upPointer) => {
+      this.handleSpreadPointerUp(upPointer);
+    };
+
+    this.scene.input.on('pointermove', this.spreadPointerMoveHandler);
+    this.scene.input.on('pointerup', this.spreadPointerUpHandler);
+    this.scene.input.on('pointerupoutside', this.spreadPointerUpHandler);
+
+    return true;
+  }
+
+  getSpreadPointerPosition(pointer) {
+    if (this.spreadUsesTouch || this.isTouchPointer(pointer)) {
+      const touchPointers = this.getActiveTouchPointers();
+
+      if (touchPointers.length >= 2) {
+        const total = touchPointers.reduce((sum, touchPointer) => ({
+          x: sum.x + touchPointer.x,
+          y: sum.y + touchPointer.y,
+        }), { x: 0, y: 0 });
+
+        return {
+          x: total.x / touchPointers.length,
+          y: total.y / touchPointers.length,
+        };
+      }
+    }
+
+    if (!pointer) {
+      return null;
+    }
+
+    return { x: pointer.x, y: pointer.y };
+  }
+
+  handleSpreadPointerMove(pointer) {
+    if (!this.isSpreading) {
+      return;
+    }
+
+    if (!this.spreadUsesTouch && this.getDragPointerId(pointer) !== this.spreadPointerId) {
+      return;
+    }
+
+    const position = this.getSpreadPointerPosition(pointer);
+
+    if (!position || !this.spreadGestureAnchor) {
+      return;
+    }
+
+    const dx = position.x - this.spreadGestureAnchor.x;
+    const dy = position.y - this.spreadGestureAnchor.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < this.spreadStrokeDistance) {
+      return;
+    }
+
+    this.spreadGestureAnchor = position;
+    this.registerSpreadStroke(dx, dy);
+  }
+
+  registerSpreadStroke(dx, dy) {
+    this.spreadStrokeCount += 1;
+    this.spreadProgress = Phaser.Math.Clamp(
+      this.spreadStrokeCount / this.spreadRequiredStrokes,
+      0,
+      1,
+    );
+
+    this.playSpreadPulse(dx, dy);
+    this.updateSpreadMeter();
+
+    if (this.spreadProgress >= 1) {
+      this.completeSpreading();
+    }
+  }
+
+  handleSpreadPointerUp(pointer) {
+    if (!this.isSpreading) {
+      return;
+    }
+
+    if (this.spreadUsesTouch) {
+      if (this.getActiveTouchPointers().length < 2) {
+        this.finishSpreading();
+      }
+      return;
+    }
+
+    if (this.getDragPointerId(pointer) === this.spreadPointerId) {
+      this.finishSpreading();
+    }
+  }
+
+  completeSpreading() {
+    const spreadIngredient = this.getSpreadIngredient();
+    const result = this.createSpreadStackResult?.(spreadIngredient);
+
+    this.finishSpreading();
+
+    if (result) {
+      this.replaceWithSpreadStackResult(result);
+      return;
+    }
+
+    this.stackLocked = true;
+    this.isFinishedStack = true;
+    this.spreadProgress = 1;
+    this.playFinishedStackPulse();
+  }
+
+  replaceWithSpreadStackResult(result) {
+    if (!result) {
+      return;
+    }
+
+    result.setDepth(Math.max(result.depth ?? 0, this.depth ?? 0));
+    result.applyRestingDepth?.();
+    result.playFinishedStackPulse?.();
+
+    const cuttableObjects = this.scene?.cuttableObjects;
+    const cuttableIndex = Array.isArray(cuttableObjects) ? cuttableObjects.indexOf(this) : -1;
+
+    if (cuttableIndex !== -1) {
+      cuttableObjects.splice(cuttableIndex, 1, result);
+    }
+
+    const children = [...(this.stackChildren ?? [])];
+
+    this.stackChildren = [];
+    children.forEach((child) => {
+      child.stackParent = null;
+      child.destroy();
+    });
+
+    this.destroy();
+  }
+
+  finishSpreading() {
+    if (this.spreadPointerMoveHandler) {
+      this.scene.input.off('pointermove', this.spreadPointerMoveHandler);
+      this.spreadPointerMoveHandler = null;
+    }
+
+    if (this.spreadPointerUpHandler) {
+      this.scene.input.off('pointerup', this.spreadPointerUpHandler);
+      this.scene.input.off('pointerupoutside', this.spreadPointerUpHandler);
+      this.spreadPointerUpHandler = null;
+    }
+
+    this.isSpreading = false;
+    this.spreadPointerId = null;
+    this.spreadUsesTouch = false;
+    this.spreadGestureAnchor = null;
+    this.spreadChildBaseScale = null;
+    this.suppressedDragPointerId = null;
+    this.setStackHighlight(false);
+    this.hideKneadMeter();
+  }
+
   handleKneadPointerDown(pointer) {
     if (!this.canStartKneading() || !this.isKneadStartPointer(pointer)) {
       return;
@@ -1257,6 +1496,26 @@ export class IngredientObject extends RotatableObject {
     this.kneadMeter.strokePath();
   }
 
+  updateSpreadMeter() {
+    if (!this.kneadMeter) {
+      return;
+    }
+
+    const bounds = this.getKneadMeterBounds();
+    const inset = 6;
+    const width = Math.max(8, bounds.width + inset * 2);
+    const height = Math.max(8, bounds.height + inset * 2);
+    const x = bounds.x - inset;
+    const y = bounds.y - inset;
+    const progressWidth = width * Phaser.Math.Clamp(this.spreadProgress, 0, 1);
+
+    this.kneadMeter.clear();
+    this.kneadMeter.lineStyle(2, 0x143026, 0.4);
+    this.kneadMeter.strokeRect(x, y, width, height);
+    this.kneadMeter.fillStyle(0xfff4df, 0.82);
+    this.kneadMeter.fillRect(x, y + height - 5, progressWidth, 4);
+  }
+
   hideKneadMeter() {
     if (!this.kneadMeter) {
       return;
@@ -1307,6 +1566,46 @@ export class IngredientObject extends RotatableObject {
     }
   }
 
+  playSpreadPulse(dx, dy) {
+    if (this.spreadPulseTween) {
+      this.spreadPulseTween.stop();
+      this.spreadPulseTween = null;
+    }
+
+    const spreadIngredient = this.getSpreadIngredient();
+
+    if (!spreadIngredient) {
+      return;
+    }
+
+    const baseScale = this.spreadChildBaseScale ?? {
+      scaleX: spreadIngredient.scaleX || 1,
+      scaleY: spreadIngredient.scaleY || 1,
+    };
+    const progress = Phaser.Math.Clamp(this.spreadProgress, 0, 1);
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const targetScaleX = baseScale.scaleX * Phaser.Math.Linear(1, absX >= absY ? 2.25 : 1.75, progress);
+    const targetScaleY = baseScale.scaleY * Phaser.Math.Linear(1, absX >= absY ? 0.36 : 0.44, progress);
+
+    spreadIngredient.setScale(targetScaleX * 1.03, targetScaleY * 0.96);
+    spreadIngredient.setAlpha?.(Phaser.Math.Linear(1, 0.72, progress));
+
+    this.spreadPulseTween = this.scene.tweens.add({
+      targets: spreadIngredient,
+      scaleX: targetScaleX,
+      scaleY: targetScaleY,
+      x: Phaser.Math.Linear(spreadIngredient.x, 0, 0.35),
+      y: Phaser.Math.Linear(spreadIngredient.y, 0, 0.35),
+      duration: 120,
+      ease: 'Cubic.Out',
+      onComplete: () => {
+        this.spreadPulseTween = null;
+        this.refreshCompositionShadow?.();
+      },
+    });
+  }
+
   playFinishedStackPulse() {
     const baseScaleX = this.scaleX || 1;
     const baseScaleY = this.scaleY || 1;
@@ -1326,12 +1625,19 @@ export class IngredientObject extends RotatableObject {
 
   shouldSuppressDragStart(pointer) {
     return this.isKneading
+      || this.isSpreading
       || (this.canStartKneading() && this.isKneadStartPointer(pointer))
+      || (this.canStartSpreading() && this.isSpreadStartPointer(pointer))
       || super.shouldSuppressDragStart(pointer);
   }
 
   handleDragStart(pointer) {
-    if (this.isKneading || (this.canStartKneading() && this.isKneadStartPointer(pointer))) {
+    if (
+      this.isKneading
+      || this.isSpreading
+      || (this.canStartKneading() && this.isKneadStartPointer(pointer))
+      || (this.canStartSpreading() && this.isSpreadStartPointer(pointer))
+    ) {
       this.suppressedDragPointerId = this.getDragPointerId(pointer);
       this.isDragging = false;
       return false;
@@ -1341,7 +1647,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   handleDrag(pointer, dragX, dragY) {
-    if (this.isKneading) {
+    if (this.isKneading || this.isSpreading) {
       return false;
     }
 
@@ -1349,7 +1655,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   handleDragEnd(pointer) {
-    if (this.isKneading) {
+    if (this.isKneading || this.isSpreading) {
       return false;
     }
 
@@ -1357,7 +1663,13 @@ export class IngredientObject extends RotatableObject {
   }
 
   handleStackLongPressDown(pointer) {
-    if (this.stackLocked || this.isKneading || this.isKneadStartPointer(pointer)) {
+    if (
+      this.stackLocked
+      || this.isKneading
+      || this.isSpreading
+      || this.isKneadStartPointer(pointer)
+      || this.isSpreadStartPointer(pointer)
+    ) {
       return;
     }
 
@@ -1458,8 +1770,36 @@ export class IngredientObject extends RotatableObject {
       && this.acceptsStackPlacement(other, placement);
   }
 
+  getStackRejectionReason(other, placement = {}) {
+    if (!other?.stackCategory) {
+      return 'source has no stack category';
+    }
+
+    if (!this.acceptedStackCategories) {
+      return 'target accepts no stacks';
+    }
+
+    if (!this.acceptedStackCategories.includes(other.stackCategory)) {
+      return `category ${other.stackCategory} not accepted`;
+    }
+
+    if (this.stackChildren.length >= this.maxStackedItems && other.stackParent !== this) {
+      return 'target stack full';
+    }
+
+    if (!this.acceptsStackPlacement(other, placement)) {
+      return this.getStackPlacementRejectionReason?.(other, placement) ?? 'placement rejected';
+    }
+
+    return 'stack OK';
+  }
+
   acceptsStackPlacement(_other, _placement = {}) {
     return true;
+  }
+
+  getWorldHitboxRect(centerX = this.x, centerY = this.y) {
+    return this.getWorldShadowRectAt(centerX, centerY) ?? super.getWorldHitboxRect(centerX, centerY);
   }
 
   canStackOn(other, placement = {}) {
@@ -1596,10 +1936,16 @@ export class IngredientObject extends RotatableObject {
 
   destroy(fromScene) {
     this.finishKneading();
+    this.finishSpreading();
 
     if (this.kneadPulseTween) {
       this.kneadPulseTween.stop();
       this.kneadPulseTween = null;
+    }
+
+    if (this.spreadPulseTween) {
+      this.spreadPulseTween.stop();
+      this.spreadPulseTween = null;
     }
 
     this.cancelStackLongPress();

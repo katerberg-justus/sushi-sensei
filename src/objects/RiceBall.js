@@ -1,15 +1,16 @@
+import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { IngredientObject } from './IngredientObject.js';
 import { Nigiri } from './Nigiri.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { getCachedFullImageData, resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 1.8;
 const RICE_BALL_BASE_KEY = 'rice-ball-pixel';
 const RICE_BALL_VARIANT_POOL = 6;
 const RICE_BALL_WIDTH = 30;
 const RICE_BALL_HEIGHT = 26;
-const TOPPING_SIZE_TOLERANCE = 0.4;
 const RICE_BALL_WEIGHT_GRAMS = 20;
+const visibleTextureBoundsCache = new Map();
 
 export class RiceBall extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -28,6 +29,7 @@ export class RiceBall extends IngredientObject {
     this.computedShadePixelSize = 1;
     this.computedShadeBottomProfileSmoothing = 2;
 
+    this.stackCategory = 'rice';
     this.acceptedStackCategories = ['fish'];
     this.maxStackedItems = 1;
     this.stackOffsetX = 0;
@@ -42,6 +44,88 @@ export class RiceBall extends IngredientObject {
     this.addDraggablePart(this.sprite);
     this.refreshCompositionShadow();
     this.applyRestingDepth();
+  }
+
+  getPlacementRectAt(x = this.x, y = this.y) {
+    const bounds = RiceBall.getVisibleTextureBounds(this.scene, this.sprite?.texture?.key);
+
+    if (!bounds || !this.sprite) {
+      return super.getPlacementRectAt(x, y);
+    }
+
+    const frameWidth = this.sprite.frame?.realWidth ?? RICE_BALL_WIDTH;
+    const frameHeight = this.sprite.frame?.realHeight ?? RICE_BALL_HEIGHT;
+    const scaleX = Math.abs(this.sprite.scaleX || PIXEL);
+    const scaleY = Math.abs(this.sprite.scaleY || PIXEL);
+    const basePosition = this.draggablePartBasePositions?.get(this.sprite) ?? { x: 0, y: 0 };
+    const visibleWidth = (bounds.right - bounds.left) * scaleX;
+    const visibleHeight = (bounds.bottom - bounds.top) * scaleY;
+    const visibleCenterX = (bounds.left + (bounds.right - bounds.left) / 2 - frameWidth / 2) * scaleX;
+    const visibleBottom = (bounds.bottom - frameHeight / 2) * scaleY;
+    const width = visibleWidth * this.shadowEdgeDragScaleX;
+    const height = visibleHeight * this.shadowEdgeDragScaleY;
+    const centerX = x + basePosition.x + visibleCenterX;
+    const bottom = y + basePosition.y + visibleBottom;
+    const centerY = bottom - height / 2 + this.restShadowOffset;
+
+    return new Phaser.Geom.Rectangle(
+      centerX - width / 2,
+      centerY - height / 2,
+      width,
+      height,
+    );
+  }
+
+  static getVisibleTextureBounds(scene, textureKey) {
+    if (!scene || !textureKey) {
+      return null;
+    }
+
+    if (visibleTextureBoundsCache.has(textureKey)) {
+      return visibleTextureBoundsCache.get(textureKey);
+    }
+
+    const texture = scene.textures.get(textureKey);
+    const source = texture?.getSourceImage?.();
+    const cachedImageData = getCachedFullImageData(source);
+    let imageData = cachedImageData;
+
+    if (!imageData) {
+      const canvas = source?.getContext ? source : source?.canvas;
+      const context = canvas?.getContext?.('2d', { willReadFrequently: true });
+
+      if (!context) {
+        return null;
+      }
+
+      imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    const { data, width, height } = imageData;
+    let left = width;
+    let right = -1;
+    let top = height;
+    let bottom = -1;
+
+    for (let py = 0; py < height; py += 1) {
+      for (let px = 0; px < width; px += 1) {
+        if (data[(py * width + px) * 4 + 3] === 0) {
+          continue;
+        }
+
+        left = Math.min(left, px);
+        right = Math.max(right, px + 1);
+        top = Math.min(top, py);
+        bottom = Math.max(bottom, py + 1);
+      }
+    }
+
+    const bounds = right >= left && bottom >= top
+      ? { left, right, top, bottom }
+      : null;
+
+    visibleTextureBoundsCache.set(textureKey, bounds);
+    return bounds;
   }
 
   createKneadedStackResult(topping) {
@@ -66,43 +150,6 @@ export class RiceBall extends IngredientObject {
     nigiri.setObjectRotation(this.rotation ?? 0);
 
     return nigiri;
-  }
-
-  acceptsStackPlacement(other, placement = {}) {
-    if (other.stackCategory !== 'fish') {
-      return true;
-    }
-
-    const targetRect = placement.targetRect ?? this.getWorldHitboxRect?.();
-    const sourceRect = placement.sourceRect ?? other.getWorldHitboxRect?.(placement.x, placement.y);
-
-    if (!targetRect || !sourceRect) {
-      return false;
-    }
-
-    const minSizeRatio = 1 - TOPPING_SIZE_TOLERANCE;
-    const maxSizeRatio = 1 + TOPPING_SIZE_TOLERANCE;
-    const widthRatio = sourceRect.width / targetRect.width;
-    const heightRatio = sourceRect.height / targetRect.height;
-
-    if (
-      widthRatio < minSizeRatio
-      || widthRatio > maxSizeRatio
-      || heightRatio < minSizeRatio
-      || heightRatio > maxSizeRatio
-    ) {
-      return false;
-    }
-
-    const sourceCenterX = sourceRect.centerX ?? sourceRect.x + sourceRect.width / 2;
-    const sourceCenterY = sourceRect.centerY ?? sourceRect.y + sourceRect.height / 2;
-    const targetCenterX = targetRect.centerX ?? targetRect.x + targetRect.width / 2;
-    const targetCenterY = targetRect.centerY ?? targetRect.y + targetRect.height / 2;
-    const maxHorizontalDistance = targetRect.width * TOPPING_SIZE_TOLERANCE;
-    const maxVerticalDistance = targetRect.height * TOPPING_SIZE_TOLERANCE;
-
-    return Math.abs(sourceCenterX - targetCenterX) <= maxHorizontalDistance
-      && Math.abs(sourceCenterY - targetCenterY) <= maxVerticalDistance;
   }
 
   static paintTexture(context, rng) {

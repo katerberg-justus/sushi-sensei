@@ -81,11 +81,11 @@ export class DraggableObject extends SceneObject {
     this.shadowEdgeAlpha = 0.22;
     this.shadowCoreAlpha = 0.3;
     this.shadowEdgeScaleX = 0.86;
-    this.shadowEdgeScaleY = 0.34;
+    this.shadowEdgeScaleY = 0.52;
     this.shadowEdgeDragScaleX = 0.98;
-    this.shadowEdgeDragScaleY = 0.44;
+    this.shadowEdgeDragScaleY = 0.66;
     this.shadowCoreScaleX = 0.84;
-    this.shadowCoreScaleY = 0.32;
+    this.shadowCoreScaleY = 0.5;
     this.draggableParts = [];
     this.draggablePartBaseScales = new Map();
     this.draggablePartBasePositions = new Map();
@@ -359,20 +359,28 @@ export class DraggableObject extends SceneObject {
 
     shadow.compositionOffsetX = bounds.localCenterX ?? centerX;
     shadow.compositionOffsetY = bounds.localCenterY ?? centerY;
+    shadow.shadowBaseWidth = width;
+    shadow.shadowBaseHeight = height;
+    shadow.shadowCollisionWidth = width * this.shadowEdgeScaleX;
+    shadow.shadowCollisionHeight = height * this.shadowEdgeScaleY;
 
     shadow.setPixelBlurProgress = (progress) => {
       const liftProgress = Phaser.Math.Clamp(progress, 0, 1);
+      const edgeScaleX = Phaser.Math.Linear(this.shadowEdgeScaleX, this.shadowEdgeDragScaleX, liftProgress);
+      const edgeScaleY = Phaser.Math.Linear(this.shadowEdgeScaleY, this.shadowEdgeDragScaleY, liftProgress);
 
       edge.setAlpha(Phaser.Math.Linear(0, this.shadowEdgeAlpha, liftProgress));
       core.setAlpha(Phaser.Math.Linear(0, this.shadowCoreAlpha, liftProgress));
       edge.setScale(
-        Phaser.Math.Linear(1, this.shadowEdgeDragScaleX / this.shadowEdgeScaleX, liftProgress),
-        Phaser.Math.Linear(1, this.shadowEdgeDragScaleY / this.shadowEdgeScaleY, liftProgress),
+        edgeScaleX / this.shadowEdgeScaleX,
+        edgeScaleY / this.shadowEdgeScaleY,
       );
       core.setScale(
         Phaser.Math.Linear(1, this.shadowEdgeDragScaleX / this.shadowEdgeScaleX, liftProgress),
         Phaser.Math.Linear(1, this.shadowEdgeDragScaleY / this.shadowEdgeScaleY, liftProgress),
       );
+      shadow.shadowCollisionWidth = shadow.shadowBaseWidth * edgeScaleX;
+      shadow.shadowCollisionHeight = shadow.shadowBaseHeight * edgeScaleY;
     };
     shadow.setPixelBlurProgress(0);
 
@@ -409,20 +417,28 @@ export class DraggableObject extends SceneObject {
     shadow.generatedTextureKeys = [edgeTextureKey, coreTextureKey];
     shadow.compositionOffsetX = bounds.localCenterX ?? centerX;
     shadow.compositionOffsetY = bounds.localCenterY ?? centerY;
+    shadow.shadowBaseWidth = width;
+    shadow.shadowBaseHeight = height;
+    shadow.shadowCollisionWidth = width * this.shadowEdgeScaleX;
+    shadow.shadowCollisionHeight = height * this.shadowEdgeScaleY;
 
     shadow.setPixelBlurProgress = (progress) => {
       const liftProgress = Phaser.Math.Clamp(progress, 0, 1);
+      const edgeScaleX = Phaser.Math.Linear(this.shadowEdgeScaleX, this.shadowEdgeDragScaleX, liftProgress);
+      const edgeScaleY = Phaser.Math.Linear(this.shadowEdgeScaleY, this.shadowEdgeDragScaleY, liftProgress);
 
       edge.setAlpha(Phaser.Math.Linear(0, this.shadowEdgeAlpha, liftProgress));
       core.setAlpha(Phaser.Math.Linear(0, this.shadowCoreAlpha, liftProgress));
       edge.setScale(
-        Phaser.Math.Linear(1, this.shadowEdgeDragScaleX / this.shadowEdgeScaleX, liftProgress),
-        Phaser.Math.Linear(1, this.shadowEdgeDragScaleY / this.shadowEdgeScaleY, liftProgress),
+        edgeScaleX / this.shadowEdgeScaleX,
+        edgeScaleY / this.shadowEdgeScaleY,
       );
       core.setScale(
         Phaser.Math.Linear(1, this.shadowEdgeDragScaleX / this.shadowEdgeScaleX, liftProgress),
         Phaser.Math.Linear(1, this.shadowEdgeDragScaleY / this.shadowEdgeScaleY, liftProgress),
       );
+      shadow.shadowCollisionWidth = shadow.shadowBaseWidth * edgeScaleX;
+      shadow.shadowCollisionHeight = shadow.shadowBaseHeight * edgeScaleY;
     };
     shadow.setPixelBlurProgress(0);
 
@@ -990,12 +1006,96 @@ export class DraggableObject extends SceneObject {
   }
 
   getFootprint() {
-    const depthFactor = Phaser.Math.Clamp(this.footprintDepthFactor ?? 1, 0, 1);
-    const footprintHeight = this.hitbox.height * depthFactor;
-    const bottom = this.y + this.hitbox.y + this.hitbox.height;
+    return this.getFootprintAt(this.x, this.y);
+  }
+
+  getPlacementRectAt(x = this.x, y = this.y) {
+    return this.getWorldShadowRectAt(x, y) ?? this.getFootprintAt(x, y);
+  }
+
+  getWorldShadowRectAt(x = this.x, y = this.y) {
+    if (!this.shadow) {
+      return null;
+    }
+
+    const localBounds = this.getShadowLocalBounds();
+
+    if (!localBounds) {
+      return null;
+    }
+
+    const centerX = localBounds.x + localBounds.width / 2;
+    const centerY = localBounds.y + localBounds.height / 2;
+    const rotation = this.rotation ?? 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const worldCenterX = x + centerX * cos - centerY * sin;
+    const worldCenterY = y + centerX * sin + centerY * cos;
+    const width = localBounds.width * Math.abs(this.scaleX || 1);
+    const height = localBounds.height * Math.abs(this.scaleY || 1);
 
     return new Phaser.Geom.Rectangle(
-      this.x + this.hitbox.x,
+      worldCenterX - width / 2,
+      worldCenterY - height / 2,
+      width,
+      height,
+    );
+  }
+
+  getShadowLocalBounds() {
+    if (!this.shadow) {
+      return null;
+    }
+
+    if (Number.isFinite(this.shadow.shadowCollisionWidth)
+      && Number.isFinite(this.shadow.shadowCollisionHeight)) {
+      return new Phaser.Geom.Rectangle(
+        this.shadow.x - this.shadow.shadowCollisionWidth / 2,
+        this.shadow.y - this.shadow.shadowCollisionHeight / 2,
+        this.shadow.shadowCollisionWidth,
+        this.shadow.shadowCollisionHeight,
+      );
+    }
+
+    const children = this.shadow.list ?? [];
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    let bottom = -Infinity;
+
+    children.forEach((child) => {
+      if (!child?.visible) {
+        return;
+      }
+
+      const width = child.displayWidth ?? Math.abs((child.width ?? 0) * (child.scaleX ?? 1));
+      const height = child.displayHeight ?? Math.abs((child.height ?? 0) * (child.scaleY ?? 1));
+      const originX = child.originX ?? 0.5;
+      const originY = child.originY ?? 0.5;
+      const childLeft = this.shadow.x + (child.x ?? 0) - width * originX;
+      const childTop = this.shadow.y + (child.y ?? 0) - height * originY;
+
+      left = Math.min(left, childLeft);
+      right = Math.max(right, childLeft + width);
+      top = Math.min(top, childTop);
+      bottom = Math.max(bottom, childTop + height);
+    });
+
+    if (!Number.isFinite(left) || !Number.isFinite(right)
+      || !Number.isFinite(top) || !Number.isFinite(bottom)) {
+      return null;
+    }
+
+    return new Phaser.Geom.Rectangle(left, top, right - left, bottom - top);
+  }
+
+  getFootprintAt(x = this.x, y = this.y) {
+    const depthFactor = Phaser.Math.Clamp(this.footprintDepthFactor ?? 1, 0, 1);
+    const footprintHeight = this.hitbox.height * depthFactor;
+    const bottom = y + this.hitbox.y + this.hitbox.height;
+
+    return new Phaser.Geom.Rectangle(
+      x + this.hitbox.x,
       bottom - footprintHeight,
       this.hitbox.width,
       footprintHeight,
@@ -1011,28 +1111,27 @@ export class DraggableObject extends SceneObject {
   }
 
   canOccupyPosition(x, y) {
-    const depthFactor = Phaser.Math.Clamp(this.footprintDepthFactor ?? 1, 0, 1);
-    const footprintHeight = this.hitbox.height * depthFactor;
-    const bottom = y + this.hitbox.y + this.hitbox.height;
-    const candidate = new Phaser.Geom.Rectangle(
-      x + this.hitbox.x,
-      bottom - footprintHeight,
-      this.hitbox.width,
-      footprintHeight,
-    );
+    const shadowRect = this.getPlacementRectAt(x, y);
+    const bodyRect = this.getWorldHitboxRect(x, y);
 
     for (const other of draggableRegistry) {
       if (other === this || !other.scene) {
         continue;
       }
 
-      const otherFootprint = other.getFootprint();
-
-      if (!Phaser.Geom.Intersects.RectangleToRectangle(candidate, otherFootprint)) {
+      if (other.stackParent === this) {
         continue;
       }
 
-      if (this.canStackOn(other) && other.accepts(this)) {
+      const otherRect = other.getWorldHitboxRect();
+
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(shadowRect, otherRect)) {
+        continue;
+      }
+
+      const placement = { x, y, sourceRect: bodyRect, targetRect: otherRect };
+
+      if (this.canStackOn(other, placement) && other.accepts(this, placement)) {
         continue;
       }
 
@@ -1106,7 +1205,7 @@ export class DraggableObject extends SceneObject {
       this.lastValidY = dragY;
     }
 
-    this.updateStackHoverHighlight(dragX, dragY);
+    this.updateStackHoverHighlight(this.x, this.y);
 
     return true;
   }
@@ -1116,7 +1215,12 @@ export class DraggableObject extends SceneObject {
       return;
     }
 
-    const target = this.findStackTargetAt(x, y);
+    const probeX = this.x;
+    const probeY = this.y;
+
+    this.scene?.setDragDebugInfo?.(this.getDragDebugLines(probeX, probeY));
+
+    const target = this.findStackTargetAt(probeX, probeY);
 
     if (target === this.currentStackHover) {
       return;
@@ -1138,6 +1242,7 @@ export class DraggableObject extends SceneObject {
       this.currentStackHover.setStackHighlight(false);
     }
     this.currentStackHover = null;
+    this.scene?.setDragDebugInfo?.(['idle']);
   }
 
   handleDragEnd(pointer) {
@@ -1182,6 +1287,10 @@ export class DraggableObject extends SceneObject {
     );
   }
 
+  getStackProbeRect(centerX = this.x, centerY = this.y) {
+    return this.getPlacementRectAt(centerX, centerY);
+  }
+
   beginManualDrag(pointer) {
     if (this.isDragging) {
       return false;
@@ -1219,7 +1328,7 @@ export class DraggableObject extends SceneObject {
         this.lastValidY = y;
       }
 
-      this.updateStackHoverHighlight(x, y);
+      this.updateStackHoverHighlight(this.x, this.y);
     };
 
     this.manualDragUpHandler = () => {
@@ -1273,7 +1382,7 @@ export class DraggableObject extends SceneObject {
       return null;
     }
 
-    const myRect = this.getWorldHitboxRect(x, y);
+    const shadowRect = this.getStackProbeRect(x, y);
     let bestTarget = null;
     let bestDepth = -Infinity;
 
@@ -1282,14 +1391,19 @@ export class DraggableObject extends SceneObject {
         continue;
       }
 
-      const otherRect = other.getWorldHitboxRect();
-      const placement = { x, y, sourceRect: myRect, targetRect: otherRect };
-
-      if (!this.canStackOn(other, placement) || !other.accepts(this, placement)) {
+      if (other.stackParent === this) {
         continue;
       }
 
-      if (!Phaser.Geom.Intersects.RectangleToRectangle(myRect, otherRect)) {
+      const otherRect = other.getWorldHitboxRect();
+
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(shadowRect, otherRect)) {
+        continue;
+      }
+
+      const placement = { x, y, sourceRect: shadowRect, targetRect: otherRect };
+
+      if (!this.canStackOn(other, placement) || !other.accepts(this, placement)) {
         continue;
       }
 
@@ -1300,6 +1414,45 @@ export class DraggableObject extends SceneObject {
     }
 
     return bestTarget;
+  }
+
+  getDragDebugLines(x, y) {
+    const sourceRect = this.getStackProbeRect(x, y);
+    const lines = [
+      `${this.displayName ?? this.constructor.name}`,
+      `shadow ${Math.round(sourceRect.x)},${Math.round(sourceRect.y)} ${Math.round(sourceRect.width)}x${Math.round(sourceRect.height)}`,
+    ];
+    const hits = [];
+
+    for (const other of draggableRegistry) {
+      if (other === this || !other.scene || other.isDragging) {
+        continue;
+      }
+
+      const targetRect = other.getWorldHitboxRect();
+
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(sourceRect, targetRect)) {
+        continue;
+      }
+
+      const placement = { x, y, sourceRect, targetRect };
+      const canStack = this.canStackOn(other, placement) && other.accepts(this, placement);
+      const reason = canStack
+        ? 'stack OK'
+        : other.getStackRejectionReason?.(this, placement) ?? 'not stackable';
+
+      hits.push(
+        `${other.displayName ?? other.constructor.name}: hit ${Math.round(targetRect.x)},${Math.round(targetRect.y)} ${Math.round(targetRect.width)}x${Math.round(targetRect.height)}, ${reason}`,
+      );
+    }
+
+    if (!hits.length) {
+      lines.push('collision: none');
+      return lines;
+    }
+
+    lines.push(`collision: ${hits.length}`);
+    return [...lines, ...hits.slice(0, 4)];
   }
 
   snapBackTo(x, y) {
@@ -1341,9 +1494,8 @@ export class DraggableObject extends SceneObject {
 
     if (this.shadow) {
       const liftProgress = Phaser.Math.Clamp(lift / this.dragLift, 0, 1);
-      const shadowScreenOffset = Phaser.Math.Linear(this.restShadowOffset, this.dragShadowOffset, liftProgress);
 
-      this.setShadowScreenOffset(shadowScreenOffset);
+      this.setShadowScreenOffset(this.restShadowOffset);
       this.shadow.setAlpha(Phaser.Math.Linear(this.restShadowAlpha, this.dragShadowAlpha, liftProgress));
 
       if (this.shadow.setPixelBlurProgress) {
@@ -1550,6 +1702,9 @@ export class DraggableObject extends SceneObject {
   updateDragPosition(delta = 16.67, snap = false) {
     if (snap || !this.isDragging) {
       this.setPosition(this.dragAnchorX, this.dragAnchorY);
+      if (this.isDragging) {
+        this.updateStackHoverHighlight(this.x, this.y);
+      }
       return;
     }
 
@@ -1566,10 +1721,12 @@ export class DraggableObject extends SceneObject {
 
     if (distance <= this.dragSnapDistance) {
       this.setPosition(this.dragAnchorX, this.dragAnchorY);
+      this.updateStackHoverHighlight(this.x, this.y);
       return;
     }
 
     this.setPosition(nextX, nextY);
+    this.updateStackHoverHighlight(this.x, this.y);
   }
 
   tweenDragLift(targetLift, duration, ease, onComplete = null) {
