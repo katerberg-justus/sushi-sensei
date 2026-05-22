@@ -59,6 +59,10 @@ export class CuttableObject extends SceneObject {
 
     target.addPiece(0, 0, textureWidth, textureHeight);
     target.setDepth(target.cutDepth);
+
+    if (target.refreshCuttableGeometry) {
+      target.refreshCuttableGeometry();
+    }
   }
 
   tryCutWith(cutter, start, end) {
@@ -194,6 +198,7 @@ export class CuttableObject extends SceneObject {
         cropWidth: piece.cropWidth,
         cropHeight: piece.cropHeight,
         minimumCutWidth: this.minimumCutWidth,
+        variant: this.variantIndex,
       });
     }
 

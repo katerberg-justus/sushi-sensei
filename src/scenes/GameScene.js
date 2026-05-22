@@ -32,25 +32,38 @@ export class GameScene extends Phaser.Scene {
 
     this.createNameSignboard();
     this.positionNameSignboard();
+    this.createFpsCounter();
+    this.positionFpsCounter();
     this.scale.on('resize', this.positionNameSignboard, this);
+    this.scale.on('resize', this.positionFpsCounter, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.positionNameSignboard, this);
+      this.scale.off('resize', this.positionFpsCounter, this);
       this.input.keyboard.off('keydown-R', this.resetScene, this);
     });
     this.input.on('gameobjectover', this.handleObjectOver, this);
     this.input.on('gameobjectout', this.handleObjectOut, this);
   }
 
+  update(time) {
+    if (!this.fpsCounter || time < this.nextFpsUpdateAt) {
+      return;
+    }
+
+    const fps = Math.round(this.game.loop.actualFps || 0);
+    const rawDelta = this.game.loop.rawDelta || 0;
+
+    this.fpsCounter.setText(`${fps} FPS`);
+    this.frameDeltaCounter.setText(`${rawDelta.toFixed(1)} MS`);
+    this.nextFpsUpdateAt = time + 250;
+  }
+
   resetScene() {
     this.scene.restart();
   }
 
-  positionNameSignboard() {
-    if (!this.nameSignboard) {
-      return;
-    }
-
+  getVisibleGameArea() {
     const sm = this.scale;
     const gameWidth = sm.gameSize.width;
     const gameHeight = sm.gameSize.height;
@@ -59,12 +72,27 @@ export class GameScene extends Phaser.Scene {
     const zoom = Math.max(parentWidth / gameWidth, parentHeight / gameHeight) || 1;
     const visibleWidth = Math.min(gameWidth, parentWidth / zoom);
     const visibleHeight = Math.min(gameHeight, parentHeight / zoom);
-    const visibleLeft = (gameWidth - visibleWidth) / 2;
-    const visibleBottom = (gameHeight + visibleHeight) / 2;
+
+    return {
+      left: (gameWidth - visibleWidth) / 2,
+      top: (gameHeight - visibleHeight) / 2,
+      right: (gameWidth + visibleWidth) / 2,
+      bottom: (gameHeight + visibleHeight) / 2,
+      width: visibleWidth,
+      height: visibleHeight,
+    };
+  }
+
+  positionNameSignboard() {
+    if (!this.nameSignboard) {
+      return;
+    }
+
+    const visibleArea = this.getVisibleGameArea();
     const margin = 12;
 
-    const restX = Math.round(visibleLeft + margin);
-    const restY = Math.round(visibleBottom - margin - this.nameSignboard.signboardHeight);
+    const restX = Math.round(visibleArea.left + margin);
+    const restY = Math.round(visibleArea.bottom - margin - this.nameSignboard.signboardHeight);
 
     this.nameSignboard.restX = restX;
     this.nameSignboard.restY = restY;
@@ -148,6 +176,34 @@ export class GameScene extends Phaser.Scene {
 
     this.nameSignboard = container;
     this.nameSignboardText = text;
+  }
+
+  createFpsCounter() {
+    this.fpsCounter = this.add.bitmapText(0, 0, BITMAP_FONT_PIXEL, '-- FPS', 8);
+    this.fpsCounter.setOrigin(1, 0);
+    this.fpsCounter.setTint(0xf8f4ef);
+    this.fpsCounter.setDepth(1000);
+
+    this.frameDeltaCounter = this.add.bitmapText(0, 0, BITMAP_FONT_PIXEL, '--.- MS', 8);
+    this.frameDeltaCounter.setOrigin(1, 0);
+    this.frameDeltaCounter.setTint(0xf8f4ef);
+    this.frameDeltaCounter.setDepth(1000);
+
+    this.nextFpsUpdateAt = 0;
+  }
+
+  positionFpsCounter() {
+    if (!this.fpsCounter || !this.frameDeltaCounter) {
+      return;
+    }
+
+    const visibleArea = this.getVisibleGameArea();
+    const margin = 10;
+    const x = Math.round(visibleArea.right - margin);
+    const y = Math.round(visibleArea.top + margin);
+
+    this.fpsCounter.setPosition(x, y);
+    this.frameDeltaCounter.setPosition(x, y + 12);
   }
 
   handleObjectOver(_pointer, gameObject) {

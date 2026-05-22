@@ -51,6 +51,7 @@ export class DraggableObject extends SceneObject {
     this.draggablePartBaseScales = new Map();
     this.draggablePartBasePositions = new Map();
     this.shadow = null;
+    this.footprintDepthFactor = 0.34;
     this.hitbox = new Phaser.Geom.Rectangle(0, 0, width, height);
 
     this.setSize(width, height);
@@ -65,6 +66,8 @@ export class DraggableObject extends SceneObject {
     this.on('dragstart', this.handleDragStart, this);
     this.on('drag', this.handleDrag, this);
     this.on('dragend', this.handleDragEnd, this);
+
+    this.applyRestingDepth();
   }
 
   setCenteredHitbox(width, height, offsetX = 0, offsetY = 0) {
@@ -735,12 +738,38 @@ export class DraggableObject extends SceneObject {
     super.destroy(fromScene);
   }
 
+  applyDragDepth() {
+    let maxDepth = this.restDepth;
+
+    for (const other of draggableRegistry) {
+      if (other === this || !other.scene) {
+        continue;
+      }
+      if (other.depth > maxDepth) {
+        maxDepth = other.depth;
+      }
+    }
+
+    this.setDepth(maxDepth + this.dragDepth);
+  }
+
+  applyRestingDepth() {
+    const footprint = this.getFootprint();
+    const bottom = footprint.y + footprint.height;
+
+    this.setDepth(this.restDepth + bottom);
+  }
+
   getFootprint() {
+    const depthFactor = Phaser.Math.Clamp(this.footprintDepthFactor ?? 1, 0, 1);
+    const footprintHeight = this.hitbox.height * depthFactor;
+    const bottom = this.y + this.hitbox.y + this.hitbox.height;
+
     return new Phaser.Geom.Rectangle(
       this.x + this.hitbox.x,
-      this.y + this.hitbox.y,
+      bottom - footprintHeight,
       this.hitbox.width,
-      this.hitbox.height,
+      footprintHeight,
     );
   }
 
@@ -753,11 +782,14 @@ export class DraggableObject extends SceneObject {
   }
 
   canOccupyPosition(x, y) {
+    const depthFactor = Phaser.Math.Clamp(this.footprintDepthFactor ?? 1, 0, 1);
+    const footprintHeight = this.hitbox.height * depthFactor;
+    const bottom = y + this.hitbox.y + this.hitbox.height;
     const candidate = new Phaser.Geom.Rectangle(
       x + this.hitbox.x,
-      y + this.hitbox.y,
+      bottom - footprintHeight,
       this.hitbox.width,
-      this.hitbox.height,
+      footprintHeight,
     );
 
     for (const other of draggableRegistry) {
@@ -820,7 +852,7 @@ export class DraggableObject extends SceneObject {
     this.dragAnchorY = this.y;
     this.stopSnapBack();
     this.stopDropImpact();
-    this.setDepth(this.dragDepth);
+    this.applyDragDepth();
     this.lastValidX = this.x;
     this.lastValidY = this.y;
     this.tweenDragLift(this.dragLift, this.dragLiftDuration, 'Quad.easeOut');
@@ -857,7 +889,7 @@ export class DraggableObject extends SceneObject {
     this.isDragging = false;
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {
-        this.setDepth(this.restDepth);
+        this.applyRestingDepth();
         this.playDropImpact();
       }
     });
