@@ -1,14 +1,13 @@
-import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { IngredientObject } from './IngredientObject.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
-const PIXEL = 2.25;
+const PIXEL = 1.8;
 const RICE_BALL_BASE_KEY = 'rice-ball-pixel';
-const RICE_BALL_SHADOW_KEY = 'rice-ball-shadow-pixel';
 const RICE_BALL_VARIANT_POOL = 6;
 const RICE_BALL_WIDTH = 30;
 const RICE_BALL_HEIGHT = 26;
+const TOPPING_SIZE_TOLERANCE = 0.25;
 
 export class RiceBall extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -18,42 +17,62 @@ export class RiceBall extends IngredientObject {
       pool: RICE_BALL_VARIANT_POOL,
       paint: RiceBall.paintTexture,
     });
-    RiceBall.createShadowTexture(scene);
 
-    super(scene, x, y, 68, 58);
-    this.setCenteredHitbox(68, 58, 0, 4);
+    super(scene, x, y, 54, 46);
+    this.setCenteredHitbox(54, 46, 0, 3);
     this.variantIndex = variantIndex;
+    this.computedShadePixelSize = 1;
+    this.computedShadeBottomProfileSmoothing = 2;
 
-    const shadowEdge = scene.add.image(0, 0, RICE_BALL_SHADOW_KEY);
-    shadowEdge.setScale(PIXEL * this.shadowEdgeScaleX, PIXEL * this.shadowEdgeScaleY);
-    shadowEdge.setOrigin(0.5);
-    shadowEdge.setTint(0x9a8064);
-
-    const shadowCore = scene.add.image(0, 0, RICE_BALL_SHADOW_KEY);
-    shadowCore.setScale(PIXEL * this.shadowCoreScaleX, PIXEL * this.shadowCoreScaleY);
-    shadowCore.setOrigin(0.5);
-    shadowCore.setTint(0x6f5d48);
-
-    const shadow = scene.add.container(0, this.restShadowOffset, [shadowEdge, shadowCore]);
-    shadow.compositionOffsetX = 0;
-    shadow.compositionOffsetY = 14;
-    shadow.setPixelBlurProgress = (progress) => {
-      shadowEdge.setAlpha(Phaser.Math.Linear(0, this.shadowEdgeAlpha, progress));
-      shadowCore.setAlpha(Phaser.Math.Linear(0, this.shadowCoreAlpha, progress));
-      shadowEdge.setScale(
-        Phaser.Math.Linear(PIXEL * this.shadowEdgeScaleX, PIXEL * this.shadowEdgeDragScaleX, progress),
-        Phaser.Math.Linear(PIXEL * this.shadowEdgeScaleY, PIXEL * this.shadowEdgeDragScaleY, progress),
-      );
-    };
-    shadow.setPixelBlurProgress(0);
-    this.setPixelShadow(shadow);
+    this.acceptedStackCategories = ['fish'];
+    this.maxStackedItems = 1;
+    this.stackOffsetX = 0;
+    this.stackOffsetY = -5;
 
     this.sprite = scene.add.image(0, 0, textureKey);
     this.sprite.setScale(PIXEL);
     this.sprite.setOrigin(0.5);
 
     this.addDraggablePart(this.sprite);
-    this.setDepth(this.restDepth);
+    this.refreshCompositionShadow();
+    this.applyRestingDepth();
+  }
+
+  acceptsStackPlacement(other, placement = {}) {
+    if (other.stackCategory !== 'fish') {
+      return true;
+    }
+
+    const targetRect = placement.targetRect ?? this.getWorldHitboxRect?.();
+    const sourceRect = placement.sourceRect ?? other.getWorldHitboxRect?.(placement.x, placement.y);
+
+    if (!targetRect || !sourceRect) {
+      return false;
+    }
+
+    const minSizeRatio = 1 - TOPPING_SIZE_TOLERANCE;
+    const maxSizeRatio = 1 + TOPPING_SIZE_TOLERANCE;
+    const widthRatio = sourceRect.width / targetRect.width;
+    const heightRatio = sourceRect.height / targetRect.height;
+
+    if (
+      widthRatio < minSizeRatio
+      || widthRatio > maxSizeRatio
+      || heightRatio < minSizeRatio
+      || heightRatio > maxSizeRatio
+    ) {
+      return false;
+    }
+
+    const sourceCenterX = sourceRect.centerX ?? sourceRect.x + sourceRect.width / 2;
+    const sourceCenterY = sourceRect.centerY ?? sourceRect.y + sourceRect.height / 2;
+    const targetCenterX = targetRect.centerX ?? targetRect.x + targetRect.width / 2;
+    const targetCenterY = targetRect.centerY ?? targetRect.y + targetRect.height / 2;
+    const maxHorizontalDistance = targetRect.width * TOPPING_SIZE_TOLERANCE;
+    const maxVerticalDistance = targetRect.height * TOPPING_SIZE_TOLERANCE;
+
+    return Math.abs(sourceCenterX - targetCenterX) <= maxHorizontalDistance
+      && Math.abs(sourceCenterY - targetCenterY) <= maxVerticalDistance;
   }
 
   static paintTexture(context, rng) {
@@ -123,35 +142,5 @@ export class RiceBall extends IngredientObject {
 
       context.fillRect(sx, sy, 1, 1);
     }
-  }
-
-  static createShadowTexture(scene) {
-    if (scene.textures.exists(RICE_BALL_SHADOW_KEY)) {
-      return;
-    }
-
-    const width = 32;
-    const height = 24;
-    const texture = scene.textures.createCanvas(RICE_BALL_SHADOW_KEY, width, height);
-    const context = texture.getContext();
-
-    context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, width, height);
-
-    context.fillStyle = toHexColor(0xdddddd);
-    context.fillRect(10, 3, 12, 3);
-    context.fillRect(7, 5, 18, 3);
-    context.fillRect(5, 7, 22, 4);
-    context.fillRect(3, 10, 26, 7);
-    context.fillRect(5, 17, 22, 3);
-    context.fillRect(8, 20, 16, 2);
-
-    context.fillStyle = toHexColor(0xffffff);
-    context.fillRect(9, 5, 14, 3);
-    context.fillRect(7, 8, 18, 4);
-    context.fillRect(5, 12, 21, 5);
-    context.fillRect(8, 17, 15, 2);
-
-    texture.refresh();
   }
 }

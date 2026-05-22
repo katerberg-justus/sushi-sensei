@@ -55,7 +55,7 @@ export class Knife extends CuttingObject {
     this.addDraggablePart(this.sprite);
     this.setCutTipOffset(KNIFE_TIP_LOCAL_X, KNIFE_TIP_LOCAL_Y);
     this.setHoldArea(HANDLE_HOLD_WIDTH, HANDLE_HOLD_HEIGHT, 0, HANDLE_HOLD_OFFSET_Y);
-    this.setDepth(this.restDepth);
+    this.applyRestingDepth();
   }
 
   canCutOrientation(orientation, target) {
@@ -100,19 +100,45 @@ export class Knife extends CuttingObject {
 
     context.fillStyle = '#6a3f2a';
     context.fillRect(42, 8, 18, 5);
+    context.fillStyle = '#784a32';
+    context.fillRect(43, 9, 16, 3);
     context.fillStyle = '#8b5538';
     context.fillRect(45, 6, 14, 3);
+    context.fillStyle = '#a06b48';
+    context.fillRect(47, 7, 5, 1);
+    context.fillRect(54, 7, 4, 1);
     context.fillStyle = '#4b2e22';
+    context.fillRect(44, 12, 16, 2);
     context.fillRect(58, 9, 4, 3);
+    context.fillStyle = '#3a2419';
+    context.fillRect(61, 8, 1, 5);
 
+    context.fillStyle = '#5a6266';
+    context.fillRect(40, 5, 2, 10);
+    context.fillStyle = '#8fa2a8';
+    context.fillRect(41, 6, 1, 8);
+
+    context.fillStyle = '#a8b6bb';
+    context.fillRect(7, 7, 35, 5);
     context.fillStyle = '#cbd4d7';
-    context.fillRect(8, 6, 36, 6);
+    context.fillRect(8, 6, 34, 6);
     context.fillStyle = '#edf3f4';
     context.fillRect(5, 12, 35, 3);
     context.fillStyle = '#8fa2a8';
     context.fillRect(10, 4, 31, 2);
+    context.fillStyle = '#7a8a90';
+    context.fillRect(6, 14, 33, 1);
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(14, 9, 5, 1);
+    context.fillRect(24, 8, 4, 1);
+    context.fillRect(32, 10, 3, 1);
+    context.fillRect(19, 13, 6, 1);
+    context.fillRect(30, 13, 4, 1);
+
     context.fillStyle = '#f8fbfb';
     context.fillRect(2, 11, 6, 2);
+    context.fillRect(3, 12, 4, 1);
 
     texture.refresh();
   }

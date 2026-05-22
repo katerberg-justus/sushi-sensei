@@ -37,7 +37,12 @@ export class RotatableObject extends DraggableObject {
   shouldSuppressDragStart(pointer) {
     const pointerId = this.getDragPointerId(pointer);
 
-    return pointerId !== null && pointerId === this.rotationOnlyPointerId;
+    if (pointerId === null) {
+      return false;
+    }
+
+    return pointerId === this.rotationOnlyPointerId
+      || pointerId === this.suppressedDragPointerId;
   }
 
   rotateBy(angle) {
@@ -130,24 +135,23 @@ export class RotatableObject extends DraggableObject {
   }
 
   worldVectorToLocal(vector) {
-    const rotation = -(this.rotation ?? 0);
-    const sin = Math.sin(rotation);
-    const cos = Math.cos(rotation);
+    if (this.getLocalVectorForWorldOffset) {
+      return this.getLocalVectorForWorldOffset(vector.x, vector.y);
+    }
 
-    return new Phaser.Math.Vector2(
-      vector.x * cos - vector.y * sin,
-      vector.x * sin + vector.y * cos,
-    );
+    const origin = this.worldToLocalPoint({ x: 0, y: 0 });
+    const end = this.worldToLocalPoint(vector);
+
+    return new Phaser.Math.Vector2(end.x - origin.x, end.y - origin.y);
   }
 
   localVectorToWorld(vector) {
-    const rotation = this.rotation ?? 0;
-    const sin = Math.sin(rotation);
-    const cos = Math.cos(rotation);
+    const origin = this.localToWorldPoint({ x: 0, y: 0 });
+    const end = this.localToWorldPoint(vector);
 
     return new Phaser.Math.Vector2(
-      vector.x * cos - vector.y * sin,
-      vector.x * sin + vector.y * cos,
+      end.x - origin.x,
+      end.y - origin.y,
     );
   }
 

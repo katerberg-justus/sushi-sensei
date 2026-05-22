@@ -1,5 +1,29 @@
 const DEFAULT_POOL_SIZE = 6;
 
+const fullImageDataBySource = new WeakMap();
+
+export function getCachedFullImageData(source) {
+  if (!source) {
+    return null;
+  }
+
+  return fullImageDataBySource.get(source) ?? null;
+}
+
+export function sliceCachedImageData(full, cropX, cropY, width, height) {
+  const data = new Uint8ClampedArray(width * height * 4);
+  const fullWidth = full.width;
+  const rowBytes = width * 4;
+
+  for (let y = 0; y < height; y += 1) {
+    const srcStart = ((y + cropY) * fullWidth + cropX) * 4;
+
+    data.set(full.data.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
+  }
+
+  return { data, width, height };
+}
+
 export function createSeededRng(seed) {
   let state = (seed >>> 0) || 1;
 
@@ -52,6 +76,18 @@ export function ensureVariantTexture(scene, baseKey, variantIndex, width, height
   context.clearRect(0, 0, width, height);
 
   paintFn(context, rng, width, height, variantIndex);
+
+  try {
+    const fullImageData = context.getImageData(0, 0, width, height);
+    const sourceImage = texture.getSourceImage?.();
+    const canvas = sourceImage?.getContext ? sourceImage : sourceImage?.canvas ?? texture.canvas;
+
+    if (canvas) {
+      fullImageDataBySource.set(canvas, fullImageData);
+    }
+  } catch (error) {
+    // Ignore — fall back to on-demand getImageData if snapshot fails.
+  }
 
   texture.refresh();
 

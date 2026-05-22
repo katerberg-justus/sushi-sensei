@@ -1,4 +1,6 @@
+import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { RotatableObject } from './RotatableObject.js';
+import { holdSharedTexture, releaseSharedTexture } from './DraggableObject.js';
 
 let computedShadeTextureId = 0;
 
@@ -10,6 +12,23 @@ export class IngredientObject extends RotatableObject {
     this.softness = 0.9;
     this.restShadowOffset = 6;
     this.dragShadowOffset = 6;
+    this.stackCategory = null;
+    this.acceptedStackCategories = null;
+    this.maxStackedItems = 1;
+    this.stackOffsetX = 0;
+    this.stackOffsetY = 0;
+    this.stackChildren = [];
+    this.stackParent = null;
+    this.longPressDuration = 400;
+    this.longPressMoveTolerance = 6;
+    this.longPressTimer = null;
+    this.longPressOrigin = null;
+    this.longPressPointerMoveHandler = null;
+
+    this.on('pointerdown', this.handleStackLongPressDown, this);
+    this.on('pointerup', this.cancelStackLongPress, this);
+    this.on('pointerupoutside', this.cancelStackLongPress, this);
+    this.on('dragstart', this.cancelStackLongPress, this);
     this.computedShadeParts = new Map();
     this.computedShadeDarkAlpha = 0.34;
     this.computedShadeLightAlpha = 0.16;
@@ -17,6 +36,7 @@ export class IngredientObject extends RotatableObject {
     this.computedShadeBottomCoverage = 0.25;
     this.computedShadeMaxPixels = 20;
     this.computedShadeDarken = 0.5;
+    this.computedShadeBottomProfileSmoothing = 0;
     this.computedShadeFadeTween = null;
     this.computedShadeSpinFrames = null;
     this.computedShadeSpinFrameRate = 60;
@@ -82,13 +102,61 @@ export class IngredientObject extends RotatableObject {
     this.computedShadeParts.set(part, shade);
     super.addDraggablePart(shade);
     this.syncComputedShadePart(part, shade);
-    this.refreshComputedShade();
+
+    if (!this.deferComputedShadeRefresh) {
+      this.refreshComputedShade();
+    }
 
     return shade;
   }
 
+  borrowComputedShadeFrom(parent) {
+    if (!parent?.computedShadeParts?.size || !this.computedShadeParts?.size) {
+      return this;
+    }
+
+    const parentShade = parent.computedShadeParts.values().next().value;
+    const parentShadeKey = parentShade?.computedShadeTextureKey;
+
+    if (!parentShadeKey || !this.scene?.textures?.exists(parentShadeKey)) {
+      return this;
+    }
+
+    this.computedShadeParts.forEach((shade) => {
+      holdSharedTexture(parentShadeKey);
+      shade.setTexture(parentShadeKey);
+      shade.computedShadeTextureKey = parentShadeKey;
+      shade.setAlpha(1);
+    });
+
+    return this;
+  }
+
+  commitDeferredRenderArtifacts() {
+    const ranShade = this.deferComputedShadeRefresh && !this.skipDeferredComputedShadeRefresh;
+    const ranShadow = this.deferCompositionShadowRefresh;
+
+    this.deferComputedShadeRefresh = false;
+    this.deferCompositionShadowRefresh = false;
+    this.skipDeferredComputedShadeRefresh = false;
+
+    if (ranShade) {
+      this.refreshComputedShade();
+    }
+
+    if (ranShadow && this.refreshCompositionShadow) {
+      this.refreshCompositionShadow();
+    }
+
+    return this;
+  }
+
   refreshComputedShade() {
     if (!this.computedShadeParts?.size) {
+      return this;
+    }
+
+    if (this.deferComputedShadeRefresh) {
       return this;
     }
 
@@ -303,12 +371,45 @@ export class IngredientObject extends RotatableObject {
       return null;
     }
 
+    const smoothingRadius = Math.max(0, Math.floor(this.computedShadeBottomProfileSmoothing ?? 0));
+
     return {
       minY,
       maxY,
       spanY: Math.max(1, maxY - minY),
-      bottomByX,
+      bottomByX: smoothingRadius > 0
+        ? this.getSmoothedComputedShadeBottomProfile(bottomByX, smoothingRadius)
+        : bottomByX,
     };
+  }
+
+  getSmoothedComputedShadeBottomProfile(bottomByX, radius) {
+    if (!bottomByX?.size || radius <= 0) {
+      return bottomByX;
+    }
+
+    const smoothed = new Map();
+
+    bottomByX.forEach((_bottomY, bucket) => {
+      const samples = [];
+
+      for (let offset = -radius; offset <= radius; offset += 1) {
+        const sample = bottomByX.get(bucket + offset);
+
+        if (sample !== undefined) {
+          samples.push(sample);
+        }
+      }
+
+      if (!samples.length) {
+        return;
+      }
+
+      samples.sort((a, b) => a - b);
+      smoothed.set(bucket, samples[Math.floor(samples.length / 2)]);
+    });
+
+    return smoothed;
   }
 
   getLocalBottomY(profile, screenX) {
@@ -317,30 +418,39 @@ export class IngredientObject extends RotatableObject {
     }
 
     const bucket = Math.round(screenX);
-    let best = profile.bottomByX.get(bucket);
+    const exact = profile.bottomByX.get(bucket);
 
-    if (best !== undefined) {
-      return best;
+    if (exact !== undefined) {
+      return exact;
     }
 
-    for (let offset = 1; offset <= 3; offset += 1) {
+    let nearestLower;
+    let nearestUpper;
+    const maxSearchOffset = Math.max(3, Math.ceil(profile.spanY));
+
+    for (let offset = 1; offset <= maxSearchOffset; offset += 1) {
       const lower = profile.bottomByX.get(bucket - offset);
       const upper = profile.bottomByX.get(bucket + offset);
 
-      if (lower !== undefined && (best === undefined || lower > best)) {
-        best = lower;
+      if (lower !== undefined) {
+        nearestLower = { value: lower, distance: offset };
       }
 
-      if (upper !== undefined && (best === undefined || upper > best)) {
-        best = upper;
+      if (upper !== undefined) {
+        nearestUpper = { value: upper, distance: offset };
       }
 
-      if (best !== undefined) {
-        return best;
+      if (nearestLower && nearestUpper) {
+        const totalDistance = nearestLower.distance + nearestUpper.distance;
+
+        return (
+          nearestLower.value * nearestUpper.distance
+          + nearestUpper.value * nearestLower.distance
+        ) / totalDistance;
       }
     }
 
-    return profile.maxY;
+    return nearestLower?.value ?? nearestUpper?.value ?? profile.maxY;
   }
 
   updateComputedShadePart(part, shade, profile) {
@@ -598,8 +708,8 @@ export class IngredientObject extends RotatableObject {
     shade.setTexture(key);
     shade.computedShadeTextureKey = key;
 
-    if (previousKey && previousKey !== key && this.scene.textures.exists(previousKey)) {
-      this.scene.textures.remove(previousKey);
+    if (previousKey && previousKey !== key) {
+      releaseSharedTexture(this.scene, previousKey);
     }
   }
 
@@ -615,16 +725,256 @@ export class IngredientObject extends RotatableObject {
       const key = shade.computedShadeTextureKey;
 
       shade.destroy();
-
-      if (key && this.scene.textures.exists(key)) {
-        this.scene.textures.remove(key);
-      }
+      releaseSharedTexture(this.scene, key);
     });
 
     this.computedShadeParts.clear();
   }
 
+  handleStackLongPressDown(pointer) {
+    if (!this.stackChildren?.length) {
+      return;
+    }
+
+    this.cancelStackLongPress();
+    this.longPressOrigin = { x: pointer.x, y: pointer.y };
+
+    this.longPressPointerMoveHandler = (movePointer) => {
+      if (!this.longPressOrigin) {
+        return;
+      }
+      const dx = movePointer.x - this.longPressOrigin.x;
+      const dy = movePointer.y - this.longPressOrigin.y;
+
+      if (Math.sqrt(dx * dx + dy * dy) > this.longPressMoveTolerance) {
+        this.cancelStackLongPress();
+      }
+    };
+
+    this.scene.input.on('pointermove', this.longPressPointerMoveHandler);
+
+    this.longPressTimer = this.scene.time.delayedCall(this.longPressDuration, () => {
+      this.longPressTimer = null;
+      this.fireStackLongPress();
+    });
+  }
+
+  cancelStackLongPress() {
+    if (this.longPressTimer) {
+      this.longPressTimer.remove(false);
+      this.longPressTimer = null;
+    }
+
+    if (this.longPressPointerMoveHandler) {
+      this.scene.input.off('pointermove', this.longPressPointerMoveHandler);
+      this.longPressPointerMoveHandler = null;
+    }
+
+    this.longPressOrigin = null;
+  }
+
+  fireStackLongPress() {
+    this.cancelStackLongPress();
+
+    const topping = this.stackChildren[this.stackChildren.length - 1];
+
+    if (!topping?.detachFromStackParent) {
+      return;
+    }
+
+    const pointer = this.scene.input.activePointer;
+
+    this.suppressedDragPointerId = this.getDragPointerId(pointer);
+
+    topping.detachFromStackParent();
+    topping.beginManualDrag?.(pointer);
+  }
+
+  setStackHighlight(active) {
+    if (this.stackHighlightActive === active) {
+      return;
+    }
+
+    this.stackHighlightActive = active;
+
+    const tint = 0xfff2a8;
+
+    this.draggableParts.forEach((part) => {
+      if (part.excludeFromCompositionShadow || !part.setTint) {
+        return;
+      }
+
+      if (active) {
+        part.setTint(tint);
+      } else {
+        part.clearTint();
+      }
+    });
+  }
+
+  accepts(other, placement = {}) {
+    if (!this.acceptedStackCategories || !other?.stackCategory) {
+      return false;
+    }
+
+    if (this.stackChildren.length >= this.maxStackedItems) {
+      return false;
+    }
+
+    if (other.stackParent === this) {
+      return true;
+    }
+
+    return this.acceptedStackCategories.includes(other.stackCategory)
+      && this.acceptsStackPlacement(other, placement);
+  }
+
+  acceptsStackPlacement(_other, _placement = {}) {
+    return true;
+  }
+
+  canStackOn(other, placement = {}) {
+    return Boolean(this.stackCategory) && Boolean(other?.accepts?.(this, placement));
+  }
+
+  attachToStackTarget(target) {
+    if (!target || this.stackParent === target) {
+      return false;
+    }
+
+    if (this.stackParent) {
+      this.detachFromStackParent();
+    }
+
+    const offsetX = target.stackOffsetX ?? 0;
+    const offsetY = target.stackOffsetY ?? 0;
+
+    target.add(this);
+    this.setPosition(offsetX, offsetY);
+    this.setRotation(0);
+    this.refreshRotatedGeometry?.();
+
+    this.hoistShadowInto(target, offsetX, offsetY);
+
+    if (this.input) {
+      this.disableInteractive();
+    }
+
+    this.stackParent = target;
+    target.stackChildren.push(this);
+
+    return true;
+  }
+
+  hoistShadowInto(target, offsetX, offsetY) {
+    if (!this.shadow || !target) {
+      return;
+    }
+
+    this.unhoistShadowFromStack();
+
+    this.stackShadowHoist = {
+      target,
+      compositionOffsetX: this.shadow.compositionOffsetX ?? 0,
+      compositionOffsetY: this.shadow.compositionOffsetY ?? 0,
+    };
+
+    this.remove(this.shadow);
+    this.shadow.compositionOffsetX = this.stackShadowHoist.compositionOffsetX + offsetX;
+    this.shadow.compositionOffsetY = this.stackShadowHoist.compositionOffsetY + offsetY;
+    this.shadow.setVisible(true);
+    target.addAt(this.shadow, 0);
+    this.setDragLift(this.currentLift);
+  }
+
+  unhoistShadowFromStack() {
+    if (!this.stackShadowHoist || !this.shadow) {
+      this.stackShadowHoist = null;
+      return;
+    }
+
+    const { target, compositionOffsetX, compositionOffsetY } = this.stackShadowHoist;
+
+    target?.remove(this.shadow);
+    this.shadow.compositionOffsetX = compositionOffsetX;
+    this.shadow.compositionOffsetY = compositionOffsetY;
+    this.addAt(this.shadow, 0);
+    this.stackShadowHoist = null;
+    this.setDragLift(this.currentLift);
+  }
+
+  setDragLift(lift) {
+    super.setDragLift(lift);
+
+    this.stackChildren?.forEach((child) => {
+      child.setDragLift?.(lift);
+    });
+
+    if (this.stackDragShadowNeedsRefresh) {
+      this.refreshStackDragShadow?.();
+      super.setDragLift(lift);
+    }
+  }
+
+  detachFromStackParent() {
+    const parent = this.stackParent;
+
+    if (!parent) {
+      return false;
+    }
+
+    const worldPoint = new Phaser.Math.Vector2();
+    parent.getWorldTransformMatrix().transformPoint(this.x, this.y, worldPoint);
+    const worldRotation = (parent.rotation ?? 0) + (this.rotation ?? 0);
+
+    this.unhoistShadowFromStack();
+    parent.remove(this);
+    this.scene.add.existing(this);
+
+    this.setPosition(worldPoint.x, worldPoint.y);
+    this.setRotation(worldRotation);
+    this.refreshRotatedGeometry?.();
+
+    if (this.shadow) {
+      this.shadow.setVisible(true);
+    }
+
+    this.setInteractive(this.hitbox, Phaser.Geom.Rectangle.Contains);
+    this.scene.input.setDraggable(this);
+
+    const index = parent.stackChildren.indexOf(this);
+    if (index !== -1) {
+      parent.stackChildren.splice(index, 1);
+    }
+
+    this.stackParent = null;
+    this.applyRestingDepth();
+
+    return true;
+  }
+
+  getFootprint() {
+    if (this.stackParent) {
+      return new Phaser.Geom.Rectangle(this.x, this.y, 0, 0);
+    }
+
+    return super.getFootprint();
+  }
+
   destroy(fromScene) {
+    this.cancelStackLongPress();
+
+    if (this.stackParent) {
+      const parent = this.stackParent;
+      const index = parent.stackChildren.indexOf(this);
+
+      if (index !== -1) {
+        parent.stackChildren.splice(index, 1);
+      }
+
+      this.stackParent = null;
+    }
+
     this.clearComputedShadeParts();
     super.destroy(fromScene);
   }

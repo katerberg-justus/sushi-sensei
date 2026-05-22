@@ -32,7 +32,9 @@ export class CuttableObject extends SceneObject {
 
     this.setSize(this.cutWidth, this.cutHeight);
 
-    this.addPiece(0, 0, textureWidth, textureHeight);
+    if (!options.skipInitialPiece) {
+      this.addPiece(0, 0, textureWidth, textureHeight);
+    }
     this.setDepth(this.cutDepth);
   }
 
@@ -57,7 +59,9 @@ export class CuttableObject extends SceneObject {
     );
     target.pieces = [];
 
-    target.addPiece(0, 0, textureWidth, textureHeight);
+    if (!options.skipInitialPiece) {
+      target.addPiece(0, 0, textureWidth, textureHeight);
+    }
     target.setDepth(target.cutDepth);
 
     if (target.refreshCuttableGeometry) {
@@ -129,15 +133,27 @@ export class CuttableObject extends SceneObject {
         return false;
       }
 
+      const parentVisibleBounds = piece.visibleBounds ?? this.getPieceVisibleTextureBounds(piece);
+
+      piece.visibleBounds = parentVisibleBounds;
+
+      const buildPiece = (cropX, cropY, cropWidth, cropHeight) => this.createPieceData(
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        this.intersectVisibleBounds(parentVisibleBounds, cropX, cropY, cropWidth, cropHeight),
+      );
+
       if (orientation === 'horizontal') {
         cutPieces = [
-          this.createPieceData(piece.cropX, piece.cropY, piece.cropWidth, split),
-          this.createPieceData(piece.cropX, piece.cropY + split, piece.cropWidth, piece.cropHeight - split),
+          buildPiece(piece.cropX, piece.cropY, piece.cropWidth, split),
+          buildPiece(piece.cropX, piece.cropY + split, piece.cropWidth, piece.cropHeight - split),
         ];
       } else {
         cutPieces = [
-          this.createPieceData(piece.cropX, piece.cropY, split, piece.cropHeight),
-          this.createPieceData(piece.cropX + split, piece.cropY, piece.cropWidth - split, piece.cropHeight),
+          buildPiece(piece.cropX, piece.cropY, split, piece.cropHeight),
+          buildPiece(piece.cropX + split, piece.cropY, piece.cropWidth - split, piece.cropHeight),
         ];
       }
 
@@ -153,9 +169,50 @@ export class CuttableObject extends SceneObject {
     replacements.forEach((object) => {
       object.setDepth(this.depth);
     });
+    this.donateRenderArtifactsTo(replacements, orientation);
     this.separateCuttableObjects(replacements, orientation, localPosition);
 
     return replacements;
+  }
+
+  donateRenderArtifactsTo(children, orientation) {
+    const skipShadeCommit = orientation === 'vertical';
+
+    const baseDelay = 110;
+    const stagger = 40;
+
+    children.forEach((child, index) => {
+      if (child.borrowComputedShadeFrom) {
+        child.borrowComputedShadeFrom(this);
+      }
+
+      if (child.borrowCompositionShadowFrom) {
+        child.borrowCompositionShadowFrom(this);
+      }
+
+      if (skipShadeCommit) {
+        child.skipDeferredComputedShadeRefresh = true;
+      }
+
+      const scene = child.scene;
+
+      if (!scene) {
+        if (child.commitDeferredRenderArtifacts) {
+          child.commitDeferredRenderArtifacts();
+        }
+        return;
+      }
+
+      scene.time.delayedCall(baseDelay + index * stagger, () => {
+        if (!child.scene || !child.active) {
+          return;
+        }
+
+        if (child.commitDeferredRenderArtifacts) {
+          child.commitDeferredRenderArtifacts();
+        }
+      });
+    });
   }
 
   canCutOnAxis(orientation) {
@@ -177,6 +234,9 @@ export class CuttableObject extends SceneObject {
     const position = this.getPieceWorldVisibleCenter(visualPiece);
     const object = this.createReplacementCuttable(position, visualPiece);
 
+    object.deferComputedShadeRefresh = true;
+    object.deferCompositionShadowRefresh = true;
+
     object.configureAsCutPiece(visualPiece, {
       minimumCutWidth: this.minimumCutWidth,
       minSwipeDistance: this.minSwipeDistance,
@@ -195,10 +255,14 @@ export class CuttableObject extends SceneObject {
   createReplacementCuttable(position, piece) {
     if (this.addDraggablePart && this.constructor !== CuttableObject) {
       return new this.constructor(this.scene, position.x, position.y, {
+        cropX: piece.cropX,
+        cropY: piece.cropY,
         cropWidth: piece.cropWidth,
         cropHeight: piece.cropHeight,
+        visibleBounds: piece.visibleBounds,
         minimumCutWidth: this.minimumCutWidth,
         variant: this.variantIndex,
+        skipInitialPiece: true,
       });
     }
 
@@ -212,6 +276,7 @@ export class CuttableObject extends SceneObject {
       this.pixelScale,
       {
         minimumCutWidth: this.minimumCutWidth,
+        skipInitialPiece: true,
       },
     );
   }
@@ -233,7 +298,13 @@ export class CuttableObject extends SceneObject {
     this.cutDepth = options.cutDepth ?? this.cutDepth;
     this.cutGap = options.cutGap ?? this.cutGap;
     this.allowedCutOrientations = new Set(options.allowedCutOrientations ?? this.allowedCutOrientations);
-    this.pieces = [this.createPieceData(piece.cropX, piece.cropY, piece.cropWidth, piece.cropHeight)];
+    this.pieces = [this.createPieceData(
+      piece.cropX,
+      piece.cropY,
+      piece.cropWidth,
+      piece.cropHeight,
+      piece.visibleBounds,
+    )];
     this.setAnchorToPieceVisibleCenter(this.pieces[0]);
     this.pieces[0].image = this.createPieceImage(this.pieces[0]);
     this.registerCuttablePart(this.pieces[0].image);
@@ -340,13 +411,41 @@ export class CuttableObject extends SceneObject {
     }
   }
 
-  createPieceData(cropX, cropY, cropWidth, cropHeight) {
-    return {
+  createPieceData(cropX, cropY, cropWidth, cropHeight, visibleBounds = null) {
+    const piece = {
       cropX,
       cropY,
       cropWidth,
       cropHeight,
     };
+
+    if (visibleBounds) {
+      piece.visibleBounds = visibleBounds;
+    }
+
+    return piece;
+  }
+
+  intersectVisibleBounds(parentBounds, cropX, cropY, cropWidth, cropHeight) {
+    if (!parentBounds) {
+      return null;
+    }
+
+    const left = Math.max(parentBounds.left, cropX);
+    const right = Math.min(parentBounds.right, cropX + cropWidth);
+    const top = Math.max(parentBounds.top, cropY);
+    const bottom = Math.min(parentBounds.bottom, cropY + cropHeight);
+
+    if (right <= left || bottom <= top) {
+      return {
+        left: cropX,
+        right: cropX + cropWidth,
+        top: cropY,
+        bottom: cropY + cropHeight,
+      };
+    }
+
+    return { left, right, top, bottom };
   }
 
   createVisualPieceData(piece) {
@@ -389,10 +488,15 @@ export class CuttableObject extends SceneObject {
   }
 
   getPieceVisibleTextureBounds(piece) {
+    if (piece.visibleBounds) {
+      return piece.visibleBounds;
+    }
+
     const cacheKey = `${this.textureKey}|${piece.cropX},${piece.cropY},${piece.cropWidth},${piece.cropHeight}`;
     const cached = visibleBoundsCache.get(cacheKey);
 
     if (cached) {
+      piece.visibleBounds = cached;
       return cached;
     }
 
@@ -453,6 +557,7 @@ export class CuttableObject extends SceneObject {
     };
 
     visibleBoundsCache.set(cacheKey, bounds);
+    piece.visibleBounds = bounds;
 
     return bounds;
   }

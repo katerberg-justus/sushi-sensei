@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { SceneObject } from './SceneObject.js';
+import { getCachedFullImageData, sliceCachedImageData } from './ProceduralTexture.js';
 
 let shadowTextureId = 0;
 
@@ -7,6 +8,41 @@ const draggableRegistry = new Set();
 const shadowImageDataCache = new WeakMap();
 const shadowTextureCache = new Map();
 const SHADOW_TEXTURE_CACHE_MAX = 200;
+
+const sharedTextureRefs = new Map();
+
+export function holdSharedTexture(key) {
+  if (!key) {
+    return;
+  }
+
+  if (sharedTextureRefs.has(key)) {
+    sharedTextureRefs.set(key, sharedTextureRefs.get(key) + 1);
+  } else {
+    sharedTextureRefs.set(key, 2);
+  }
+}
+
+export function releaseSharedTexture(scene, key) {
+  if (!key) {
+    return;
+  }
+
+  const count = sharedTextureRefs.get(key);
+
+  if (count !== undefined) {
+    if (count > 1) {
+      sharedTextureRefs.set(key, count - 1);
+      return;
+    }
+
+    sharedTextureRefs.delete(key);
+  }
+
+  if (scene?.textures?.exists(key)) {
+    scene.textures.remove(key);
+  }
+}
 
 export class DraggableObject extends SceneObject {
   constructor(scene, x, y, width, height) {
@@ -51,6 +87,9 @@ export class DraggableObject extends SceneObject {
     this.draggablePartBaseScales = new Map();
     this.draggablePartBasePositions = new Map();
     this.shadow = null;
+    this.stackDragShadow = null;
+    this.stackDragShadowNeedsRefresh = false;
+    this.stackDragShadowOriginalShadow = null;
     this.footprintDepthFactor = 0.34;
     this.hitbox = new Phaser.Geom.Rectangle(0, 0, width, height);
 
@@ -144,14 +183,16 @@ export class DraggableObject extends SceneObject {
     shadow.destroy();
 
     textureKeys.forEach((key) => {
-      if (this.scene?.textures?.exists(key)) {
-        this.scene.textures.remove(key);
-      }
+      releaseSharedTexture(this.scene, key);
     });
   }
 
   refreshCompositionShadow() {
     if (!this.draggableParts.length) {
+      return null;
+    }
+
+    if (this.deferCompositionShadowRefresh) {
       return null;
     }
 
@@ -161,6 +202,68 @@ export class DraggableObject extends SceneObject {
 
     this.scheduleCompositionShadowRefresh();
     return null;
+  }
+
+  borrowCompositionShadowFrom(parent) {
+    if (!parent?.shadow?.generatedTextureKeys?.length || !this.scene) {
+      return null;
+    }
+
+    const [edgeKey, coreKey] = parent.shadow.generatedTextureKeys;
+
+    if (!edgeKey || !coreKey
+      || !this.scene.textures.exists(edgeKey)
+      || !this.scene.textures.exists(coreKey)) {
+      return null;
+    }
+
+    const bounds = this.getDraggablePartsShadowBounds
+      ? this.getDraggablePartsShadowBounds()
+      : this.getDraggablePartsBounds();
+    const width = Math.max(4, bounds.right - bounds.left);
+    const height = Math.max(4, bounds.bottom - bounds.top);
+    const centerX = bounds.left + width / 2;
+    const centerY = bounds.top + height / 2;
+
+    holdSharedTexture(edgeKey);
+    holdSharedTexture(coreKey);
+
+    const edge = this.scene.add.image(0, 0, edgeKey);
+
+    edge.setOrigin(0.5);
+    edge.setTint(0x9a8064);
+
+    const core = this.scene.add.image(0, 0, coreKey);
+
+    core.setOrigin(0.5);
+    core.setTint(0x6f5d48);
+
+    const shadow = this.scene.add.container(0, 0, [edge, core]);
+
+    shadow.generatedTextureKeys = [edgeKey, coreKey];
+    shadow.compositionOffsetX = bounds.localCenterX ?? centerX;
+    shadow.compositionOffsetY = bounds.localCenterY ?? centerY;
+    shadow.isCompositionShadow = true;
+    shadow.keepWorldRotation = true;
+    shadow.isBorrowedShadow = true;
+
+    shadow.setPixelBlurProgress = (progress) => {
+      const liftProgress = Phaser.Math.Clamp(progress, 0, 1);
+
+      edge.setAlpha(Phaser.Math.Linear(0, this.shadowEdgeAlpha, liftProgress));
+      core.setAlpha(Phaser.Math.Linear(0, this.shadowCoreAlpha, liftProgress));
+      edge.setScale(
+        Phaser.Math.Linear(1, this.shadowEdgeDragScaleX / this.shadowEdgeScaleX, liftProgress),
+        Phaser.Math.Linear(1, this.shadowEdgeDragScaleY / this.shadowEdgeScaleY, liftProgress),
+      );
+      core.setScale(
+        Phaser.Math.Linear(1, this.shadowEdgeDragScaleX / this.shadowEdgeScaleX, liftProgress),
+        Phaser.Math.Linear(1, this.shadowEdgeDragScaleY / this.shadowEdgeScaleY, liftProgress),
+      );
+    };
+    shadow.setPixelBlurProgress(0);
+
+    return this.setPixelShadow(shadow);
   }
 
   scheduleCompositionShadowRefresh() {
@@ -191,16 +294,17 @@ export class DraggableObject extends SceneObject {
       return null;
     }
 
-    const bounds = this.getDraggablePartsShadowBounds();
-    const shadow = this.createShadowFromBounds(bounds);
+    const parts = this.getCompositionShadowParts();
+    const bounds = this.getDraggablePartsShadowBounds(parts);
+    const shadow = this.createShadowFromBounds(bounds, parts);
     shadow.isCompositionShadow = true;
     shadow.keepWorldRotation = true;
 
     return this.setPixelShadow(shadow);
   }
 
-  getDraggablePartsBounds() {
-    return this.draggableParts.reduce((bounds, part) => {
+  getDraggablePartsBounds(parts = this.getCompositionShadowParts()) {
+    return parts.reduce((bounds, part) => {
       if (part.excludeFromCompositionShadow) {
         return bounds;
       }
@@ -228,8 +332,8 @@ export class DraggableObject extends SceneObject {
     });
   }
 
-  createShadowFromBounds(bounds) {
-    const sampledShadow = this.createShadowFromPartPixels(bounds);
+  createShadowFromBounds(bounds, parts = this.getCompositionShadowParts()) {
+    const sampledShadow = this.createShadowFromPartPixels(bounds, parts);
 
     if (sampledShadow) {
       return sampledShadow;
@@ -272,12 +376,12 @@ export class DraggableObject extends SceneObject {
     return shadow;
   }
 
-  createShadowFromPartPixels(bounds) {
+  createShadowFromPartPixels(bounds, parts = this.getCompositionShadowParts()) {
     const width = Math.max(4, bounds.right - bounds.left);
     const height = Math.max(4, bounds.bottom - bounds.top);
     const centerX = bounds.left + width / 2;
     const centerY = bounds.top + height / 2;
-    const [edgeTextureKey, coreTextureKey] = this.createShadowTexturesFromParts(bounds);
+    const [edgeTextureKey, coreTextureKey] = this.createShadowTexturesFromParts(bounds, parts);
 
     if (!edgeTextureKey || !coreTextureKey) {
       [edgeTextureKey, coreTextureKey].forEach((key) => {
@@ -322,8 +426,8 @@ export class DraggableObject extends SceneObject {
     return shadow;
   }
 
-  createShadowTexturesFromParts(bounds) {
-    const cacheKey = this.getShadowCacheKey(bounds);
+  createShadowTexturesFromParts(bounds, parts = this.getCompositionShadowParts()) {
+    const cacheKey = this.getShadowCacheKey(bounds, parts);
 
     if (cacheKey) {
       const cached = shadowTextureCache.get(cacheKey);
@@ -381,7 +485,7 @@ export class DraggableObject extends SceneObject {
 
     let drewPixels = false;
 
-    this.draggableParts.forEach((part) => {
+    parts.forEach((part) => {
       if (part.excludeFromCompositionShadow) {
         return;
       }
@@ -442,10 +546,10 @@ export class DraggableObject extends SceneObject {
     return keys;
   }
 
-  getShadowCacheKey(bounds) {
+  getShadowCacheKey(bounds, parts = this.getCompositionShadowParts()) {
     const partSignatures = [];
 
-    for (const part of this.draggableParts) {
+    for (const part of parts) {
       if (part.excludeFromCompositionShadow) {
         continue;
       }
@@ -613,13 +717,22 @@ export class DraggableObject extends SceneObject {
     let imageData = sourceCache.get(cacheKey);
 
     if (!imageData) {
-      const context = source.getContext('2d', { willReadFrequently: true });
+      const fullImageData = getCachedFullImageData(source);
 
-      if (!context) {
-        return null;
+      if (fullImageData
+        && crop.cx + sourceWidth <= fullImageData.width
+        && crop.cy + sourceHeight <= fullImageData.height) {
+        imageData = sliceCachedImageData(fullImageData, crop.cx, crop.cy, sourceWidth, sourceHeight);
+      } else {
+        const context = source.getContext('2d', { willReadFrequently: true });
+
+        if (!context) {
+          return null;
+        }
+
+        imageData = context.getImageData(crop.cx, crop.cy, sourceWidth, sourceHeight);
       }
 
-      imageData = context.getImageData(crop.cx, crop.cy, sourceWidth, sourceHeight);
       sourceCache.set(cacheKey, imageData);
     }
 
@@ -635,11 +748,11 @@ export class DraggableObject extends SceneObject {
     };
   }
 
-  getDraggablePartsShadowBounds() {
+  getDraggablePartsShadowBounds(parts = this.getCompositionShadowParts()) {
     const rotation = this.rotation ?? 0;
     const projectionSin = Math.sin(rotation);
     const projectionCos = Math.cos(rotation);
-    const bounds = this.draggableParts.reduce((currentBounds, part) => {
+    const bounds = parts.reduce((currentBounds, part) => {
       if (part.excludeFromCompositionShadow) {
         return currentBounds;
       }
@@ -664,7 +777,7 @@ export class DraggableObject extends SceneObject {
 
     if (!Number.isFinite(bounds.left) || !Number.isFinite(bounds.right)
       || !Number.isFinite(bounds.top) || !Number.isFinite(bounds.bottom)) {
-      return this.getDraggablePartsBounds();
+      return this.getDraggablePartsBounds(parts);
     }
 
     const centerX = bounds.left + (bounds.right - bounds.left) / 2;
@@ -701,6 +814,100 @@ export class DraggableObject extends SceneObject {
     }));
   }
 
+  getCompositionShadowParts() {
+    return this.collectCompositionShadowParts();
+  }
+
+  collectCompositionShadowParts(transform = {
+    x: 0,
+    y: 0,
+    rotation: 0,
+    scaleX: 1,
+    scaleY: 1,
+  }) {
+    const parts = this.draggableParts.map((part) => (
+      this.createTransformedShadowPart(part, transform)
+    ));
+
+    this.stackChildren?.forEach((child) => {
+      if (!child?.collectCompositionShadowParts) {
+        return;
+      }
+
+      const childTransform = this.composeChildShadowTransform(transform, child);
+
+      parts.push(...child.collectCompositionShadowParts(childTransform));
+    });
+
+    return parts;
+  }
+
+  composeChildShadowTransform(parentTransform, child) {
+    const childX = child.x ?? 0;
+    const childY = child.y ?? 0;
+    const parentSin = Math.sin(parentTransform.rotation);
+    const parentCos = Math.cos(parentTransform.rotation);
+    const scaledX = childX * parentTransform.scaleX;
+    const scaledY = childY * parentTransform.scaleY;
+
+    return {
+      x: parentTransform.x + scaledX * parentCos - scaledY * parentSin,
+      y: parentTransform.y + scaledX * parentSin + scaledY * parentCos,
+      rotation: parentTransform.rotation + (child.rotation ?? 0),
+      scaleX: parentTransform.scaleX * (child.scaleX ?? 1),
+      scaleY: parentTransform.scaleY * (child.scaleY ?? 1),
+    };
+  }
+
+  createTransformedShadowPart(part, transform) {
+    if (!transform.x && !transform.y && !transform.rotation
+      && transform.scaleX === 1 && transform.scaleY === 1) {
+      return part;
+    }
+
+    const partX = part.x ?? 0;
+    const partY = part.y ?? 0;
+    const transformSin = Math.sin(transform.rotation);
+    const transformCos = Math.cos(transform.rotation);
+    const scaledX = partX * transform.scaleX;
+    const scaledY = partY * transform.scaleY;
+    const proxy = {
+      texture: part.texture,
+      frame: part.frame,
+      isCropped: part.isCropped,
+      _crop: part._crop,
+      originX: part.originX,
+      originY: part.originY,
+      excludeFromCompositionShadow: part.excludeFromCompositionShadow,
+    };
+
+    proxy.x = transform.x + scaledX * transformCos - scaledY * transformSin;
+    proxy.y = transform.y + scaledX * transformSin + scaledY * transformCos;
+    proxy.rotation = transform.rotation + (part.rotation ?? 0);
+    proxy.scaleX = (part.scaleX ?? 1) * transform.scaleX;
+    proxy.scaleY = (part.scaleY ?? 1) * transform.scaleY;
+    proxy.displayWidth = (part.displayWidth ?? 0) * Math.abs(transform.scaleX);
+    proxy.displayHeight = (part.displayHeight ?? 0) * Math.abs(transform.scaleY);
+
+    if (part.compositionWidth !== undefined) {
+      proxy.compositionWidth = part.compositionWidth * Math.abs(transform.scaleX);
+    }
+
+    if (part.compositionHeight !== undefined) {
+      proxy.compositionHeight = part.compositionHeight * Math.abs(transform.scaleY);
+    }
+
+    if (part.compositionOffsetX || part.compositionOffsetY) {
+      const offsetX = (part.compositionOffsetX ?? 0) * transform.scaleX;
+      const offsetY = (part.compositionOffsetY ?? 0) * transform.scaleY;
+
+      proxy.compositionOffsetX = offsetX * transformCos - offsetY * transformSin;
+      proxy.compositionOffsetY = offsetX * transformSin + offsetY * transformCos;
+    }
+
+    return proxy;
+  }
+
   getCanvasSourceForTexture(texture) {
     const source = texture?.getSourceImage?.();
 
@@ -717,6 +924,10 @@ export class DraggableObject extends SceneObject {
 
   destroy(fromScene) {
     draggableRegistry.delete(this);
+
+    if (this.stackDragShadow) {
+      this.deactivateStackDragShadow();
+    }
 
     if (this.pendingShadowRefresh) {
       this.pendingShadowRefresh.remove(false);
@@ -758,6 +969,19 @@ export class DraggableObject extends SceneObject {
     const bottom = footprint.y + footprint.height;
 
     this.setDepth(this.restDepth + bottom);
+  }
+
+  refreshOtherRestingDepths() {
+    for (const other of draggableRegistry) {
+      if (other === this || !other.scene || other.isDragging) {
+        continue;
+      }
+
+      const footprint = other.getFootprint();
+      const bottom = footprint.y + footprint.height;
+
+      other.setDepth(other.restDepth + bottom);
+    }
   }
 
   getFootprint() {
@@ -845,6 +1069,10 @@ export class DraggableObject extends SceneObject {
       return false;
     }
 
+    if (this.stackParent && this.detachFromStackParent) {
+      this.detachFromStackParent();
+    }
+
     this.suppressedDragPointerId = null;
     this.ensureCompositionShadowReady();
     this.isDragging = true;
@@ -873,7 +1101,38 @@ export class DraggableObject extends SceneObject {
       this.lastValidY = dragY;
     }
 
+    this.updateStackHoverHighlight(dragX, dragY);
+
     return true;
+  }
+
+  updateStackHoverHighlight(x, y) {
+    if (!this.stackCategory) {
+      return;
+    }
+
+    const target = this.findStackTargetAt(x, y);
+
+    if (target === this.currentStackHover) {
+      return;
+    }
+
+    if (this.currentStackHover?.setStackHighlight) {
+      this.currentStackHover.setStackHighlight(false);
+    }
+
+    if (target?.setStackHighlight) {
+      target.setStackHighlight(true);
+    }
+
+    this.currentStackHover = target;
+  }
+
+  clearStackHoverHighlight() {
+    if (this.currentStackHover?.setStackHighlight) {
+      this.currentStackHover.setStackHighlight(false);
+    }
+    this.currentStackHover = null;
   }
 
   handleDragEnd(pointer) {
@@ -890,15 +1149,150 @@ export class DraggableObject extends SceneObject {
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {
         this.applyRestingDepth();
+        this.refreshOtherRestingDepths();
         this.playDropImpact();
       }
     });
 
-    if (!this.canOccupyPosition(this.x, this.y)) {
+    const stackTarget = this.findStackTargetAt(this.x, this.y);
+
+    this.clearStackHoverHighlight();
+
+    if (stackTarget && this.attachToStackTarget) {
+      this.attachToStackTarget(stackTarget);
+    } else if (!this.canOccupyPosition(this.x, this.y)) {
       this.snapBackTo(this.lastValidX, this.lastValidY);
     }
 
     return true;
+  }
+
+  getWorldHitboxRect(centerX = this.x, centerY = this.y) {
+    return new Phaser.Geom.Rectangle(
+      centerX + this.hitbox.x,
+      centerY + this.hitbox.y,
+      this.hitbox.width,
+      this.hitbox.height,
+    );
+  }
+
+  beginManualDrag(pointer) {
+    if (this.isDragging) {
+      return false;
+    }
+
+    this.isDragging = true;
+    this.isManualDrag = true;
+    this.dragAnchorX = this.x;
+    this.dragAnchorY = this.y;
+    this.manualDragOffsetX = this.x - pointer.x;
+    this.manualDragOffsetY = this.y - pointer.y;
+    this.lastValidX = this.x;
+    this.lastValidY = this.y;
+
+    this.stopSnapBack();
+    this.stopDropImpact();
+    this.ensureCompositionShadowReady();
+    this.applyDragDepth();
+    this.tweenDragLift(this.dragLift, this.dragLiftDuration, 'Quad.easeOut');
+
+    this.manualDragMoveHandler = (movePointer) => {
+      if (!this.isDragging || !this.isManualDrag) {
+        return;
+      }
+
+      const x = movePointer.x + this.manualDragOffsetX;
+      const y = movePointer.y + this.manualDragOffsetY;
+
+      this.dragAnchorX = x;
+      this.dragAnchorY = y;
+      this.updateDragPosition();
+
+      if (this.canOccupyPosition(x, y)) {
+        this.lastValidX = x;
+        this.lastValidY = y;
+      }
+
+      this.updateStackHoverHighlight(x, y);
+    };
+
+    this.manualDragUpHandler = () => {
+      this.endManualDrag();
+    };
+
+    this.scene.input.on('pointermove', this.manualDragMoveHandler);
+    this.scene.input.on('pointerup', this.manualDragUpHandler);
+    this.scene.input.on('pointerupoutside', this.manualDragUpHandler);
+
+    return true;
+  }
+
+  endManualDrag() {
+    if (!this.isManualDrag) {
+      return false;
+    }
+
+    this.scene.input.off('pointermove', this.manualDragMoveHandler);
+    this.scene.input.off('pointerup', this.manualDragUpHandler);
+    this.scene.input.off('pointerupoutside', this.manualDragUpHandler);
+    this.manualDragMoveHandler = null;
+    this.manualDragUpHandler = null;
+    this.isManualDrag = false;
+    this.isDragging = false;
+
+    this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
+      if (!this.isDragging) {
+        this.applyRestingDepth();
+        this.refreshOtherRestingDepths();
+        this.playDropImpact();
+      }
+    });
+
+    const stackTarget = this.findStackTargetAt(this.x, this.y);
+
+    this.clearStackHoverHighlight();
+
+    if (stackTarget && this.attachToStackTarget) {
+      this.attachToStackTarget(stackTarget);
+    } else if (!this.canOccupyPosition(this.x, this.y)) {
+      this.snapBackTo(this.lastValidX, this.lastValidY);
+    }
+
+    return true;
+  }
+
+  findStackTargetAt(x, y) {
+    if (!this.stackCategory) {
+      return null;
+    }
+
+    const myRect = this.getWorldHitboxRect(x, y);
+    let bestTarget = null;
+    let bestDepth = -Infinity;
+
+    for (const other of draggableRegistry) {
+      if (other === this || !other.scene || other.isDragging) {
+        continue;
+      }
+
+      const otherRect = other.getWorldHitboxRect();
+      const placement = { x, y, sourceRect: myRect, targetRect: otherRect };
+
+      if (!this.canStackOn(other, placement) || !other.accepts(this, placement)) {
+        continue;
+      }
+
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(myRect, otherRect)) {
+        continue;
+      }
+
+      if (other.depth > bestDepth) {
+        bestDepth = other.depth;
+        bestTarget = other;
+      }
+    }
+
+    return bestTarget;
   }
 
   snapBackTo(x, y) {
@@ -924,6 +1318,8 @@ export class DraggableObject extends SceneObject {
   }
 
   setDragLift(lift) {
+    this.updateStackDragShadow(lift);
+
     this.currentLift = lift;
     const liftOffset = this.getLocalVectorForWorldOffset(0, -lift + this.currentImpactSink);
 
@@ -947,6 +1343,125 @@ export class DraggableObject extends SceneObject {
         this.shadow.setPixelBlurProgress(liftProgress);
       }
     }
+  }
+
+  updateStackDragShadow(lift) {
+    const shouldMergeStackShadow = this.shouldUseMergedStackShadow(lift);
+
+    if (shouldMergeStackShadow && !this.stackDragShadow) {
+      this.activateStackDragShadow();
+    } else if (!shouldMergeStackShadow && this.stackDragShadow) {
+      this.deactivateStackDragShadow();
+    }
+  }
+
+  shouldUseMergedStackShadow(lift) {
+    return Boolean(
+      this.isDragging
+      && lift > 0
+      && this.stackChildren?.some((child) => child?.scene),
+    );
+  }
+
+  activateStackDragShadow() {
+    if (!this.scene) {
+      return;
+    }
+
+    const parts = this.getCompositionShadowParts();
+
+    if (!parts.length) {
+      return;
+    }
+
+    const bounds = this.getDraggablePartsShadowBounds(parts);
+    const shadow = this.createShadowFromBounds(bounds, parts);
+
+    shadow.isCompositionShadow = true;
+    shadow.keepWorldRotation = true;
+
+    this.stackDragShadowOriginalShadow = this.shadow;
+    this.hideStackDragSourceShadows();
+    this.stackDragShadow = shadow;
+    this.shadow = shadow;
+    this.shadow.compositionOffsetX ??= 0;
+    this.shadow.compositionOffsetY ??= 0;
+    this.shadow.setDepth(-1);
+    this.shadow.setAlpha(0);
+    this.syncPixelShadowRotation();
+    this.addAt(this.shadow, 0);
+    this.stackDragShadowNeedsRefresh = true;
+  }
+
+  refreshStackDragShadow() {
+    if (!this.stackDragShadow || !this.scene) {
+      return;
+    }
+
+    const previousShadow = this.stackDragShadow;
+    const previousAlpha = previousShadow.alpha ?? 0;
+    const parts = this.getCompositionShadowParts();
+
+    if (!parts.length) {
+      this.deactivateStackDragShadow();
+      return;
+    }
+
+    const bounds = this.getDraggablePartsShadowBounds(parts);
+    const shadow = this.createShadowFromBounds(bounds, parts);
+
+    shadow.isCompositionShadow = true;
+    shadow.keepWorldRotation = true;
+    shadow.compositionOffsetX ??= 0;
+    shadow.compositionOffsetY ??= 0;
+    shadow.setDepth(-1);
+    shadow.setAlpha(previousAlpha);
+
+    this.remove(previousShadow);
+    this.stackDragShadow = shadow;
+    this.shadow = shadow;
+    this.destroyPixelShadow(previousShadow);
+    this.syncPixelShadowRotation();
+    this.addAt(this.shadow, 0);
+    this.stackDragShadowNeedsRefresh = false;
+  }
+
+  deactivateStackDragShadow() {
+    const shadow = this.stackDragShadow;
+
+    if (!shadow) {
+      return;
+    }
+
+    this.remove(shadow);
+    this.stackDragShadow = null;
+    this.stackDragShadowNeedsRefresh = false;
+    this.shadow = this.stackDragShadowOriginalShadow;
+    this.destroyPixelShadow(shadow);
+    this.showStackDragSourceShadows();
+    this.stackDragShadowOriginalShadow = null;
+  }
+
+  hideStackDragSourceShadows() {
+    this.setStackDragSourceShadowsVisible(false);
+  }
+
+  showStackDragSourceShadows() {
+    this.setStackDragSourceShadowsVisible(true);
+  }
+
+  setStackDragSourceShadowsVisible(visible) {
+    if (this.stackDragShadowOriginalShadow) {
+      this.stackDragShadowOriginalShadow.setVisible(visible);
+    }
+
+    this.stackChildren?.forEach((child) => {
+      child?.setStackDragSourceShadowsVisible?.(visible);
+
+      if (child?.shadow && child.shadow !== child.stackDragShadow) {
+        child.shadow.setVisible(visible);
+      }
+    });
   }
 
   setShadowScreenOffset(offsetY) {
@@ -976,6 +1491,21 @@ export class DraggableObject extends SceneObject {
   }
 
   getLocalVectorForWorldOffset(x, y) {
+    const matrix = this.getWorldTransformMatrix?.();
+
+    if (matrix?.applyInverse) {
+      const origin = new Phaser.Math.Vector2();
+      const offset = new Phaser.Math.Vector2();
+
+      matrix.applyInverse(0, 0, origin);
+      matrix.applyInverse(x, y, offset);
+
+      return new Phaser.Math.Vector2(
+        offset.x - origin.x,
+        offset.y - origin.y,
+      );
+    }
+
     const rotation = -(this.rotation ?? 0);
     const sin = Math.sin(rotation);
     const cos = Math.cos(rotation);
@@ -1039,6 +1569,10 @@ export class DraggableObject extends SceneObject {
         this.dropImpactTween = null;
         this.resetDropImpact();
       },
+    });
+
+    this.stackChildren?.forEach((child) => {
+      child.playDropImpact?.();
     });
   }
 

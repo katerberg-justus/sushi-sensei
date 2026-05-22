@@ -30,14 +30,21 @@ export class CuttableSalmon extends IngredientObject {
     this.restDepth = 20;
     this.variantIndex = variantIndex;
 
+    this.stackCategory = 'fish';
+    this.acceptedStackCategories = ['wasabi'];
+    this.maxStackedItems = 1;
+    this.stackOffsetX = 0;
+    this.stackOffsetY = -4;
+
     CuttableObject.setupCuttable(this, textureKey, cropWidth, cropHeight, PIXEL, options);
 
-    if (cropX !== 0 || cropY !== 0) {
+    if (!options.skipInitialPiece && (cropX !== 0 || cropY !== 0)) {
       this.configureAsCutPiece({
         cropX,
         cropY,
         cropWidth,
         cropHeight,
+        visibleBounds: options.visibleBounds,
       }, options);
     }
 

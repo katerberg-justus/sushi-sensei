@@ -31,12 +31,13 @@ export class CuttableTamago extends IngredientObject {
 
     CuttableObject.setupCuttable(this, textureKey, cropWidth, cropHeight, PIXEL, options);
 
-    if (cropX !== 0 || cropY !== 0) {
+    if (!options.skipInitialPiece && (cropX !== 0 || cropY !== 0)) {
       this.configureAsCutPiece({
         cropX,
         cropY,
         cropWidth,
         cropHeight,
+        visibleBounds: options.visibleBounds,
       }, options);
     }
 
