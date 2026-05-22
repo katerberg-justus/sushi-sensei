@@ -13,6 +13,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
 
+    this.input.mouse?.disableContextMenu();
     this.cameras.main.setBackgroundColor(COLORS.boardSideB);
     this.createPixelBoardTexture();
 

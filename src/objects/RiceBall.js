@@ -7,7 +7,7 @@ const RICE_BALL_BASE_KEY = 'rice-ball-pixel';
 const RICE_BALL_VARIANT_POOL = 6;
 const RICE_BALL_WIDTH = 30;
 const RICE_BALL_HEIGHT = 26;
-const TOPPING_SIZE_TOLERANCE = 0.25;
+const TOPPING_SIZE_TOLERANCE = 0.4;
 
 export class RiceBall extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -27,7 +27,9 @@ export class RiceBall extends IngredientObject {
     this.acceptedStackCategories = ['fish'];
     this.maxStackedItems = 1;
     this.stackOffsetX = 0;
-    this.stackOffsetY = -5;
+    this.stackOffsetY = -10;
+    this.kneadableStackCategory = 'fish';
+    this.finishedStackDisplayName = 'Salmon Nigiri';
 
     this.sprite = scene.add.image(0, 0, textureKey);
     this.sprite.setScale(PIXEL);

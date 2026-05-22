@@ -17,7 +17,7 @@ export class RotatableObject extends DraggableObject {
   }
 
   handleRotatePointerDown(pointer) {
-    if (!this.isRotatable) {
+    if (!this.isRotatable || !this.isRotatePointer(pointer)) {
       return;
     }
 
@@ -32,6 +32,17 @@ export class RotatableObject extends DraggableObject {
 
     this.lastRotateClickTime = clickTime;
     this.rotationOnlyPointerId = null;
+  }
+
+  isRotatePointer(pointer) {
+    return !(
+      pointer?.rightButtonDown?.()
+      || pointer?.middleButtonDown?.()
+      || pointer?.button === 1
+      || pointer?.button === 2
+      || pointer?.event?.button === 1
+      || pointer?.event?.button === 2
+    );
   }
 
   shouldSuppressDragStart(pointer) {

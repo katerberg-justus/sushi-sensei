@@ -3,6 +3,7 @@ import { RotatableObject } from './RotatableObject.js';
 import { holdSharedTexture, releaseSharedTexture } from './DraggableObject.js';
 
 let computedShadeTextureId = 0;
+const DEFAULT_STACK_OFFSET_Y = -4;
 
 export class IngredientObject extends RotatableObject {
   constructor(scene, x, y, width, height) {
@@ -16,15 +17,31 @@ export class IngredientObject extends RotatableObject {
     this.acceptedStackCategories = null;
     this.maxStackedItems = 1;
     this.stackOffsetX = 0;
-    this.stackOffsetY = 0;
+    this.stackOffsetY = DEFAULT_STACK_OFFSET_Y;
     this.stackChildren = [];
     this.stackParent = null;
+    this.stackLocked = false;
     this.longPressDuration = 400;
     this.longPressMoveTolerance = 6;
     this.longPressTimer = null;
     this.longPressOrigin = null;
     this.longPressPointerMoveHandler = null;
+    this.kneadableStackCategory = null;
+    this.kneadRequiredStrokes = 5;
+    this.kneadStrokeDistance = 18;
+    this.kneadProgress = 0;
+    this.kneadStrokeCount = 0;
+    this.kneadGestureAnchor = null;
+    this.kneadLastStrokeKind = null;
+    this.kneadPointerId = null;
+    this.kneadUsesTouch = false;
+    this.kneadPointerMoveHandler = null;
+    this.kneadPointerUpHandler = null;
+    this.kneadMeter = null;
+    this.kneadPulseTween = null;
+    this.finishedStackDisplayName = 'Nigiri';
 
+    this.on('pointerdown', this.handleKneadPointerDown, this);
     this.on('pointerdown', this.handleStackLongPressDown, this);
     this.on('pointerup', this.cancelStackLongPress, this);
     this.on('pointerupoutside', this.cancelStackLongPress, this);
@@ -731,7 +748,434 @@ export class IngredientObject extends RotatableObject {
     this.computedShadeParts.clear();
   }
 
+  handleKneadPointerDown(pointer) {
+    if (!this.canStartKneading() || !this.isKneadStartPointer(pointer)) {
+      return;
+    }
+
+    pointer.event?.preventDefault?.();
+    this.beginKneading(pointer);
+  }
+
+  canStartKneading() {
+    if (this.isFinishedStack || this.stackLocked || !this.kneadableStackCategory) {
+      return false;
+    }
+
+    return Boolean(this.getKneadTopping());
+  }
+
+  getKneadTopping() {
+    if (!this.stackChildren?.length) {
+      return null;
+    }
+
+    return this.stackChildren.find((child) => (
+      child?.stackCategory === this.kneadableStackCategory
+    )) ?? null;
+  }
+
+  isKneadStartPointer(pointer) {
+    return this.isRightButtonPointer(pointer) || this.isTwoFingerTouchPointer(pointer);
+  }
+
+  isRightButtonPointer(pointer) {
+    if (!pointer) {
+      return false;
+    }
+
+    return Boolean(
+      pointer.rightButtonDown?.()
+      || pointer.button === 2
+      || pointer.event?.button === 2
+      || pointer.buttons === 2
+      || pointer.event?.buttons === 2,
+    );
+  }
+
+  isTouchPointer(pointer) {
+    return pointer?.event?.pointerType === 'touch'
+      || pointer?.pointerType === 'touch'
+      || pointer?.wasTouch === true;
+  }
+
+  isTwoFingerTouchPointer(pointer) {
+    if (!this.isTouchPointer(pointer)) {
+      return false;
+    }
+
+    return pointer.event?.isPrimary === false || this.getActiveTouchPointers().length >= 2;
+  }
+
+  getActiveTouchPointers() {
+    const managerPointers = this.scene?.input?.manager?.pointers;
+    const pluginPointers = this.scene?.input?.pointers;
+    const pointers = Array.isArray(managerPointers)
+      ? managerPointers
+      : Array.isArray(pluginPointers)
+        ? pluginPointers
+        : [];
+
+    return pointers.filter((pointer) => pointer?.isDown && this.isTouchPointer(pointer));
+  }
+
+  beginKneading(pointer) {
+    if (this.isKneading) {
+      return false;
+    }
+
+    const position = this.getKneadPointerPosition(pointer);
+
+    if (!position) {
+      return false;
+    }
+
+    this.cancelStackLongPress();
+    this.cancelActiveDragForKneading();
+
+    this.isKneading = true;
+    this.kneadUsesTouch = this.isTouchPointer(pointer);
+    this.kneadPointerId = this.getDragPointerId(pointer);
+    this.kneadGestureAnchor = position;
+    this.kneadLastStrokeKind = null;
+    this.kneadStrokeCount = 0;
+    this.kneadProgress = 0;
+    this.suppressedDragPointerId = this.kneadPointerId;
+
+    this.setStackHighlight(true);
+    this.showKneadMeter();
+    this.updateKneadMeter();
+
+    this.kneadPointerMoveHandler = (movePointer) => {
+      this.handleKneadPointerMove(movePointer);
+    };
+    this.kneadPointerUpHandler = (upPointer) => {
+      this.handleKneadPointerUp(upPointer);
+    };
+
+    this.scene.input.on('pointermove', this.kneadPointerMoveHandler);
+    this.scene.input.on('pointerup', this.kneadPointerUpHandler);
+    this.scene.input.on('pointerupoutside', this.kneadPointerUpHandler);
+
+    return true;
+  }
+
+  cancelActiveDragForKneading() {
+    if (this.isManualDrag) {
+      this.scene.input.off('pointermove', this.manualDragMoveHandler);
+      this.scene.input.off('pointerup', this.manualDragUpHandler);
+      this.scene.input.off('pointerupoutside', this.manualDragUpHandler);
+      this.manualDragMoveHandler = null;
+      this.manualDragUpHandler = null;
+      this.isManualDrag = false;
+    }
+
+    if (!this.isDragging) {
+      return;
+    }
+
+    this.isDragging = false;
+    this.clearStackHoverHighlight?.();
+    this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
+      if (!this.isDragging) {
+        this.applyRestingDepth();
+        this.refreshOtherRestingDepths();
+      }
+    });
+  }
+
+  getKneadPointerPosition(pointer) {
+    if (this.kneadUsesTouch || this.isTouchPointer(pointer)) {
+      const touchPointers = this.getActiveTouchPointers();
+
+      if (touchPointers.length >= 2) {
+        const total = touchPointers.reduce((sum, touchPointer) => ({
+          x: sum.x + touchPointer.x,
+          y: sum.y + touchPointer.y,
+        }), { x: 0, y: 0 });
+
+        return {
+          x: total.x / touchPointers.length,
+          y: total.y / touchPointers.length,
+        };
+      }
+    }
+
+    if (!pointer) {
+      return null;
+    }
+
+    return { x: pointer.x, y: pointer.y };
+  }
+
+  handleKneadPointerMove(pointer) {
+    if (!this.isKneading) {
+      return;
+    }
+
+    if (!this.kneadUsesTouch && this.getDragPointerId(pointer) !== this.kneadPointerId) {
+      return;
+    }
+
+    const position = this.getKneadPointerPosition(pointer);
+
+    if (!position || !this.kneadGestureAnchor) {
+      return;
+    }
+
+    const dx = position.x - this.kneadGestureAnchor.x;
+    const dy = position.y - this.kneadGestureAnchor.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < this.kneadStrokeDistance) {
+      return;
+    }
+
+    const strokeKind = this.getKneadStrokeKind(dx, dy);
+
+    this.kneadGestureAnchor = position;
+
+    if (!strokeKind || strokeKind === this.kneadLastStrokeKind) {
+      return;
+    }
+
+    this.registerKneadStroke(strokeKind);
+  }
+
+  getKneadStrokeKind(dx, dy) {
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+
+    if (dy < -this.kneadStrokeDistance && absY > absX * 0.75) {
+      return 'up';
+    }
+
+    if (absX >= this.kneadStrokeDistance && absX > absY * 0.75) {
+      return 'side';
+    }
+
+    return null;
+  }
+
+  registerKneadStroke(strokeKind) {
+    this.kneadLastStrokeKind = strokeKind;
+    this.kneadStrokeCount += 1;
+    this.kneadProgress = Phaser.Math.Clamp(
+      this.kneadStrokeCount / this.kneadRequiredStrokes,
+      0,
+      1,
+    );
+
+    this.playKneadPulse(strokeKind);
+    this.updateKneadMeter();
+
+    if (this.kneadProgress >= 1) {
+      this.completeKneading();
+    }
+  }
+
+  handleKneadPointerUp(pointer) {
+    if (!this.isKneading) {
+      return;
+    }
+
+    if (this.kneadUsesTouch) {
+      if (this.getActiveTouchPointers().length < 2) {
+        this.finishKneading();
+      }
+      return;
+    }
+
+    if (this.getDragPointerId(pointer) === this.kneadPointerId) {
+      this.finishKneading();
+    }
+  }
+
+  completeKneading() {
+    const topping = this.getKneadTopping();
+
+    this.finishKneading();
+    this.stackLocked = true;
+    this.isFinishedStack = true;
+    this.kneadProgress = 1;
+
+    if (this.finishedStackDisplayName) {
+      this.displayName = this.finishedStackDisplayName;
+    }
+
+    if (topping) {
+      const targetY = (this.stackOffsetY ?? topping.y) + 2;
+
+      this.scene.tweens.add({
+        targets: topping,
+        y: targetY,
+        duration: 160,
+        ease: 'Back.Out',
+        onComplete: () => {
+          this.refreshCompositionShadow?.();
+        },
+      });
+    }
+
+    this.playFinishedStackPulse();
+  }
+
+  finishKneading() {
+    if (this.kneadPointerMoveHandler) {
+      this.scene.input.off('pointermove', this.kneadPointerMoveHandler);
+      this.kneadPointerMoveHandler = null;
+    }
+
+    if (this.kneadPointerUpHandler) {
+      this.scene.input.off('pointerup', this.kneadPointerUpHandler);
+      this.scene.input.off('pointerupoutside', this.kneadPointerUpHandler);
+      this.kneadPointerUpHandler = null;
+    }
+
+    this.isKneading = false;
+    this.kneadPointerId = null;
+    this.kneadUsesTouch = false;
+    this.kneadGestureAnchor = null;
+    this.kneadLastStrokeKind = null;
+    this.suppressedDragPointerId = null;
+    this.setStackHighlight(false);
+    this.hideKneadMeter();
+  }
+
+  showKneadMeter() {
+    if (this.kneadMeter) {
+      return;
+    }
+
+    this.kneadMeter = this.scene.add.graphics();
+    this.kneadMeter.excludeFromCompositionShadow = true;
+    this.add(this.kneadMeter);
+  }
+
+  updateKneadMeter() {
+    if (!this.kneadMeter) {
+      return;
+    }
+
+    const centerX = this.hitbox.x + this.hitbox.width / 2;
+    const centerY = this.hitbox.y + this.hitbox.height / 2;
+    const radius = Math.max(this.hitbox.width, this.hitbox.height) * 0.62;
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + Math.PI * 2 * this.kneadProgress;
+
+    this.kneadMeter.clear();
+    this.kneadMeter.lineStyle(2, 0x6b4a32, 0.35);
+    this.kneadMeter.strokeCircle(centerX, centerY, radius);
+    this.kneadMeter.lineStyle(4, 0xfff2a8, 0.95);
+    this.kneadMeter.beginPath();
+    this.kneadMeter.arc(centerX, centerY, radius, startAngle, endAngle, false);
+    this.kneadMeter.strokePath();
+  }
+
+  hideKneadMeter() {
+    if (!this.kneadMeter) {
+      return;
+    }
+
+    this.kneadMeter.destroy();
+    this.kneadMeter = null;
+  }
+
+  playKneadPulse(strokeKind) {
+    if (this.kneadPulseTween) {
+      this.kneadPulseTween.stop();
+      this.kneadPulseTween = null;
+    }
+
+    const baseScaleX = this.scaleX || 1;
+    const baseScaleY = this.scaleY || 1;
+    const topping = this.getKneadTopping();
+
+    this.setScale(
+      baseScaleX * (strokeKind === 'side' ? 1.05 : 1.03),
+      baseScaleY * (strokeKind === 'side' ? 0.97 : 0.94),
+    );
+
+    this.kneadPulseTween = this.scene.tweens.add({
+      targets: this,
+      scaleX: baseScaleX,
+      scaleY: baseScaleY,
+      duration: 120,
+      ease: 'Cubic.Out',
+      onComplete: () => {
+        this.kneadPulseTween = null;
+      },
+    });
+
+    if (topping) {
+      const property = strokeKind === 'side' ? 'x' : 'y';
+      const offset = strokeKind === 'side' ? 2 : -2;
+      const original = topping[property];
+
+      this.scene.tweens.add({
+        targets: topping,
+        [property]: original + offset,
+        duration: 55,
+        yoyo: true,
+        ease: 'Sine.InOut',
+      });
+    }
+  }
+
+  playFinishedStackPulse() {
+    const baseScaleX = this.scaleX || 1;
+    const baseScaleY = this.scaleY || 1;
+
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: baseScaleX * 1.08,
+      scaleY: baseScaleY * 0.92,
+      duration: 90,
+      yoyo: true,
+      ease: 'Sine.InOut',
+      onComplete: () => {
+        this.setScale(baseScaleX, baseScaleY);
+      },
+    });
+  }
+
+  shouldSuppressDragStart(pointer) {
+    return this.isKneading
+      || (this.canStartKneading() && this.isKneadStartPointer(pointer))
+      || super.shouldSuppressDragStart(pointer);
+  }
+
+  handleDragStart(pointer) {
+    if (this.isKneading || (this.canStartKneading() && this.isKneadStartPointer(pointer))) {
+      this.suppressedDragPointerId = this.getDragPointerId(pointer);
+      this.isDragging = false;
+      return false;
+    }
+
+    return super.handleDragStart(pointer);
+  }
+
+  handleDrag(pointer, dragX, dragY) {
+    if (this.isKneading) {
+      return false;
+    }
+
+    return super.handleDrag(pointer, dragX, dragY);
+  }
+
+  handleDragEnd(pointer) {
+    if (this.isKneading) {
+      return false;
+    }
+
+    return super.handleDragEnd(pointer);
+  }
+
   handleStackLongPressDown(pointer) {
+    if (this.stackLocked || this.isKneading || this.isKneadStartPointer(pointer)) {
+      return;
+    }
+
     if (!this.stackChildren?.length) {
       return;
     }
@@ -923,6 +1367,10 @@ export class IngredientObject extends RotatableObject {
       return false;
     }
 
+    if (parent.stackLocked) {
+      return false;
+    }
+
     const worldPoint = new Phaser.Math.Vector2();
     parent.getWorldTransformMatrix().transformPoint(this.x, this.y, worldPoint);
     const worldRotation = (parent.rotation ?? 0) + (this.rotation ?? 0);
@@ -962,6 +1410,13 @@ export class IngredientObject extends RotatableObject {
   }
 
   destroy(fromScene) {
+    this.finishKneading();
+
+    if (this.kneadPulseTween) {
+      this.kneadPulseTween.stop();
+      this.kneadPulseTween = null;
+    }
+
     this.cancelStackLongPress();
 
     if (this.stackParent) {

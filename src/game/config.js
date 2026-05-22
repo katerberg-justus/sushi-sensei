@@ -11,6 +11,9 @@ export const gameConfig = {
   backgroundColor: COLORS.background,
   pixelArt: true,
   roundPixels: true,
+  input: {
+    activePointers: 3,
+  },
   scene: [PreloadScene, GameScene],
   scale: {
     mode: Phaser.Scale.ENVELOP,
