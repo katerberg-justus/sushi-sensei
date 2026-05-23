@@ -13,8 +13,10 @@ function computeFlatDepth(object) {
   const footprint = object.getFootprint?.();
   const bottom = footprint ? footprint.y + footprint.height : 0;
   const ordering = Number.isFinite(bottom) ? Math.max(0, bottom) * 0.001 : 0;
+  const base = Number.isFinite(object.flatDepthBase) ? object.flatDepthBase : 0;
+  const cap = Number.isFinite(object.flatDepthCap) ? object.flatDepthCap : FLAT_DEPTH_CAP;
 
-  return Math.min(FLAT_DEPTH_CAP, ordering);
+  return base + Math.min(cap, ordering);
 }
 
 function getDragRoot(object) {
@@ -117,6 +119,8 @@ export class DraggableObject extends SceneObject {
     this.dragDepth = 100;
     this.restDepth = 10;
     this.isFlat = false;
+    this.flatDepthBase = 0;
+    this.flatDepthCap = FLAT_DEPTH_CAP;
     this.dragLift = 18;
     this.dragLiftDuration = 120;
     this.dropLiftDuration = 90;
@@ -154,11 +158,15 @@ export class DraggableObject extends SceneObject {
     this.draggableParts = [];
     this.draggablePartBaseScales = new Map();
     this.draggablePartBasePositions = new Map();
+    this.hoverBrightness = 1.035;
+    this.isHoverBrightened = false;
+    this.hoverBrightnessEffects = new Map();
     this.shadow = null;
     this.stackDragShadow = null;
     this.stackDragShadowNeedsRefresh = false;
     this.stackDragShadowOriginalShadow = null;
     this.footprintDepthFactor = 0.34;
+    this.previousDragCursor = null;
     this.hitbox = new Phaser.Geom.Rectangle(0, 0, width, height);
 
     this.setSize(width, height);
@@ -174,6 +182,8 @@ export class DraggableObject extends SceneObject {
     this.on('drag', this.handleDrag, this);
     this.on('dragend', this.handleDragEnd, this);
     this.on('pointerdown', this.handleSuppressDoubleClickDragPointerDown, this);
+    this.on('pointerover', this.handlePointerOver, this);
+    this.on('pointerout', this.handlePointerOut, this);
 
     this.applyRestingDepth();
   }
@@ -212,6 +222,9 @@ export class DraggableObject extends SceneObject {
     });
     this.add(part);
 
+    this.prepareHoverBrightnessForPart(part);
+    this.setHoverBrightnessForPart(part, this.isHoverBrightened);
+
     return part;
   }
 
@@ -224,9 +237,78 @@ export class DraggableObject extends SceneObject {
 
     this.draggablePartBaseScales.delete(part);
     this.draggablePartBasePositions.delete(part);
+    this.removeHoverBrightnessFromPart(part);
     this.remove(part);
 
     return part;
+  }
+
+  handlePointerOver() {
+    this.setHoverBrightness(true);
+  }
+
+  handlePointerOut() {
+    this.setHoverBrightness(false);
+  }
+
+  setHoverBrightness(active) {
+    if (this.isHoverBrightened === active) {
+      return this;
+    }
+
+    this.isHoverBrightened = active;
+
+    this.draggableParts.forEach((part) => {
+      this.prepareHoverBrightnessForPart(part);
+      this.setHoverBrightnessForPart(part, active);
+    });
+
+    return this;
+  }
+
+  prepareHoverBrightnessForPart(part) {
+    if (!part || this.hoverBrightnessEffects.has(part)) {
+      return;
+    }
+
+    const fx = part.preFX;
+
+    if (!fx?.addColorMatrix) {
+      return;
+    }
+
+    const colorMatrix = fx.addColorMatrix();
+
+    colorMatrix.brightness(1);
+    this.hoverBrightnessEffects.set(part, { fx, colorMatrix });
+  }
+
+  setHoverBrightnessForPart(part, active) {
+    const effect = this.hoverBrightnessEffects.get(part);
+
+    if (!effect) {
+      return;
+    }
+
+    effect.colorMatrix.brightness(active ? this.hoverBrightness : 1);
+  }
+
+  removeHoverBrightnessFromPart(part) {
+    const effect = this.hoverBrightnessEffects.get(part);
+
+    if (!effect) {
+      return;
+    }
+
+    effect.fx?.remove?.(effect.colorMatrix);
+    this.hoverBrightnessEffects.delete(part);
+  }
+
+  removeHoverBrightnessEffects() {
+    this.hoverBrightnessEffects.forEach(({ fx, colorMatrix }) => {
+      fx?.remove?.(colorMatrix);
+    });
+    this.hoverBrightnessEffects.clear();
   }
 
   setPixelShadow(shadow) {
@@ -1026,6 +1108,9 @@ export class DraggableObject extends SceneObject {
     }
 
     this.stopDragPositionUpdates();
+    this.clearGrabbingCursor();
+    this.setHoverBrightness(false);
+    this.removeHoverBrightnessEffects();
 
     if (this.shadow) {
       const shadow = this.shadow;
@@ -1349,7 +1434,50 @@ export class DraggableObject extends SceneObject {
     return Phaser.Math.Distance.Between(downX, downY, x, y);
   }
 
+  shouldShowDesktopCursor(pointer) {
+    const pointerType = pointer?.pointerType ?? pointer?.event?.pointerType;
+
+    if (pointerType && pointerType !== 'mouse') {
+      return false;
+    }
+
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return true;
+    }
+
+    return window.matchMedia('(any-pointer: fine)').matches;
+  }
+
+  showGrabbingCursor(pointer) {
+    if (!this.shouldShowDesktopCursor(pointer)) {
+      return;
+    }
+
+    const canvas = this.scene?.input?.manager?.canvas ?? this.scene?.sys?.game?.canvas;
+
+    if (!canvas?.style || this.previousDragCursor !== null) {
+      return;
+    }
+
+    this.previousDragCursor = canvas.style.cursor;
+    canvas.style.cursor = 'grabbing';
+  }
+
+  clearGrabbingCursor() {
+    const canvas = this.scene?.input?.manager?.canvas ?? this.scene?.sys?.game?.canvas;
+
+    if (!canvas?.style || this.previousDragCursor === null) {
+      this.previousDragCursor = null;
+      return;
+    }
+
+    canvas.style.cursor = this.previousDragCursor;
+    this.previousDragCursor = null;
+  }
+
   handleDragStart(pointer) {
+    this.setHoverBrightness(false);
+
     if (this.isDragSuppressed(pointer)) {
       this.isDragging = false;
       return false;
@@ -1390,6 +1518,7 @@ export class DraggableObject extends SceneObject {
     this.lastValidX = this.x;
     this.lastValidY = this.y;
     this.startDragPositionUpdates();
+    this.showGrabbingCursor(pointer);
     this.tweenDragLift(this.dragLift, this.dragLiftDuration, 'Quad.easeOut');
     return true;
   }
@@ -1483,6 +1612,7 @@ export class DraggableObject extends SceneObject {
     this.isDragging = false;
     releaseActiveDrag(this);
     this.stopDragPositionUpdates();
+    this.clearGrabbingCursor();
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {
         this.applyRestingDepth();
@@ -1549,6 +1679,7 @@ export class DraggableObject extends SceneObject {
     this.ensureCompositionShadowReady();
     this.applyDragDepth();
     this.startDragPositionUpdates();
+    this.showGrabbingCursor(pointer);
     this.tweenDragLift(this.dragLift, this.dragLiftDuration, 'Quad.easeOut');
 
     this.manualDragMoveHandler = (movePointer) => {
@@ -1599,6 +1730,7 @@ export class DraggableObject extends SceneObject {
     this.isDragging = false;
     releaseActiveDrag(this);
     this.stopDragPositionUpdates();
+    this.clearGrabbingCursor();
 
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {

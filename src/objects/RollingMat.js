@@ -59,6 +59,8 @@ export class RollingMat extends IngredientObject {
     this.finishedStackDisplayName = 'Hosomaki';
     this.restDepth = 12;
     this.isFlat = true;
+    this.flatDepthBase = 0.01;
+    this.flatDepthCap = 0;
     this.footprintDepthFactor = 1;
     this.computedShadeDarkAlpha = 0.18;
     this.computedShadeLightAlpha = 0.08;
@@ -86,7 +88,9 @@ export class RollingMat extends IngredientObject {
 
   accepts(other, placement = {}) {
     if (other?.stackCategory === 'nori') {
-      return !this.getNoriSheet() && super.accepts(other, placement);
+      return !this.getNoriSheet()
+        && super.accepts(other, placement)
+        && this.isValidNoriSheetForPlacement(other, placement);
     }
 
     const nori = this.getNoriSheet();
@@ -96,7 +100,19 @@ export class RollingMat extends IngredientObject {
 
   getStackRejectionReason(other, placement = {}) {
     if (other?.stackCategory === 'nori') {
-      return this.getNoriSheet() ? 'mat already has nori' : super.getStackRejectionReason(other, placement);
+      if (this.getNoriSheet()) {
+        return 'mat already has nori';
+      }
+
+      if (!this.isUncutNoriSheet(other)) {
+        return 'nori must be uncut';
+      }
+
+      if (!this.doesNoriFitMat(other, placement)) {
+        return 'nori is larger than mat';
+      }
+
+      return super.getStackRejectionReason(other, placement);
     }
 
     const nori = this.getNoriSheet();
@@ -106,6 +122,44 @@ export class RollingMat extends IngredientObject {
     }
 
     return nori.getStackRejectionReason?.(other, placement) ?? 'nori rejected placement';
+  }
+
+  isValidNoriSheetForPlacement(nori, placement = {}) {
+    return this.isUncutNoriSheet(nori) && this.doesNoriFitMat(nori, placement);
+  }
+
+  isUncutNoriSheet(nori) {
+    if (!(nori instanceof NoriSheet)) {
+      return false;
+    }
+
+    const piece = nori.pieces?.[0];
+    const sourceWidth = nori.sourceTextureWidth ?? nori.textureWidth;
+    const sourceHeight = nori.sourceTextureHeight ?? nori.textureHeight;
+
+    return Boolean(piece)
+      && nori.pieces.length === 1
+      && (nori.cropOriginX ?? 0) === 0
+      && (nori.cropOriginY ?? 0) === 0
+      && piece.cropX === 0
+      && piece.cropY === 0
+      && piece.cropWidth === sourceWidth
+      && piece.cropHeight === sourceHeight;
+  }
+
+  doesNoriFitMat(nori, placement = {}) {
+    const noriBounds = nori?.getLocalVisualBounds?.();
+    const matBounds = this.getRollMatBounds();
+
+    if (!noriBounds || !matBounds) {
+      return false;
+    }
+
+    const noriWidth = noriBounds.width * Math.abs(nori.scaleX ?? 1);
+    const noriHeight = noriBounds.height * Math.abs(nori.scaleY ?? 1);
+
+    return noriWidth <= matBounds.width
+      && noriHeight <= matBounds.height;
   }
 
   getStackPlacementOffset(child, drop = {}) {
@@ -263,9 +317,23 @@ export class RollingMat extends IngredientObject {
   }
 
   hasRollFilling(nori = this.getNoriSheet()) {
-    return Boolean(
-      nori?.stackChildren?.some((child) => child?.stackCategory === 'fish'),
-    );
+    return Boolean(nori?.hasValidRollFillingPlacement?.());
+  }
+
+  getRollDebugLines(position = null) {
+    const nori = this.getNoriSheet();
+    const startSide = position ? this.getRollStartSide(position) : null;
+
+    if (!nori) {
+      return ['Rolling Mat', 'nori: no'];
+    }
+
+    return [
+      'Rolling Mat',
+      `can roll: ${this.canStartKneading() ? 'yes' : 'no'}`,
+      `start side: ${startSide ?? 'none'}`,
+      ...(nori.getRollFillingDebugLines?.() ?? [nori.getRollFillingPlacementRejectionReason?.() ?? 'no roll diagnostics']),
+    ];
   }
 
   getKneadTopping() {
@@ -273,7 +341,7 @@ export class RollingMat extends IngredientObject {
   }
 
   handleRollHoverPointerMove(pointer) {
-    if (!this.scene || this.isKneading || !this.canStartKneading()) {
+    if (!this.scene || this.isKneading) {
       this.hideRollHoverHighlight();
       return;
     }
@@ -285,18 +353,32 @@ export class RollingMat extends IngredientObject {
       return;
     }
 
+    this.scene?.setDragDebugInfo?.(this.getRollDebugLines(position));
+
+    if (!this.canStartKneading()) {
+      this.hideRollHoverHighlight();
+      return;
+    }
+
     this.rollHoverSide = this.getRollStartSide(position);
     this.showRollHoverHighlight();
   }
 
   handleRollHoverMove(pointer) {
-    if (this.isKneading || !this.canStartKneading()) {
+    if (this.isKneading) {
       this.hideRollHoverHighlight();
       return;
     }
 
     const position = pointer ? { x: pointer.x, y: pointer.y } : null;
     const nextSide = this.getRollStartSide(position);
+
+    this.scene?.setDragDebugInfo?.(this.getRollDebugLines(position));
+
+    if (!this.canStartKneading()) {
+      this.hideRollHoverHighlight();
+      return;
+    }
 
     if (!nextSide) {
       this.hideRollHoverHighlight();

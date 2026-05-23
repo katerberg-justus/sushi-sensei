@@ -14,6 +14,9 @@ export class RotatableObject extends DraggableObject {
     this.lastRotateClickTime = -Infinity;
     this.rotationTween = null;
     this.rotationOnlyPointerId = null;
+    this.rotationRejectTween = null;
+    this.rotationRejectAmplitude = Phaser.Math.DegToRad(2);
+    this.rotationRejectDuration = 45;
 
     this.on('pointerdown', this.handleRotatePointerDown, this);
   }
@@ -54,7 +57,75 @@ export class RotatableObject extends DraggableObject {
   }
 
   rotateBy(angle) {
-    return this.tweenObjectRotation((this.rotation ?? 0) + angle);
+    const target = (this.rotation ?? 0) + angle;
+
+    if (!this.canRotateTo(target)) {
+      this.playRotationRejectBuzz();
+      return this;
+    }
+
+    return this.tweenObjectRotation(target);
+  }
+
+  canRotateTo(angle) {
+    if (typeof this.canOccupyPosition !== 'function') {
+      return true;
+    }
+
+    const originalRotation = this.rotation ?? 0;
+
+    this.rotation = angle;
+
+    let allowed;
+    try {
+      allowed = this.canOccupyPosition(this.x, this.y);
+    } finally {
+      this.rotation = originalRotation;
+    }
+
+    return allowed;
+  }
+
+  playRotationRejectBuzz() {
+    if (!this.scene?.tweens) {
+      return this;
+    }
+
+    this.stopRotationRejectBuzz();
+    this.stopRotationTween();
+
+    const baseRotation = this.rotation ?? 0;
+    const amplitude = this.rotationRejectAmplitude;
+
+    this.rotationRejectTween = this.scene.tweens.add({
+      targets: this,
+      rotation: baseRotation + amplitude,
+      duration: this.rotationRejectDuration,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: 1,
+      onUpdate: () => {
+        this.refreshRotatedGeometry({ transient: true });
+      },
+      onComplete: () => {
+        this.rotationRejectTween = null;
+        this.applyObjectRotation(baseRotation);
+      },
+      onStop: () => {
+        this.rotationRejectTween = null;
+      },
+    });
+
+    return this;
+  }
+
+  stopRotationRejectBuzz() {
+    if (!this.rotationRejectTween) {
+      return;
+    }
+
+    this.rotationRejectTween.stop();
+    this.rotationRejectTween = null;
   }
 
   setObjectRotation(angle) {
@@ -164,6 +235,7 @@ export class RotatableObject extends DraggableObject {
   }
 
   destroy(fromScene) {
+    this.stopRotationRejectBuzz();
     this.stopRotationTween();
     super.destroy(fromScene);
   }

@@ -44,6 +44,7 @@ export class Nigiri extends IngredientObject {
     this.fishType = fishType;
     this.stackCategory = 'sushi';
     this.variantIndex = variantIndex;
+    this.isRotatable = false;
     this.restDepth = 24;
     this.softness = 0.82;
     this.computedShadePixelSize = 1;

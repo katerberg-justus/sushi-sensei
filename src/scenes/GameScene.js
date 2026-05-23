@@ -23,11 +23,12 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.input.mouse?.disableContextMenu();
+    this.input.setPollAlways();
     this.cameras.main.setBackgroundColor(COLORS.boardSideB);
     this.createPixelBoardTexture();
 
-    const board = this.add.image(0, 0, 'pixel-cutting-board').setOrigin(0);
-    board.setDisplaySize(width, height);
+    this.boardBackground = this.add.image(0, 0, 'pixel-cutting-board').setOrigin(0);
+    this.resizeBoardBackground();
 
     this.riceBalls = Array.from({ length: 10 }, (_value, index) => {
       const columns = 2;
@@ -109,12 +110,14 @@ export class GameScene extends Phaser.Scene {
     this.scale.on('resize', this.positionHoverActionIndicator, this);
     this.scale.on('resize', this.positionDragDebugPanel, this);
     this.scale.on('resize', this.positionFpsCounter, this);
+    this.scale.on('resize', this.resizeBoardBackground, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.positionNameSignboard, this);
       this.scale.off('resize', this.positionHoverActionIndicator, this);
       this.scale.off('resize', this.positionDragDebugPanel, this);
       this.scale.off('resize', this.positionFpsCounter, this);
+      this.scale.off('resize', this.resizeBoardBackground, this);
       this.input.keyboard.off('keydown-R', this.resetScene, this);
     });
     this.input.on('gameobjectover', this.handleObjectOver, this);
@@ -136,6 +139,16 @@ export class GameScene extends Phaser.Scene {
 
   resetScene() {
     this.scene.restart();
+  }
+
+  resizeBoardBackground() {
+    if (!this.boardBackground) {
+      return;
+    }
+
+    const { width, height } = this.scale;
+
+    this.boardBackground.setDisplaySize(width, height);
   }
 
   getVisibleGameArea() {
@@ -572,36 +585,29 @@ export class GameScene extends Phaser.Scene {
     const textureWidth = 320;
     const textureHeight = 180;
     const pixel = 4;
-    const boardDepth = 154;
+    const boardDepth = textureHeight;
     const graphics = this.add.graphics();
 
     graphics.fillStyle(COLORS.boardSideB, 1);
     graphics.fillRect(0, 0, textureWidth, textureHeight);
 
-    const topLeft = new Phaser.Math.Vector2(28, 6);
-    const topRight = new Phaser.Math.Vector2(292, 6);
-    const frontRight = new Phaser.Math.Vector2(338, boardDepth);
-    const frontLeft = new Phaser.Math.Vector2(-18, boardDepth);
-    const sideDrop = new Phaser.Math.Vector2(0, textureHeight - boardDepth);
-    const sideBands = [
-      { offset: 0, color: 0xe6bd82 },
-      { offset: 8, color: 0xe1b577 },
-      { offset: 16, color: 0xdcaf70 },
-    ];
-
-    sideBands.forEach((band, index) => {
-      const nextOffset = sideBands[index + 1]?.offset ?? sideDrop.y;
-      this.fillPixelQuad(
-        graphics,
-        frontLeft.clone().add(new Phaser.Math.Vector2(0, band.offset)),
-        frontRight.clone().add(new Phaser.Math.Vector2(0, band.offset)),
-        frontRight.clone().add(new Phaser.Math.Vector2(0, nextOffset)),
-        frontLeft.clone().add(new Phaser.Math.Vector2(0, nextOffset)),
-        band.color,
-      );
-    });
-
+    const topLeft = new Phaser.Math.Vector2(-24, -38);
+    const topRight = new Phaser.Math.Vector2(344, -38);
+    const frontRight = new Phaser.Math.Vector2(380, boardDepth + 18);
+    const frontLeft = new Phaser.Math.Vector2(-60, boardDepth + 18);
     const topPalette = [0xecc690, 0xe8bf86, 0xe5b87d];
+
+    const lightX = textureWidth / 2;
+    const lightY = textureHeight * 0.42;
+    const lightRadiusX = textureWidth * 0.55;
+    const lightRadiusY = textureHeight * 0.32;
+    const lightLevels = [
+      { brightness: 1.04, warmR: 6, warmG: 3, warmB: 0 },
+      { brightness: 1.02, warmR: 3, warmG: 1, warmB: 0 },
+      { brightness: 1.00, warmR: 0, warmG: 0, warmB: 0 },
+      { brightness: 0.95, warmR: -2, warmG: -4, warmB: -6 },
+      { brightness: 0.88, warmR: -4, warmG: -7, warmB: -10 },
+    ];
 
     for (let y = 0; y < boardDepth; y += pixel) {
       for (let x = 0; x < 356; x += pixel) {
@@ -611,16 +617,22 @@ export class GameScene extends Phaser.Scene {
         const v1 = Math.min((y + pixel) / boardDepth, 1);
         const plank = Math.floor(x / 56);
         const grainBand = Math.floor(y / (pixel * 4));
-        const color = topPalette[(grainBand + plank) % topPalette.length];
+        const baseColor = topPalette[(grainBand + plank) % topPalette.length];
 
-        this.fillPixelQuad(
-          graphics,
-          this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u0, v0),
-          this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u1, v0),
-          this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u1, v1),
-          this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u0, v1),
-          color,
-        );
+        const a = this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u0, v0);
+        const b = this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u1, v0);
+        const c = this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u1, v1);
+        const d = this.pointOnBoard(topLeft, topRight, frontRight, frontLeft, u0, v1);
+
+        const centerScreenX = (a.x + c.x) / 2;
+        const centerScreenY = (a.y + c.y) / 2;
+        const dx = (centerScreenX - lightX) / lightRadiusX;
+        const dy = (centerScreenY - lightY) / lightRadiusY;
+        const t = Phaser.Math.Clamp(Math.hypot(dx, dy), 0, 1);
+        const levelIndex = Math.min(lightLevels.length - 1, Math.floor(t * lightLevels.length));
+        const color = this.applyLightLevel(baseColor, lightLevels[levelIndex]);
+
+        this.fillPixelQuad(graphics, a, b, c, d, color);
       }
     }
 
@@ -633,15 +645,6 @@ export class GameScene extends Phaser.Scene {
       graphics.fillStyle(i % 2 === 0 ? COLORS.boardTopC : COLORS.boardTopD, 0.2);
       graphics.fillRect(a.x, a.y, Math.max(pixel, b.x - a.x), pixel);
     }
-
-    this.fillPixelQuad(
-      graphics,
-      frontLeft,
-      frontRight,
-      frontRight.clone().add(new Phaser.Math.Vector2(0, pixel * 2)),
-      frontLeft.clone().add(new Phaser.Math.Vector2(0, pixel * 2)),
-      0xeac48b,
-    );
 
     graphics.generateTexture('pixel-cutting-board', textureWidth, textureHeight);
     graphics.destroy();
@@ -664,5 +667,16 @@ export class GameScene extends Phaser.Scene {
   fillPixelQuad(graphics, a, b, c, d, color) {
     graphics.fillStyle(color, 1);
     graphics.fillPoints([a, b, c, d], true);
+  }
+
+  applyLightLevel(baseColor, level) {
+    const r = (baseColor >> 16) & 0xff;
+    const g = (baseColor >> 8) & 0xff;
+    const b = baseColor & 0xff;
+    const lr = Phaser.Math.Clamp(Math.round(r * level.brightness + level.warmR), 0, 255);
+    const lg = Phaser.Math.Clamp(Math.round(g * level.brightness + level.warmG), 0, 255);
+    const lb = Phaser.Math.Clamp(Math.round(b * level.brightness + level.warmB), 0, 255);
+
+    return (lr << 16) | (lg << 8) | lb;
   }
 }

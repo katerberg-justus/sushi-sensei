@@ -77,6 +77,57 @@ export class RiceBall extends IngredientObject {
     );
   }
 
+  acceptsStackPlacement(other, placement = {}) {
+    if (!super.acceptsStackPlacement(other, placement)) {
+      return false;
+    }
+
+    return this.fishSizeFitsRice(other);
+  }
+
+  getStackPlacementRejectionReason(other, placement = {}) {
+    if (other?.stackCategory === 'fish' && !this.fishSizeFitsRice(other)) {
+      return 'fish piece must be within 30% of rice ball size';
+    }
+
+    return super.getStackPlacementRejectionReason?.(other, placement) ?? 'stack OK';
+  }
+
+  fishSizeFitsRice(other) {
+    if (other?.stackCategory !== 'fish' || typeof other.getPlacementRectAt !== 'function') {
+      return true;
+    }
+
+    const riceSize = this.getVisibleSize();
+    const fishRect = other.getPlacementRectAt();
+
+    if (!riceSize || !fishRect || riceSize.width <= 0 || riceSize.height <= 0) {
+      return true;
+    }
+
+    const widthRatio = fishRect.width / riceSize.width;
+    const heightRatio = fishRect.height / riceSize.height;
+
+    return widthRatio >= 0.7 && widthRatio <= 1.3
+      && heightRatio >= 0.7 && heightRatio <= 1.3;
+  }
+
+  getVisibleSize() {
+    const bounds = RiceBall.getVisibleTextureBounds(this.scene, this.sprite?.texture?.key);
+
+    if (!bounds || !this.sprite) {
+      return null;
+    }
+
+    const scaleX = Math.abs(this.sprite.scaleX || PIXEL);
+    const scaleY = Math.abs(this.sprite.scaleY || PIXEL);
+
+    return {
+      width: (bounds.right - bounds.left) * scaleX,
+      height: (bounds.bottom - bounds.top) * scaleY,
+    };
+  }
+
   static getVisibleTextureBounds(scene, textureKey) {
     if (!scene || !textureKey) {
       return null;

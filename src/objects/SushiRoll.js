@@ -13,6 +13,8 @@ const ROLL_DISC_DEPTH_PERSPECTIVE = 0.72;
 const FLIPPABLE_MAX_WEIGHT_GRAMS = 20;
 const FLIPPED_DISC_HEIGHT_SCALE = 0.86;
 const FLIP_DURATION = 180;
+const HORIZONTAL_CORNER_RADIUS = 2;
+const HORIZONTAL_RICE_END_THICKNESS = 1;
 
 const FILLING_STYLES = {
   salmon: { displayName: 'Salmon', base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
@@ -110,6 +112,19 @@ function getRollAxisBodyLength(rollLength, sinT) {
   return rollLength * (1 - (1 - ROLL_AXIS_CAP_PERSPECTIVE) * sinT);
 }
 
+function isInsideRoundedHorizontalBody(lx, ly, halfLength, halfHeight, radius) {
+  const innerHalfLength = Math.max(0, halfLength - radius);
+  const innerHalfHeight = Math.max(0, halfHeight - radius);
+  const dx = Math.abs(lx) - innerHalfLength;
+  const dy = Math.abs(ly) - innerHalfHeight;
+
+  if (dx <= 0 || dy <= 0) {
+    return Math.abs(lx) <= halfLength && Math.abs(ly) <= halfHeight;
+  }
+
+  return dx * dx + dy * dy <= radius * radius;
+}
+
 function wrapAngle(angle) {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
@@ -174,7 +189,9 @@ function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng, rollLength = ROLL_
       const lx = fx * cosT + fy * sinT;
       const ly = -fx * sinT + fy * cosT;
 
-      const inBody = Math.abs(lx) <= halfBodyL && Math.abs(ly) <= majorR;
+      const inBody = discVisible
+        ? Math.abs(lx) <= halfBodyL && Math.abs(ly) <= majorR
+        : isInsideRoundedHorizontalBody(lx, ly, halfBodyL, majorR, HORIZONTAL_CORNER_RADIUS);
 
       let inSouthEll = false;
       let southN = 2;
@@ -224,7 +241,10 @@ function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng, rollLength = ROLL_
         }
       } else {
         const edgePerp = Math.abs(ly) > majorR - 0.6;
-        color = getCoarseNoriColor(lx, ly, majorR, halfLength, edgePerp, 7);
+        const horizontalRiceEnd = !discVisible && Math.abs(lx) > halfBodyL - HORIZONTAL_RICE_END_THICKNESS;
+        color = horizontalRiceEnd
+          ? getCoarseRiceColor(lx, ly, majorR, halfLength, 13)
+          : getCoarseNoriColor(lx, ly, majorR, halfLength, edgePerp, 7);
       }
 
       ctx.fillStyle = toHexColor(color);
@@ -252,7 +272,7 @@ export class SushiRoll extends IngredientObject {
     this.displayName = `${fillingStyle.displayName} Maki`;
     this.rollStyle = 'maki';
     this.fillingType = fillingType;
-    this.restDepth = 14;
+    this.restDepth = 24;
     this.softness = 0.22;
     this.stackCategory = 'roll';
 
@@ -401,6 +421,31 @@ export class SushiRoll extends IngredientObject {
   refreshRotatedGeometry(options = {}) {
     super.refreshRotatedGeometry(options);
     this.applyRollViewForCurrentRotation();
+    return this;
+  }
+
+  refreshCuttableGeometry(options) {
+    this.setSize(this.cutWidth, this.cutHeight);
+
+    if (this.setCenteredHitbox && this.pieces?.length) {
+      const piece = this.pieces[0];
+      const sourceWidth = this.sourceTextureWidth ?? ROLL_LENGTH;
+      const sourceHeight = this.sourceTextureHeight ?? ROLL_DIAMETER;
+      const frameIndex = Math.max(0, this.currentFrameIndex);
+      const theta = (frameIndex / (FRAME_COUNT - 1)) * (Math.PI / 2);
+      const sinT = Math.sin(theta);
+      const axisBodyLength = getRollAxisBodyLength(sourceWidth, sinT);
+      const pieceLength = piece.cropWidth * (axisBodyLength / sourceWidth) * this.pixelScale;
+      const pieceCross = sourceHeight * this.pixelScale;
+      const flipped = this.isFlippedUpright;
+      const width = flipped ? pieceCross : pieceLength;
+      const height = flipped ? pieceLength * FLIPPED_DISC_HEIGHT_SCALE : pieceCross;
+
+      this.setCenteredHitbox(width, height);
+    }
+
+    this.refreshCompositionShadow?.();
+
     return this;
   }
 

@@ -1,3 +1,4 @@
+import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { CuttableObject } from './CuttableObject.js';
 import { IngredientObject } from './IngredientObject.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
@@ -12,6 +13,9 @@ const NORI_WEIGHT_GRAMS = 3;
 const NORI_PERSPECTIVE_SQUASH = 0.66;
 const RICE_SPREAD_TARGET = { left: 6, top: 6, right: 52, bottom: 34 };
 const RICE_SPREAD_COMPLETE_COVERAGE = 0.97;
+const ROLL_FILLING_REQUIRED_WIDTH_COVERAGE = 0.9;
+const ROLL_FILLING_REQUIRED_COLUMN_COVERAGE = 0.1;
+const ROLL_FILLING_EDGE_BAND_FRACTION = 0.25;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 let riceSpreadTextureId = 0;
@@ -464,6 +468,155 @@ export class NoriSheet extends IngredientObject {
       covered: fraction >= 0.999,
       segments: merged.map(([l, r]) => ({ left: l, right: r })),
     };
+  }
+
+  getRollFillingChildren() {
+    return (this.stackChildren ?? []).filter((child) => child?.stackCategory === 'fish');
+  }
+
+  getRollFillingGroups() {
+    const groups = new Map();
+
+    this.getRollFillingChildren().forEach((child) => {
+      const key = child.fishType ?? child.displayName ?? child.constructor?.name ?? 'filling';
+      const existing = groups.get(key);
+
+      if (existing) {
+        existing.children.push(child);
+        return;
+      }
+
+      groups.set(key, {
+        key,
+        displayName: child.displayName ?? 'filling',
+        children: [child],
+      });
+    });
+
+    return [...groups.values()];
+  }
+
+  hasValidRollFillingPlacement() {
+    const groups = this.getRollFillingGroups();
+
+    return groups.length > 0 && groups.every((group) => this.isRollFillingGroupCentered(group).valid);
+  }
+
+  getRollFillingPlacementRejectionReason() {
+    if (!this.hasSpreadRice) {
+      return 'nori needs spread rice';
+    }
+
+    const fillings = this.getRollFillingGroups();
+
+    if (!fillings.length) {
+      return 'roll needs filling';
+    }
+
+    const invalidFilling = fillings.find((group) => !this.isRollFillingGroupCentered(group).valid);
+
+    if (!invalidFilling) {
+      return 'stack OK';
+    }
+
+    return `${invalidFilling.displayName ?? 'filling'} must run through the center without touching the outer bands`;
+  }
+
+  getRollFillingDebugLines() {
+    if (!this.hasSpreadRice) {
+      return ['spread rice: no'];
+    }
+
+    const fillings = this.getRollFillingGroups();
+
+    if (!fillings.length) {
+      return ['spread rice: yes', 'fillings: 0'];
+    }
+
+    return [
+      'spread rice: yes',
+      `fillings: ${fillings.length}`,
+      ...fillings.map((group) => {
+        const result = this.isRollFillingGroupCentered(group);
+        const widthPercent = Math.round(result.widthCoverage * 100);
+        const edgeText = result.touchesEdgeBand ? 'edge band hit' : 'center band only';
+        const status = result.valid ? 'OK' : 'blocked';
+        const countText = group.children.length > 1 ? ` x${group.children.length}` : '';
+
+        return `${group.displayName}${countText}: ${widthPercent}% width, ${edgeText}, ${status}`;
+      }),
+    ];
+  }
+
+  isRollFillingGroupCentered(group) {
+    const children = group?.children ?? [];
+
+    if (!children.length) {
+      return { valid: false, widthCoverage: 0, touchesEdgeBand: false };
+    }
+
+    const targetWidth = RICE_SPREAD_TARGET.right - RICE_SPREAD_TARGET.left;
+    const targetHeight = RICE_SPREAD_TARGET.bottom - RICE_SPREAD_TARGET.top;
+    const edgeBandHeight = targetHeight * ROLL_FILLING_EDGE_BAND_FRACTION;
+    const centerTop = RICE_SPREAD_TARGET.top + edgeBandHeight;
+    const centerBottom = RICE_SPREAD_TARGET.bottom - edgeBandHeight;
+    const requiredCoveredRows = Math.ceil(targetHeight * ROLL_FILLING_REQUIRED_COLUMN_COVERAGE);
+    const childBounds = new Map();
+    let coveredColumns = 0;
+    let touchesEdgeBand = false;
+
+    children.forEach((child) => {
+      childBounds.set(child, child.getLocalVisualBounds?.());
+    });
+
+    for (let x = RICE_SPREAD_TARGET.left; x < RICE_SPREAD_TARGET.right; x += 1) {
+      let centerCoveredRows = 0;
+
+      for (let y = RICE_SPREAD_TARGET.top; y < RICE_SPREAD_TARGET.bottom; y += 1) {
+        const covered = children.some((child) => {
+          const bounds = childBounds.get(child);
+
+          if (!bounds || bounds.width <= 0 || bounds.height <= 0 || !child.worldToLocalPoint) {
+            return false;
+          }
+
+          const point = this.textureCellToChildLocalPoint(child, x + 0.5, y + 0.5);
+
+          return Phaser.Geom.Rectangle.Contains(bounds, point.x, point.y);
+        });
+
+        if (!covered) {
+          continue;
+        }
+
+        if (y + 0.5 < centerTop || y + 0.5 >= centerBottom) {
+          touchesEdgeBand = true;
+        } else {
+          centerCoveredRows += 1;
+        }
+      }
+
+      if (centerCoveredRows >= requiredCoveredRows) {
+        coveredColumns += 1;
+      }
+    }
+
+    const widthCoverage = targetWidth > 0 ? coveredColumns / targetWidth : 0;
+
+    return {
+      valid: widthCoverage >= ROLL_FILLING_REQUIRED_WIDTH_COVERAGE && !touchesEdgeBand,
+      widthCoverage,
+      touchesEdgeBand,
+    };
+  }
+
+  textureCellToChildLocalPoint(child, textureX, textureY) {
+    const worldPoint = this.localToWorldPoint({
+      x: (textureX - this.anchorTextureX) * PIXEL,
+      y: (textureY - this.anchorTextureY) * PIXEL,
+    });
+
+    return child.worldToLocalPoint(worldPoint);
   }
 
   getCuttableReplacementOptions() {
