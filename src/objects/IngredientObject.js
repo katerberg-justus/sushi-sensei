@@ -1875,7 +1875,7 @@ export class IngredientObject extends RotatableObject {
       return;
     }
 
-    if (!this.stackChildren?.length) {
+    if (!this.getMostRecentRemovableStackChild()) {
       return;
     }
 
@@ -1919,7 +1919,7 @@ export class IngredientObject extends RotatableObject {
   fireStackLongPress() {
     this.cancelStackLongPress();
 
-    const topping = this.stackChildren[this.stackChildren.length - 1];
+    const topping = this.getMostRecentRemovableStackChild();
 
     if (!topping?.detachFromStackParent) {
       return;
@@ -1932,6 +1932,23 @@ export class IngredientObject extends RotatableObject {
 
     topping.detachFromStackParent();
     topping.beginManualDrag?.(pointer);
+  }
+
+  getMostRecentRemovableStackChild() {
+    for (let index = (this.stackChildren?.length ?? 0) - 1; index >= 0; index -= 1) {
+      const child = this.stackChildren[index];
+      const nestedChild = child?.getMostRecentRemovableStackChild?.();
+
+      if (nestedChild) {
+        return nestedChild;
+      }
+
+      if (!child?.stackLocked && child?.detachFromStackParent) {
+        return child;
+      }
+    }
+
+    return null;
   }
 
   abortInProgressDrag() {
