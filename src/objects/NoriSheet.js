@@ -51,6 +51,7 @@ export class NoriSheet extends IngredientObject {
     this.ownWeightGrams = options.weightGrams
       ?? NoriSheet.getPieceWeightGrams(cropWidth, cropHeight, wholeWeightGrams);
     this.restDepth = 18;
+    this.isFlat = true;
     this.softness = 0.05;
     this.footprintDepthFactor = 1;
     this.variantIndex = variantIndex;

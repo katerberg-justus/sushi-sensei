@@ -12,6 +12,7 @@ const ROLL_AXIS_CAP_PERSPECTIVE = 0.72;
 const ROLL_DISC_DEPTH_PERSPECTIVE = 0.72;
 const FLIPPABLE_MAX_WEIGHT_GRAMS = 20;
 const FLIPPED_DISC_HEIGHT_SCALE = 0.86;
+const FLIP_DURATION = 180;
 
 const FILLING_STYLES = {
   salmon: { displayName: 'Salmon', base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
@@ -107,6 +108,22 @@ function getCoarseRiceColor(lx, ly, majorR, halfLength, seed = 0) {
 
 function getRollAxisBodyLength(rollLength, sinT) {
   return rollLength * (1 - (1 - ROLL_AXIS_CAP_PERSPECTIVE) * sinT);
+}
+
+function wrapAngle(angle) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function shortestAngleBetween(startAngle, endAngle) {
+  return wrapAngle(endAngle - startAngle);
+}
+
+function interpolateAngle(startAngle, endAngle, progress) {
+  return wrapAngle(startAngle + shortestAngleBetween(startAngle, endAngle) * progress);
+}
+
+function interpolateValue(startValue, endValue, progress) {
+  return startValue + (endValue - startValue) * progress;
 }
 
 function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
@@ -249,6 +266,8 @@ export class SushiRoll extends IngredientObject {
     this.isFlippedUpright = false;
     this.unflippedRotation = this.rotation ?? 0;
     this.unflippedIsRotatable = this.isRotatable;
+    this.flipTween = null;
+    this.flipTweenState = null;
     this.sprite = null;
 
     CuttableObject.setupCuttable(this, frames[0].key, cropWidth, cropHeight, PIXEL, {
@@ -277,7 +296,7 @@ export class SushiRoll extends IngredientObject {
   }
 
   handleFlipPointerDown(pointer) {
-    if (!this.canFlipUpright() || !this.isRightButtonPointer(pointer)) {
+    if (!this.canFlipUpright() || !this.isRightButtonPointer(pointer) || !this.canStartFlip()) {
       return;
     }
 
@@ -288,6 +307,20 @@ export class SushiRoll extends IngredientObject {
 
   canFlipUpright() {
     return (this.weightGrams ?? this.ownWeightGrams ?? 0) < FLIPPABLE_MAX_WEIGHT_GRAMS;
+  }
+
+  canStartFlip() {
+    return !this.isDragging && !this.rotationTween && !this.flipTween;
+  }
+
+  stopFlipTween() {
+    if (!this.flipTween) {
+      return;
+    }
+
+    this.flipTween.stop();
+    this.flipTween = null;
+    this.flipTweenState = null;
   }
 
   toggleFlippedUpright() {
@@ -303,22 +336,57 @@ export class SushiRoll extends IngredientObject {
       return this;
     }
 
-    this.stopRotationTween?.();
+    this.beginFlipTween(nextValue);
+
+    return this;
+  }
+
+  beginFlipTween(nextValue) {
+    const currentRotation = this.rotation ?? 0;
+    const targetRotation = nextValue ? 0 : this.unflippedRotation ?? 0;
+    const startView = nextValue
+      ? this.getUnflippedRollView(currentRotation)
+      : this.getFlippedRollView();
+    const endView = nextValue
+      ? this.getFlippedRollView()
+      : this.getUnflippedRollView(targetRotation);
 
     if (nextValue) {
-      this.unflippedRotation = this.rotation ?? 0;
+      this.unflippedRotation = currentRotation;
       this.unflippedIsRotatable = this.isRotatable;
-      this.isRotatable = false;
-      this.setRotation(0);
-    } else {
-      this.isRotatable = this.unflippedIsRotatable ?? true;
-      this.setRotation(this.unflippedRotation ?? 0);
     }
 
     this.isFlippedUpright = nextValue;
-    this.applyRollViewForCurrentRotation();
+    this.isRotatable = false;
+    this.flipTweenState = {
+      progress: 0,
+      startView,
+      endView,
+    };
+
+    this.renderInterpolatedRollView(startView, endView, 0);
     this.refreshCuttableGeometry?.();
     this.refreshCompositionShadow?.();
+
+    this.flipTween = this.scene.tweens.add({
+      targets: this.flipTweenState,
+      progress: 1,
+      duration: FLIP_DURATION,
+      ease: 'Cubic.Out',
+      onUpdate: () => {
+        this.renderInterpolatedRollView(startView, endView, this.flipTweenState.progress);
+        this.refreshCuttableGeometry?.();
+      },
+      onComplete: () => {
+        this.flipTween = null;
+        this.flipTweenState = null;
+        this.setRotation(targetRotation);
+        this.isRotatable = nextValue ? false : this.unflippedIsRotatable ?? true;
+        this.applyRollViewForCurrentRotation();
+        this.refreshCuttableGeometry?.();
+        this.refreshCompositionShadow?.();
+      },
+    });
 
     return this;
   }
@@ -397,25 +465,27 @@ export class SushiRoll extends IngredientObject {
   applyRollViewForCurrentRotation() {
     if (!this.frames || !this.pieces?.length) return;
 
-    if (this.isFlippedUpright) {
-      const frameIndex = FRAME_COUNT - 1;
-
-      this.currentFrameIndex = frameIndex;
-      this.pieces.forEach((piece) => {
-        this.syncRollPieceImage(piece, {
-          frameIndex,
-          flipX: false,
-          flipY: true,
-          rotation: 0,
-          scaleY: FLIPPED_DISC_HEIGHT_SCALE,
-        });
-      });
+    if (this.flipTweenState) {
+      this.renderInterpolatedRollView(
+        this.flipTweenState.startView,
+        this.flipTweenState.endView,
+        this.flipTweenState.progress,
+      );
       return;
     }
 
+    if (this.isFlippedUpright) {
+      this.applyRollView(this.getFlippedRollView());
+      return;
+    }
+
+    this.applyRollView(this.getUnflippedRollView(this.rotation ?? 0));
+  }
+
+  getUnflippedRollView(rotation) {
     const half = Math.PI;
     const quarter = Math.PI / 2;
-    const raw = this.rotation ?? 0;
+    const raw = rotation ?? 0;
     const folded = ((raw % half) + half) % half;
     const subQuadrant = Math.floor(folded / quarter);
     const subProgress = (folded - subQuadrant * quarter) / quarter;
@@ -423,13 +493,55 @@ export class SushiRoll extends IngredientObject {
     const t = forward ? subProgress : 1 - subProgress;
     const frameIndex = Math.min(FRAME_COUNT - 1, Math.max(0, Math.round(t * (FRAME_COUNT - 1))));
 
-    this.currentFrameIndex = frameIndex;
+    return {
+      objectRotation: raw,
+      imageRotation: -raw,
+      frameIndex,
+      flipX: subQuadrant === 1,
+      flipY: false,
+      scaleY: 1,
+    };
+  }
+
+  getFlippedRollView() {
+    return {
+      objectRotation: 0,
+      imageRotation: 0,
+      frameIndex: FRAME_COUNT - 1,
+      flipX: false,
+      flipY: true,
+      scaleY: FLIPPED_DISC_HEIGHT_SCALE,
+    };
+  }
+
+  renderInterpolatedRollView(startView, endView, progress) {
+    const frameIndex = Math.min(
+      FRAME_COUNT - 1,
+      Math.max(0, Math.round(interpolateValue(startView.frameIndex, endView.frameIndex, progress))),
+    );
+    const view = {
+      objectRotation: interpolateAngle(startView.objectRotation, endView.objectRotation, progress),
+      imageRotation: interpolateAngle(startView.imageRotation, endView.imageRotation, progress),
+      frameIndex,
+      flipX: progress < 0.5 ? startView.flipX : endView.flipX,
+      flipY: progress < 0.5 ? startView.flipY : endView.flipY,
+      scaleY: interpolateValue(startView.scaleY, endView.scaleY, progress),
+    };
+
+    this.setRotation(view.objectRotation);
+    this.applyRollView(view);
+  }
+
+  applyRollView(view) {
+    this.currentFrameIndex = view.frameIndex;
 
     this.pieces.forEach((piece) => {
       this.syncRollPieceImage(piece, {
-        frameIndex,
-        flipX: subQuadrant === 1,
-        rotation: -raw,
+        frameIndex: view.frameIndex,
+        flipX: view.flipX,
+        flipY: view.flipY,
+        rotation: view.imageRotation,
+        scaleY: view.scaleY,
       });
     });
   }
@@ -482,6 +594,11 @@ export class SushiRoll extends IngredientObject {
     return {
       fillingType: this.fillingType,
     };
+  }
+
+  destroy(fromScene) {
+    this.stopFlipTween();
+    super.destroy(fromScene);
   }
 }
 

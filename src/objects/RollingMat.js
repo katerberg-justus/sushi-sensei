@@ -58,6 +58,7 @@ export class RollingMat extends IngredientObject {
     this.spreadStrokeDistance = 8;
     this.finishedStackDisplayName = 'Hosomaki';
     this.restDepth = 12;
+    this.isFlat = true;
     this.footprintDepthFactor = 1;
     this.computedShadeDarkAlpha = 0.18;
     this.computedShadeLightAlpha = 0.08;

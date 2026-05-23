@@ -7,6 +7,16 @@ let shadowTextureId = 0;
 const draggableRegistry = new Set();
 let activeDragOwner = null;
 
+const FLAT_DEPTH_CAP = 9.99;
+
+function computeFlatDepth(object) {
+  const footprint = object.getFootprint?.();
+  const bottom = footprint ? footprint.y + footprint.height : 0;
+  const ordering = Number.isFinite(bottom) ? Math.max(0, bottom) * 0.001 : 0;
+
+  return Math.min(FLAT_DEPTH_CAP, ordering);
+}
+
 function getDragRoot(object) {
   let root = object;
 
@@ -106,6 +116,7 @@ export class DraggableObject extends SceneObject {
     this.isDragging = false;
     this.dragDepth = 100;
     this.restDepth = 10;
+    this.isFlat = false;
     this.dragLift = 18;
     this.dragLiftDuration = 120;
     this.dropLiftDuration = 90;
@@ -1030,7 +1041,7 @@ export class DraggableObject extends SceneObject {
     let maxDepth = this.restDepth;
 
     for (const other of draggableRegistry) {
-      if (other === this || !other.scene) {
+      if (other === this || !other.scene || other.isFlat) {
         continue;
       }
       if (other.depth > maxDepth) {
@@ -1042,6 +1053,11 @@ export class DraggableObject extends SceneObject {
   }
 
   applyRestingDepth() {
+    if (this.isFlat) {
+      this.setDepth(computeFlatDepth(this));
+      return;
+    }
+
     const footprint = this.getFootprint();
     const bottom = footprint.y + footprint.height;
 
@@ -1055,6 +1071,11 @@ export class DraggableObject extends SceneObject {
   refreshOtherRestingDepths() {
     for (const other of draggableRegistry) {
       if (other === this || !other.scene || other.isDragging) {
+        continue;
+      }
+
+      if (other.isFlat) {
+        other.setDepth(computeFlatDepth(other));
         continue;
       }
 

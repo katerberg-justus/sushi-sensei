@@ -322,6 +322,33 @@ export class Plate extends IngredientObject {
     );
   }
 
+  collectCompositionShadowParts(transform = {
+    x: 0,
+    y: 0,
+    rotation: 0,
+    scaleX: 1,
+    scaleY: 1,
+  }) {
+    return this.draggableParts.map((part) => (
+      this.createTransformedShadowPart(part, transform)
+    ));
+  }
+
+  shouldUseMergedStackShadow(lift) {
+    return Boolean(
+      lift > 0
+      && this.stackChildren?.some((child) => child?.scene),
+    );
+  }
+
+  showStackDragSourceShadows() {
+    super.showStackDragSourceShadows();
+
+    this.stackChildren?.forEach((child) => {
+      this.setPlateChildShadowVisible(child, false);
+    });
+  }
+
   getWorldHitboxRect(centerX = this.x, centerY = this.y) {
     return new Phaser.Geom.Rectangle(
       centerX - this.plateDisplayWidth * 0.46,
@@ -332,13 +359,25 @@ export class Plate extends IngredientObject {
   }
 
   handleStackChildAttached(child) {
+    this.setPlateChildShadowVisible(child, false);
     child?.refreshCompositionShadow?.();
     this.refreshCompositionShadow?.();
   }
 
   handleStackChildDetached(child) {
+    this.setPlateChildShadowVisible(child, true);
     child?.refreshCompositionShadow?.();
     this.refreshCompositionShadow?.();
+  }
+
+  setPlateChildShadowVisible(child, visible) {
+    if (child?.shadow && child.shadow !== child.stackDragShadow) {
+      child.shadow.setVisible(visible);
+    }
+
+    child?.stackChildren?.forEach((stackChild) => {
+      this.setPlateChildShadowVisible(stackChild, visible);
+    });
   }
 
   ensureTexture() {
