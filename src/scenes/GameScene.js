@@ -8,6 +8,7 @@ import { Knife } from '../objects/Knife.js';
 import { Nigiri } from '../objects/Nigiri.js';
 import { NoriSheet } from '../objects/NoriSheet.js';
 import { RiceBall } from '../objects/RiceBall.js';
+import { RollingMat } from '../objects/RollingMat.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -46,6 +47,7 @@ export class GameScene extends Phaser.Scene {
     this.cuttableUnagi = new CuttableFish(this, width * 0.84, height * 0.42, { fishType: 'unagi' });
     this.cuttableTamago = new CuttableTamago(this, width * 0.45, height * 0.58);
     this.cuttableTamago.displayName = 'Tamago';
+    this.rollingMat = new RollingMat(this, width * 0.61, height * 0.7);
     this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58);
     this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, { fishType: 'salmon' });
     this.bowls = [

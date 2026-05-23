@@ -9,6 +9,9 @@ const BOWL_TEXTURE_HEIGHT = 38;
 const BOWL_DISPLAY_WIDTH = BOWL_TEXTURE_WIDTH * PIXEL;
 const BOWL_DISPLAY_HEIGHT = BOWL_TEXTURE_HEIGHT * PIXEL;
 const BOWL_CAPACITY_GRAMS = 180;
+const MAX_CONTENT_WEIGHT_GRAMS = 10;
+const CONTENT_RIM_Y = 16;
+const CONTENT_RIM_OVERFLOW = 3;
 const CONTENT_ELLIPSE = {
   x: 30,
   y: 14,
@@ -137,6 +140,7 @@ export class Bowl extends IngredientObject {
     this.stackCategory = 'bowl';
     this.acceptedStackCategories = options.acceptedStackCategories ?? ['rice', 'fish', 'nori'];
     this.maxStackedItems = options.maxStackedItems ?? 10;
+    this.stackLocked = true;
     this.stackOffsetX = 0;
     this.stackOffsetY = -8;
     this.ownWeightGrams = options.weightGrams ?? 120;
@@ -193,11 +197,35 @@ export class Bowl extends IngredientObject {
       return false;
     }
 
-    return this.getLocalContentPoint(other, placement) !== null;
+    return this.isSmallCutIngredient(other) && this.getLocalContentPoint(other, placement) !== null;
   }
 
   getStackPlacementRejectionReason(other, placement = {}) {
+    if (!this.isSmallCutIngredient(other)) {
+      return `ingredient must be a cut piece up to ${MAX_CONTENT_WEIGHT_GRAMS}g`;
+    }
+
     return this.getLocalContentPoint(other, placement) ? 'stack OK' : 'outside bowl';
+  }
+
+  isSmallCutIngredient(child) {
+    if (!child?.isIngredient || child.stackCategory === 'bowl') {
+      return false;
+    }
+
+    const width = child.textureWidth ?? child.pieces?.[0]?.cropWidth;
+    const height = child.textureHeight ?? child.pieces?.[0]?.cropHeight;
+    const sourceWidth = child.sourceTextureWidth ?? width;
+    const sourceHeight = child.sourceTextureHeight ?? height;
+
+    if (![width, height, sourceWidth, sourceHeight].every(Number.isFinite)) {
+      return false;
+    }
+
+    const wasCut = width < sourceWidth || height < sourceHeight;
+    const weight = child.ownWeightGrams ?? child.weightGrams;
+
+    return wasCut && Number.isFinite(weight) && weight <= MAX_CONTENT_WEIGHT_GRAMS;
   }
 
   getStackPlacementOffset(child, drop = {}) {
@@ -379,13 +407,60 @@ export class Bowl extends IngredientObject {
     }
 
     const styles = this.getContentStyles();
-    const dominant = styles[0] ?? INGREDIENT_CONTENT_STYLES.mixed;
-    const topY = Math.round(16 - fullness * 4);
-    const halfWidth = Math.round(14 + fullness * 9);
-    const halfHeight = Math.round(2 + fullness * 4);
+    const mixed = this.mixContentStyles(styles);
+    const bottomY = CONTENT_RIM_Y + CONTENT_RIM_OVERFLOW;
+    const surfaceY = CONTENT_RIM_Y - Math.round(1 + fullness * 5);
+    const halfWidth = Math.round(15 + fullness * 8);
 
-    context.fillStyle = toHexColor(dominant.base);
-    this.fillPixelEllipse(context, CONTENT_ELLIPSE.x, topY, halfWidth, halfHeight);
+    context.fillStyle = toHexColor(mixed.base);
+    this.fillContentMass(context, CONTENT_ELLIPSE.x, surfaceY, bottomY, halfWidth);
+
+    styles.forEach((style, index) => {
+      const color = index % 2 === 0 ? style.light : style.dark;
+      const y = Math.min(bottomY - 1, surfaceY + 1 + index);
+      const startX = CONTENT_ELLIPSE.x - halfWidth + 4 + (index % 3) * 3;
+
+      context.fillStyle = toHexColor(color);
+      for (let x = startX; x < CONTENT_ELLIPSE.x + halfWidth - 3; x += 7) {
+        context.fillRect(x, y, 2, 1);
+      }
+    });
+  }
+
+  fillContentMass(context, centerX, surfaceY, bottomY, halfWidth) {
+    const topY = Math.min(surfaceY, bottomY);
+    const lowerY = Math.max(surfaceY, bottomY);
+    const height = Math.max(1, lowerY - topY);
+
+    for (let y = topY; y <= lowerY; y += 1) {
+      const progress = (y - topY) / height;
+      const capNarrowing = y === topY ? 3 : y === topY + 1 ? 1 : 0;
+      const rowHalfWidth = Math.round(halfWidth + progress * 2) - capNarrowing;
+
+      context.fillRect(centerX - rowHalfWidth, y, rowHalfWidth * 2, 1);
+    }
+  }
+
+  mixContentStyles(styles) {
+    const palette = styles.length ? styles : [INGREDIENT_CONTENT_STYLES.mixed];
+    const averageColor = (key) => {
+      const totals = palette.reduce((sum, style) => ({
+        r: sum.r + ((style[key] >> 16) & 0xff),
+        g: sum.g + ((style[key] >> 8) & 0xff),
+        b: sum.b + (style[key] & 0xff),
+      }), { r: 0, g: 0, b: 0 });
+      const count = palette.length;
+
+      return (Math.round(totals.r / count) << 16)
+        | (Math.round(totals.g / count) << 8)
+        | Math.round(totals.b / count);
+    };
+
+    return {
+      base: averageColor('base'),
+      light: averageColor('light'),
+      dark: averageColor('dark'),
+    };
   }
 
   mixColors(first, second, amount) {

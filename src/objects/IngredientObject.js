@@ -57,6 +57,8 @@ export class IngredientObject extends RotatableObject {
     this.spreadPointerUpHandler = null;
     this.spreadPulseTween = null;
     this.spreadChildBaseScale = null;
+    this.spreadLastFeedbackProgress = 0;
+    this.spreadRequiresCoverage = false;
     this.finishedStackDisplayName = 'Nigiri';
 
     this.on('pointerdown', this.handleSpreadPointerDown, this);
@@ -915,6 +917,10 @@ export class IngredientObject extends RotatableObject {
 
     this.setStackHighlight(true);
     this.showKneadMeter();
+    this.spreadLastFeedbackProgress = this.beginSpreadFeedback?.(position, spreadIngredient) ?? 0;
+    if (Number.isFinite(this.spreadLastFeedbackProgress)) {
+      this.spreadProgress = Phaser.Math.Clamp(this.spreadLastFeedbackProgress, 0, 1);
+    }
     this.updateSpreadMeter();
 
     this.spreadPointerMoveHandler = (movePointer) => {
@@ -973,21 +979,44 @@ export class IngredientObject extends RotatableObject {
     const dx = position.x - this.spreadGestureAnchor.x;
     const dy = position.y - this.spreadGestureAnchor.y;
     const distance = Math.hypot(dx, dy);
+    const feedbackProgress = this.updateSpreadFeedback?.(position, {
+      previousPosition: this.spreadGestureAnchor,
+      distance,
+      pointer,
+    });
+
+    if (Number.isFinite(feedbackProgress)) {
+      this.spreadLastFeedbackProgress = Phaser.Math.Clamp(feedbackProgress, 0, 1);
+      this.spreadProgress = Math.max(this.spreadProgress, this.spreadLastFeedbackProgress);
+      this.updateSpreadMeter();
+
+      if (this.spreadProgress >= 1) {
+        this.completeSpreading();
+        return;
+      }
+    }
 
     if (distance < this.spreadStrokeDistance) {
       return;
     }
 
     this.spreadGestureAnchor = position;
-    this.registerSpreadStroke(dx, dy);
+    this.registerSpreadStroke(dx, dy, this.spreadLastFeedbackProgress);
   }
 
-  registerSpreadStroke(dx, dy) {
+  registerSpreadStroke(dx, dy, feedbackProgress = null) {
     this.spreadStrokeCount += 1;
-    this.spreadProgress = Phaser.Math.Clamp(
-      this.spreadStrokeCount / this.spreadRequiredStrokes,
-      0,
-      1,
+    const strokeProgress = this.spreadRequiresCoverage
+      ? 0
+      : Phaser.Math.Clamp(
+        this.spreadStrokeCount / this.spreadRequiredStrokes,
+        0,
+        1,
+      );
+
+    this.spreadProgress = Math.max(
+      strokeProgress,
+      Number.isFinite(feedbackProgress) ? feedbackProgress : 0,
     );
 
     this.playSpreadPulse(dx, dy);
@@ -1019,6 +1048,7 @@ export class IngredientObject extends RotatableObject {
     const spreadIngredient = this.getSpreadIngredient();
     const result = this.createSpreadStackResult?.(spreadIngredient);
 
+    this.completeSpreadFeedback?.();
     this.finishSpreading();
 
     if (result) {
@@ -1076,8 +1106,10 @@ export class IngredientObject extends RotatableObject {
     this.spreadUsesTouch = false;
     this.spreadGestureAnchor = null;
     this.spreadChildBaseScale = null;
+    this.spreadLastFeedbackProgress = 0;
     this.suppressedDragPointerId = null;
     this.setStackHighlight(false);
+    this.finishSpreadFeedback?.();
     this.hideKneadMeter();
   }
 
@@ -1585,11 +1617,20 @@ export class IngredientObject extends RotatableObject {
     const progress = Phaser.Math.Clamp(this.spreadProgress, 0, 1);
     const absX = Math.abs(dx);
     const absY = Math.abs(dy);
-    const targetScaleX = baseScale.scaleX * Phaser.Math.Linear(1, absX >= absY ? 2.25 : 1.75, progress);
-    const targetScaleY = baseScale.scaleY * Phaser.Math.Linear(1, absX >= absY ? 0.36 : 0.44, progress);
+    const spreadScale = this.spreadRequiresCoverage
+      ? Phaser.Math.Linear(1, 0.24, progress)
+      : null;
+    const targetScaleX = this.spreadRequiresCoverage
+      ? baseScale.scaleX * spreadScale
+      : baseScale.scaleX * Phaser.Math.Linear(1, absX >= absY ? 2.25 : 1.75, progress);
+    const targetScaleY = this.spreadRequiresCoverage
+      ? baseScale.scaleY * spreadScale
+      : baseScale.scaleY * Phaser.Math.Linear(1, absX >= absY ? 0.36 : 0.44, progress);
+    const pulseScaleX = this.spreadRequiresCoverage ? 0.96 : 1.03;
+    const pulseScaleY = this.spreadRequiresCoverage ? 0.96 : 0.96;
 
-    spreadIngredient.setScale(targetScaleX * 1.03, targetScaleY * 0.96);
-    spreadIngredient.setAlpha?.(Phaser.Math.Linear(1, 0.72, progress));
+    spreadIngredient.setScale(targetScaleX * pulseScaleX, targetScaleY * pulseScaleY);
+    spreadIngredient.setAlpha?.(Phaser.Math.Linear(1, this.spreadRequiresCoverage ? 0.38 : 0.72, progress));
 
     this.spreadPulseTween = this.scene.tweens.add({
       targets: spreadIngredient,

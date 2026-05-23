@@ -16,6 +16,8 @@ export class CuttableObject extends SceneObject {
     this.cropOriginY = 0;
     this.textureWidth = textureWidth;
     this.textureHeight = textureHeight;
+    this.sourceTextureWidth = options.sourceTextureWidth ?? textureWidth;
+    this.sourceTextureHeight = options.sourceTextureHeight ?? textureHeight;
     this.pixelScale = pixelScale;
     this.anchorTextureX = textureWidth / 2;
     this.anchorTextureY = textureHeight / 2;
@@ -45,6 +47,8 @@ export class CuttableObject extends SceneObject {
     target.cropOriginY = 0;
     target.textureWidth = textureWidth;
     target.textureHeight = textureHeight;
+    target.sourceTextureWidth = options.sourceTextureWidth ?? target.sourceTextureWidth ?? textureWidth;
+    target.sourceTextureHeight = options.sourceTextureHeight ?? target.sourceTextureHeight ?? textureHeight;
     target.pixelScale = pixelScale;
     target.anchorTextureX = textureWidth / 2;
     target.anchorTextureY = textureHeight / 2;
@@ -268,6 +272,8 @@ export class CuttableObject extends SceneObject {
         minimumCutWidth: this.minimumCutWidth,
         variant: this.variantIndex,
         skipInitialPiece: true,
+        sourceTextureWidth: this.sourceTextureWidth ?? this.textureWidth,
+        sourceTextureHeight: this.sourceTextureHeight ?? this.textureHeight,
       };
 
       if (visualVariation) {
@@ -310,6 +316,8 @@ export class CuttableObject extends SceneObject {
     this.cropOriginY = piece.cropY;
     this.textureWidth = piece.cropWidth;
     this.textureHeight = piece.cropHeight;
+    this.sourceTextureWidth = options.sourceTextureWidth ?? this.sourceTextureWidth ?? piece.cropWidth;
+    this.sourceTextureHeight = options.sourceTextureHeight ?? this.sourceTextureHeight ?? piece.cropHeight;
     this.cutWidth = piece.cropWidth * this.pixelScale;
     this.cutHeight = piece.cropHeight * this.pixelScale;
     this.minimumCutWidth = options.minimumCutWidth ?? this.minimumCutWidth;
