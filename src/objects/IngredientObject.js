@@ -1738,19 +1738,33 @@ export class IngredientObject extends RotatableObject {
 
     this.stackHighlightActive = active;
 
-    const tint = 0xfff2a8;
+    if (active) {
+      this.showStackHighlightOverlay();
+    } else {
+      this.stackHighlightOverlay?.setVisible(false);
+    }
+  }
 
-    this.draggableParts.forEach((part) => {
-      if (part.excludeFromCompositionShadow || !part.setTint) {
-        return;
-      }
+  showStackHighlightOverlay() {
+    if (!this.stackHighlightOverlay) {
+      this.stackHighlightOverlay = this.scene.add.graphics();
+      this.stackHighlightOverlay.excludeFromCompositionShadow = true;
+      this.add(this.stackHighlightOverlay);
+    }
 
-      if (active) {
-        part.setTint(tint);
-      } else {
-        part.clearTint();
-      }
-    });
+    const bounds = this.getLocalVisualBounds();
+    const padding = 3;
+    const x = bounds.x - padding;
+    const y = bounds.y - padding;
+    const width = bounds.width + padding * 2;
+    const height = bounds.height + padding * 2;
+
+    this.stackHighlightOverlay.clear();
+    this.stackHighlightOverlay.fillStyle(0xfff2a8, 0.08);
+    this.stackHighlightOverlay.fillRect(x, y, width, height);
+    this.stackHighlightOverlay.lineStyle(3, 0xfff2a8, 0.55);
+    this.stackHighlightOverlay.strokeRect(x, y, width, height);
+    this.stackHighlightOverlay.setVisible(true);
   }
 
   accepts(other, placement = {}) {
@@ -1815,12 +1829,16 @@ export class IngredientObject extends RotatableObject {
       this.detachFromStackParent();
     }
 
-    const offsetX = target.stackOffsetX ?? 0;
-    const offsetY = target.stackOffsetY ?? 0;
+    const dropOffset = target.getStackPlacementOffset?.(this, { x: this.x, y: this.y });
+    const offsetX = dropOffset?.x ?? target.stackOffsetX ?? 0;
+    const offsetY = dropOffset?.y ?? target.stackOffsetY ?? 0;
+    const preservedWorldRotation = target.preserveStackChildRotation ? (this.rotation ?? 0) : 0;
 
     target.add(this);
     this.setPosition(offsetX, offsetY);
-    this.setRotation(0);
+    this.setRotation(target.preserveStackChildRotation
+      ? preservedWorldRotation - (target.rotation ?? 0)
+      : 0);
     this.refreshRotatedGeometry?.();
 
     this.hoistShadowInto(target, offsetX, offsetY);
@@ -1831,6 +1849,7 @@ export class IngredientObject extends RotatableObject {
 
     this.stackParent = target;
     target.stackChildren.push(this);
+    target.handleStackChildAttached?.(this, { x: offsetX, y: offsetY });
 
     return true;
   }
@@ -1918,6 +1937,7 @@ export class IngredientObject extends RotatableObject {
     const index = parent.stackChildren.indexOf(this);
     if (index !== -1) {
       parent.stackChildren.splice(index, 1);
+      parent.handleStackChildDetached?.(this);
     }
 
     this.stackParent = null;

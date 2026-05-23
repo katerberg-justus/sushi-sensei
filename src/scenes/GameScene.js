@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { BITMAP_FONT_PIXEL, COLORS, SCENE_KEYS } from '../game/constants.js';
+import { Bowl } from '../objects/Bowl.js';
 import { CuttableFish } from '../objects/CuttableFish.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
@@ -47,6 +48,10 @@ export class GameScene extends Phaser.Scene {
     this.cuttableTamago.displayName = 'Tamago';
     this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58);
     this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, { fishType: 'salmon' });
+    this.bowls = [
+      new Bowl(this, width * 0.23, height * 0.6, { color: 'blue' }),
+      new Bowl(this, width * 0.34, height * 0.6, { color: 'red' }),
+    ];
     this.cuttableObjects = [
       this.cuttableSalmon,
       this.cuttableMaguro,
