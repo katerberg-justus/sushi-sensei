@@ -873,7 +873,7 @@ export class CuttableObject extends SceneObject {
   }
 
   copyCuttableRotationTo(object) {
-    const rotation = this.rotation ?? 0;
+    const rotation = this.getCuttableWorldRotation();
 
     if (object.setObjectRotation) {
       object.setObjectRotation(rotation);
@@ -881,5 +881,17 @@ export class CuttableObject extends SceneObject {
     }
 
     object.setRotation(rotation);
+  }
+
+  getCuttableWorldRotation() {
+    let rotation = this.rotation ?? 0;
+    let parent = this.parentContainer;
+
+    while (parent) {
+      rotation += parent.rotation ?? 0;
+      parent = parent.parentContainer;
+    }
+
+    return rotation;
   }
 }

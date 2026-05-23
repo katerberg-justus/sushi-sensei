@@ -797,7 +797,6 @@ export class RollingMat extends IngredientObject {
     this.displayName = this.finishedStackDisplayName;
 
     const spawnSushiRoll = () => {
-      this.refreshCompositionShadow?.();
       this.rollProgressBase = null;
       this.hideRollWrapOverlay();
 
@@ -805,10 +804,17 @@ export class RollingMat extends IngredientObject {
         return;
       }
 
+      this.consumeRolledNori(nori);
+
       const sushiRoll = new SushiRoll(this.scene, rollWorldX, rollWorldY, { fillingType });
 
       sushiRoll.setObjectRotation(rollRotation);
-      this.replaceWithKneadedStackResult(sushiRoll);
+      this.attachRollResult(sushiRoll);
+      this.stackLocked = false;
+      this.isFinishedStack = false;
+      this.displayName = 'Rolling Mat';
+      this.refreshCompositionShadow?.();
+      sushiRoll.playFinishedStackPulse?.();
     };
 
     if (nori) {
@@ -826,6 +832,67 @@ export class RollingMat extends IngredientObject {
     }
 
     this.playFinishedStackPulse();
+  }
+
+  consumeRolledNori(nori = this.getNoriSheet()) {
+    if (!nori) {
+      return;
+    }
+
+    const cuttableObjects = this.scene?.cuttableObjects;
+    const cuttableIndex = Array.isArray(cuttableObjects) ? cuttableObjects.indexOf(nori) : -1;
+    const index = this.stackChildren.indexOf(nori);
+
+    if (index !== -1) {
+      this.stackChildren.splice(index, 1);
+    }
+
+    nori.stackChildren = [...(nori.stackChildren ?? [])];
+    nori.stackChildren.forEach((child) => {
+      child.stackParent = null;
+      child.destroy();
+    });
+    nori.stackChildren = [];
+    nori.clearMask?.();
+    nori.unhoistShadowFromStack?.();
+    nori.stackParent = null;
+    this.remove(nori);
+    nori.destroy();
+
+    if (cuttableIndex !== -1) {
+      cuttableObjects.splice(cuttableIndex, 1);
+    }
+  }
+
+  attachRollResult(sushiRoll) {
+    if (!sushiRoll) {
+      return;
+    }
+
+    const offsetX = this.stackOffsetX ?? 0;
+    const offsetY = this.stackOffsetY ?? -3;
+    const preservedWorldRotation = sushiRoll.rotation ?? 0;
+
+    this.add(sushiRoll);
+    sushiRoll.setPosition(offsetX, offsetY);
+    sushiRoll.setRotation(this.preserveStackChildRotation
+      ? preservedWorldRotation - (this.rotation ?? 0)
+      : 0);
+    sushiRoll.refreshRotatedGeometry?.();
+    sushiRoll.hoistShadowInto?.(this, offsetX, offsetY);
+
+    if (sushiRoll.input) {
+      sushiRoll.disableInteractive();
+    }
+
+    sushiRoll.stackParent = this;
+    this.stackChildren.push(sushiRoll);
+
+    const cuttableObjects = this.scene?.cuttableObjects;
+
+    if (Array.isArray(cuttableObjects) && !cuttableObjects.includes(sushiRoll)) {
+      cuttableObjects.push(sushiRoll);
+    }
   }
 
   resolveRollFillingType(nori = this.getNoriSheet()) {

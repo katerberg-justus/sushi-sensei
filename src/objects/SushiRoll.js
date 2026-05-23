@@ -1,16 +1,14 @@
 import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
+import { CuttableObject } from './CuttableObject.js';
 import { IngredientObject } from './IngredientObject.js';
 import { toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 2;
 const ROLL_LENGTH = 60;
 const ROLL_DIAMETER = 14;
-const HALF_L = ROLL_LENGTH / 2;
-const HALF_D = ROLL_DIAMETER / 2;
-const SIDE_WIDTH = ROLL_LENGTH;
-const SIDE_HEIGHT = ROLL_DIAMETER;
 const FRAME_COUNT = 13;
 const ROLL_WEIGHT_GRAMS = 90;
+const ROLL_AXIS_CAP_PERSPECTIVE = 0.72;
 
 const FILLING_STYLES = {
   salmon: { displayName: 'Salmon', base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
@@ -25,6 +23,7 @@ const NORI_DARK = 0x102821;
 const NORI_BASE = 0x18372e;
 const NORI_HIGHLIGHT = 0x214b3d;
 const NORI_DEEP = 0x0b1a16;
+const NORI_MID = 0x142e27;
 const RICE_BASE = 0xe6ddc7;
 const RICE_LIGHT = 0xf6f0df;
 const RICE_GLINT = 0xfff8e8;
@@ -41,23 +40,67 @@ function mulberry32(seed) {
   };
 }
 
-function ensureFrameTextures(scene, fillingType, fillingStyle) {
+function hashNoriBlock(x, y, seed = 0) {
+  let value = (x + 23) * 374761393 + (y + 41) * 668265263 + seed * 2246822519;
+
+  value = Math.imul(value ^ (value >>> 13), 1274126177);
+  return (value ^ (value >>> 16)) >>> 0;
+}
+
+function getCoarseNoriColor(lx, ly, majorR, halfLength, edgePerp, seed = 0) {
+  if (edgePerp) {
+    return NORI_DEEP;
+  }
+
+  const curveT = Math.abs(ly) / majorR;
+  const blockX = Math.floor((lx + halfLength + 4) / 4);
+  const bandY = Math.floor((ly + majorR) / 2);
+  const hash = hashNoriBlock(blockX, bandY, seed);
+
+  let color = NORI_BASE;
+
+  if (curveT < 0.22) {
+    color = NORI_HIGHLIGHT;
+  } else if (curveT > 0.7) {
+    color = NORI_DARK;
+  } else if (hash % 11 === 0) {
+    color = NORI_MID;
+  }
+
+  if (hash % 23 === 0) {
+    return NORI_DEEP;
+  }
+
+  if (color === NORI_BASE && hash % 9 === 0) {
+    return NORI_HIGHLIGHT;
+  }
+
+  if (color === NORI_HIGHLIGHT && hash % 7 === 0) {
+    return NORI_BASE;
+  }
+
+  return color;
+}
+
+function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
   const frames = [];
+  const frameKeySuffix = `${Math.round(rollLength * 100)}x${Math.round(rollDiameter * 100)}`;
 
   for (let i = 0; i < FRAME_COUNT; i += 1) {
     const theta = (i / (FRAME_COUNT - 1)) * (Math.PI / 2);
     const cosT = Math.cos(theta);
     const sinT = Math.sin(theta);
-    const w = Math.max(2, Math.round(ROLL_LENGTH * cosT + ROLL_DIAMETER * sinT));
-    const h = Math.max(2, Math.round(ROLL_LENGTH * sinT + ROLL_DIAMETER * cosT));
-    const key = `sushi-roll-${fillingType}-q13-${i}`;
+    const axisCapDepth = rollDiameter * ROLL_AXIS_CAP_PERSPECTIVE;
+    const w = Math.max(2, Math.round(rollLength * cosT + rollDiameter * sinT));
+    const h = Math.max(2, Math.round(rollLength * sinT + rollDiameter * cosT + axisCapDepth * sinT));
+    const key = `sushi-roll-${fillingType}-${frameKeySuffix}-q15-${i}`;
 
     if (!scene.textures.exists(key)) {
       const texture = scene.textures.createCanvas(key, w, h);
       const ctx = texture.getContext();
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, w, h);
-      paintFrame(ctx, cosT, sinT, w, h, fillingStyle, mulberry32(0x51b1 ^ (i * 0x9e37)));
+      paintFrame(ctx, cosT, sinT, w, h, fillingStyle, mulberry32(0x51b1 ^ (i * 0x9e37)), rollLength, rollDiameter);
       texture.refresh();
     }
     frames.push({ key, w, h });
@@ -65,10 +108,12 @@ function ensureFrameTextures(scene, fillingType, fillingStyle) {
   return frames;
 }
 
-function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng) {
-  const majorR = HALF_D;
-  const minorR = HALF_D * sinT;
-  const halfBodyL = HALF_L - minorR;
+function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
+  const halfLength = rollLength / 2;
+  const halfDiameter = rollDiameter / 2;
+  const majorR = halfDiameter;
+  const minorR = halfDiameter * ROLL_AXIS_CAP_PERSPECTIVE * sinT;
+  const halfBodyL = halfLength;
   const discVisible = minorR > 0.4;
 
   const cx = w / 2;
@@ -131,39 +176,14 @@ function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng) {
           }
         }
       } else if (inNorthExt) {
-        const curveT = Math.abs(ly) / majorR;
         if (northN > 0.88) {
           color = NORI_DEEP;
-        } else if (curveT < 0.22) {
-          color = NORI_HIGHLIGHT;
-        } else if (curveT > 0.7) {
-          color = NORI_DARK;
         } else {
-          color = NORI_BASE;
-        }
-        const r = rng();
-        if (northN <= 0.88) {
-          if (r < 0.07) color = NORI_DEEP;
-          else if (r < 0.13 && color === NORI_BASE) color = NORI_HIGHLIGHT;
+          color = getCoarseNoriColor(lx, ly, majorR, halfLength, false, 7);
         }
       } else {
-        const curveT = Math.abs(ly) / majorR;
         const edgePerp = Math.abs(ly) > majorR - 0.6;
-        if (edgePerp) {
-          color = NORI_DEEP;
-        } else if (curveT < 0.22) {
-          color = NORI_HIGHLIGHT;
-        } else if (curveT > 0.7) {
-          color = NORI_DARK;
-        } else {
-          color = NORI_BASE;
-        }
-        const r = rng();
-        if (!edgePerp) {
-          if (r < 0.07) color = NORI_DEEP;
-          else if (r < 0.13 && color === NORI_BASE) color = NORI_HIGHLIGHT;
-          else if (r < 0.18 && color === NORI_HIGHLIGHT) color = NORI_BASE;
-        }
+        color = getCoarseNoriColor(lx, ly, majorR, halfLength, edgePerp, 7);
       }
 
       ctx.fillStyle = toHexColor(color);
@@ -176,10 +196,14 @@ export class SushiRoll extends IngredientObject {
   constructor(scene, x, y, options = {}) {
     const fillingType = options.fillingType ?? 'salmon';
     const fillingStyle = FILLING_STYLES[fillingType] ?? FILLING_STYLES.salmon;
-    const frames = ensureFrameTextures(scene, fillingType, fillingStyle);
+    const cropX = options.cropX ?? 0;
+    const cropY = options.cropY ?? 0;
+    const cropWidth = options.cropWidth ?? ROLL_LENGTH;
+    const cropHeight = options.cropHeight ?? ROLL_DIAMETER;
+    const frames = ensureFrameTextures(scene, fillingType, fillingStyle, cropWidth, cropHeight);
 
-    const displayWidth = SIDE_WIDTH * PIXEL;
-    const displayHeight = SIDE_HEIGHT * PIXEL;
+    const displayWidth = cropWidth * PIXEL;
+    const displayHeight = cropHeight * PIXEL;
 
     super(scene, x, y, displayWidth, displayHeight, options);
     this.setCenteredHitbox(displayWidth, displayHeight);
@@ -198,12 +222,24 @@ export class SushiRoll extends IngredientObject {
 
     this.frames = frames;
     this.currentFrameIndex = -1;
+    this.sprite = null;
 
-    this.sprite = scene.add.image(0, 0, frames[0].key);
-    this.sprite.setOrigin(0.5);
-    this.sprite.setScale(PIXEL);
-    this.sprite.excludeFromComputedShade = true;
-    this.addDraggablePart(this.sprite);
+    CuttableObject.setupCuttable(this, frames[0].key, cropWidth, cropHeight, PIXEL, {
+      ...options,
+      sourceTextureWidth: cropWidth,
+      sourceTextureHeight: cropHeight,
+      allowedCutOrientations: ['vertical'],
+    });
+
+    if (!options.skipInitialPiece && (cropX !== 0 || cropY !== 0)) {
+      this.configureAsCutPiece({
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        visibleBounds: options.visibleBounds,
+      }, options);
+    }
 
     this.applyRollViewForCurrentRotation();
     this.refreshCompositionShadow();
@@ -223,8 +259,66 @@ export class SushiRoll extends IngredientObject {
     return this;
   }
 
+  createPieceImage(piece) {
+    const image = CuttableObject.prototype.createPieceImage.call(this, piece);
+
+    image.excludeFromComputedShade = true;
+    image.rollFrameIndex = -1;
+    this.sprite = image;
+    this.syncRollPieceImage(piece);
+
+    return image;
+  }
+
+  createCuttableFromPiece(piece) {
+    const visualPiece = this.createVisualPieceData(piece);
+    const position = this.getPieceWorldVisibleCenter(visualPiece);
+    const pieceWidth = visualPiece.cropWidth;
+    const pieceHeight = visualPiece.cropHeight;
+    const object = new SushiRoll(this.scene, position.x, position.y, {
+      fillingType: this.fillingType,
+      cropWidth: pieceWidth,
+      cropHeight: pieceHeight,
+      weightGrams: visualPiece.weightGrams,
+      minimumCutWidth: this.minimumCutWidth,
+      skipInitialPiece: true,
+      visualVariation: this.getIngredientVisualVariation?.(),
+    });
+    const localPiece = {
+      ...visualPiece,
+      cropX: 0,
+      cropY: 0,
+      visibleBounds: {
+        left: 0,
+        right: pieceWidth,
+        top: 0,
+        bottom: pieceHeight,
+      },
+    };
+
+    object.deferComputedShadeRefresh = true;
+    object.deferCompositionShadowRefresh = true;
+    object.configureAsCutPiece(localPiece, {
+      minimumCutWidth: this.minimumCutWidth,
+      minSwipeDistance: this.minSwipeDistance,
+      cutDepth: this.cutDepth,
+      cutGap: this.cutGap,
+      allowedCutOrientations: this.allowedCutOrientations,
+      sourceTextureWidth: pieceWidth,
+      sourceTextureHeight: pieceHeight,
+    });
+
+    if (this.displayName) {
+      object.displayName = this.displayName;
+    }
+
+    this.copyCuttableRotationTo(object);
+
+    return object;
+  }
+
   applyRollViewForCurrentRotation() {
-    if (!this.sprite || !this.frames) return;
+    if (!this.frames || !this.pieces?.length) return;
 
     const half = Math.PI;
     const quarter = Math.PI / 2;
@@ -236,14 +330,69 @@ export class SushiRoll extends IngredientObject {
     const t = forward ? subProgress : 1 - subProgress;
     const frameIndex = Math.min(FRAME_COUNT - 1, Math.max(0, Math.round(t * (FRAME_COUNT - 1))));
 
-    if (frameIndex !== this.currentFrameIndex) {
-      this.currentFrameIndex = frameIndex;
-      this.sprite.setTexture(this.frames[frameIndex].key);
+    this.currentFrameIndex = frameIndex;
+
+    this.pieces.forEach((piece) => {
+      this.syncRollPieceImage(piece, {
+        frameIndex,
+        flipX: subQuadrant === 1,
+        rotation: -raw,
+      });
+    });
+  }
+
+  syncRollPieceImage(piece, options = {}) {
+    const image = piece?.image;
+
+    if (!image || !this.frames?.length) return;
+
+    const frameIndex = options.frameIndex ?? this.currentFrameIndex;
+    const frame = this.frames[Math.max(0, frameIndex)] ?? this.frames[0];
+    const sourceWidth = this.sourceTextureWidth ?? ROLL_LENGTH;
+    const sourceHeight = this.sourceTextureHeight ?? ROLL_DIAMETER;
+    const scaleX = frame.w / sourceWidth;
+    const scaleY = frame.h / sourceHeight;
+    const cropX = Math.round(piece.cropX * scaleX);
+    const cropY = Math.round(piece.cropY * scaleY);
+    const cropWidth = Math.max(1, Math.round(piece.cropWidth * scaleX));
+    const cropHeight = Math.max(1, Math.round(piece.cropHeight * scaleY));
+    const anchorFrameX = this.anchorTextureX * scaleX;
+    const anchorFrameY = this.anchorTextureY * scaleY;
+    const visibleBounds = piece.visibleBounds ?? this.getPieceVisibleTextureBounds(piece);
+    const visibleWidth = (visibleBounds.right - visibleBounds.left) * scaleX * this.pixelScale;
+    const visibleHeight = (visibleBounds.bottom - visibleBounds.top) * scaleY * this.pixelScale;
+    const visibleLeft = (visibleBounds.left * scaleX - anchorFrameX) * this.pixelScale;
+    const visibleTop = (visibleBounds.top * scaleY - anchorFrameY) * this.pixelScale;
+
+    if (image.rollFrameIndex !== frameIndex || image.texture?.key !== frame.key) {
+      image.setTexture(frame.key);
+      image.rollFrameIndex = frameIndex;
     }
 
-    this.sprite.setFlipX(subQuadrant === 1);
-    this.sprite.setFlipY(false);
+    image.setCrop(cropX, cropY, cropWidth, cropHeight);
+    image.setScale(this.pixelScale);
+    image.setPosition(
+      (frame.w / 2 - anchorFrameX) * this.pixelScale,
+      (frame.h / 2 - anchorFrameY) * this.pixelScale,
+    );
+    image.compositionWidth = visibleWidth;
+    image.compositionHeight = visibleHeight;
+    image.compositionOffsetX = visibleLeft + visibleWidth / 2 - image.x;
+    image.compositionOffsetY = visibleTop + visibleHeight / 2 - image.y;
+    image.setFlipX(options.flipX ?? false);
+    image.setFlipY(false);
+    image.setRotation(options.rotation ?? -(this.rotation ?? 0));
+  }
 
-    this.sprite.setRotation(-raw);
+  getCuttableReplacementOptions() {
+    return {
+      fillingType: this.fillingType,
+    };
   }
 }
+
+Object.getOwnPropertyNames(CuttableObject.prototype).forEach((name) => {
+  if (name !== 'constructor' && !Object.prototype.hasOwnProperty.call(SushiRoll.prototype, name)) {
+    SushiRoll.prototype[name] = CuttableObject.prototype[name];
+  }
+});
