@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-NetTCPConnection *)"
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(npx vite *)",
+      "Bash(node --check /c/Users/justu/sushi-sensei/src/objects/SushiRoll.js)",
+      "Bash(wc *)"
     ]
   }
 }

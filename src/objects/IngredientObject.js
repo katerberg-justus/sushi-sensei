@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { RotatableObject } from './RotatableObject.js';
-import { holdSharedTexture, releaseSharedTexture } from './DraggableObject.js';
+import { holdSharedTexture, releaseSharedTexture, releaseActiveDrag } from './DraggableObject.js';
 
 let computedShadeTextureId = 0;
 const DEFAULT_STACK_OFFSET_Y = -4;
@@ -17,8 +17,8 @@ export class IngredientObject extends RotatableObject {
     this.isIngredient = true;
     this._ownWeightGrams = IngredientObject.normalizeWeightGrams(options.weightGrams ?? 0);
     this.softness = 0.9;
-    this.restShadowOffset = 6;
-    this.dragShadowOffset = 6;
+    this.restShadowOffset = 0;
+    this.dragShadowOffset = 0;
     this.stackCategory = null;
     this.acceptedStackCategories = null;
     this.maxStackedItems = 1;
@@ -39,6 +39,12 @@ export class IngredientObject extends RotatableObject {
     this.kneadStrokeCount = 0;
     this.kneadGestureAnchor = null;
     this.kneadLastStrokeKind = null;
+    this.guidedKneadStrokes = false;
+    this.kneadTargetStrokeKind = null;
+    this.kneadAwaitingCenter = false;
+    this.kneadGestureCirclePadding = 4;
+    this.kneadCenterReturnRadiusFactor = 0.25;
+    this.kneadTargetRadiusFactor = 0.42;
     this.kneadPointerId = null;
     this.kneadUsesTouch = false;
     this.kneadPointerMoveHandler = null;
@@ -1195,6 +1201,10 @@ export class IngredientObject extends RotatableObject {
       return false;
     }
 
+    if (!this.isKneadPositionInsideMeter(position)) {
+      return false;
+    }
+
     this.cancelStackLongPress();
     this.cancelActiveDragForKneading();
 
@@ -1203,6 +1213,10 @@ export class IngredientObject extends RotatableObject {
     this.kneadPointerId = this.getDragPointerId(pointer);
     this.kneadGestureAnchor = position;
     this.kneadLastStrokeKind = null;
+    this.kneadAwaitingCenter = false;
+    this.kneadTargetStrokeKind = this.guidedKneadStrokes
+      ? this.getNextKneadTargetStrokeKind()
+      : null;
     this.kneadStrokeCount = 0;
     this.kneadProgress = 0;
     this.suppressedDragPointerId = this.kneadPointerId;
@@ -1284,7 +1298,22 @@ export class IngredientObject extends RotatableObject {
 
     const position = this.getKneadPointerPosition(pointer);
 
-    if (!position || !this.kneadGestureAnchor) {
+    if (!position) {
+      return;
+    }
+
+    if (!this.isKneadPositionInsideMeter(position)) {
+      this.kneadGestureAnchor = null;
+      return;
+    }
+
+    if (!this.kneadGestureAnchor) {
+      this.kneadGestureAnchor = position;
+      return;
+    }
+
+    if (this.guidedKneadStrokes) {
+      this.handleGuidedKneadPointerMove(position);
       return;
     }
 
@@ -1311,15 +1340,84 @@ export class IngredientObject extends RotatableObject {
     const absX = Math.abs(dx);
     const absY = Math.abs(dy);
 
-    if (dy < -this.kneadStrokeDistance && absY > absX * 0.75) {
-      return 'up';
+    if (absY >= this.kneadStrokeDistance && absY > absX * 0.75) {
+      return dy < 0 ? 'up' : 'down';
     }
 
     if (absX >= this.kneadStrokeDistance && absX > absY * 0.75) {
-      return 'side';
+      return dx < 0 ? 'left' : 'right';
     }
 
     return null;
+  }
+
+  getKneadStrokeAxis(strokeKind) {
+    return strokeKind === 'left' || strokeKind === 'right'
+      ? 'horizontal'
+      : 'vertical';
+  }
+
+  getKneadStrokeKinds() {
+    return ['up', 'down', 'left', 'right'];
+  }
+
+  getNextKneadTargetStrokeKind(previousKind = this.kneadTargetStrokeKind) {
+    const candidates = this.getKneadStrokeKinds().filter((kind) => kind !== previousKind);
+    const pool = candidates.length ? candidates : this.getKneadStrokeKinds();
+    const index = Math.floor(Math.random() * pool.length);
+
+    return pool[index] ?? null;
+  }
+
+  handleGuidedKneadPointerMove(position) {
+    const zone = this.getGuidedKneadZone(position);
+
+    if (this.kneadAwaitingCenter) {
+      if (zone !== 'center') {
+        return;
+      }
+
+      this.kneadAwaitingCenter = false;
+      this.kneadTargetStrokeKind = this.getNextKneadTargetStrokeKind();
+      this.kneadGestureAnchor = position;
+      this.updateKneadMeter();
+      return;
+    }
+
+    if (zone !== this.kneadTargetStrokeKind) {
+      return;
+    }
+
+    this.kneadGestureAnchor = position;
+    this.registerKneadStroke(zone);
+
+    if (!this.isKneading) {
+      return;
+    }
+
+    this.kneadAwaitingCenter = true;
+    this.updateKneadMeter();
+  }
+
+  getGuidedKneadZone(position) {
+    const local = this.worldToLocalPoint(position);
+    const { centerX, centerY, radius } = this.getKneadMeterCircle();
+    const dx = local.x - centerX;
+    const dy = local.y - centerY;
+    const distance = Math.hypot(dx, dy);
+    const centerRadius = Math.max(8, radius * this.kneadCenterReturnRadiusFactor);
+
+    if (distance <= centerRadius) {
+      return 'center';
+    }
+
+    const targetRadius = Math.max(this.kneadStrokeDistance, radius * this.kneadTargetRadiusFactor);
+
+    if (distance < targetRadius) {
+      return null;
+    }
+
+    return this.getKneadStrokeKind(dx, dy);
   }
 
   registerKneadStroke(strokeKind) {
@@ -1429,6 +1527,8 @@ export class IngredientObject extends RotatableObject {
     this.kneadUsesTouch = false;
     this.kneadGestureAnchor = null;
     this.kneadLastStrokeKind = null;
+    this.kneadTargetStrokeKind = null;
+    this.kneadAwaitingCenter = false;
     this.suppressedDragPointerId = null;
     this.setStackHighlight(false);
     this.hideKneadMeter();
@@ -1466,6 +1566,29 @@ export class IngredientObject extends RotatableObject {
     });
 
     return bounds;
+  }
+
+  getKneadMeterCircle() {
+    const bounds = this.getKneadMeterBounds();
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    const radius = Math.hypot(bounds.width / 2, bounds.height / 2) + 7;
+
+    return { centerX, centerY, radius };
+  }
+
+  isKneadPositionInsideMeter(position) {
+    if (!position) {
+      return false;
+    }
+
+    const local = this.worldToLocalPoint(position);
+    const { centerX, centerY, radius } = this.getKneadMeterCircle();
+    const dx = local.x - centerX;
+    const dy = local.y - centerY;
+    const maxDistance = radius + (this.kneadGestureCirclePadding ?? 0);
+
+    return dx * dx + dy * dy <= maxDistance * maxDistance;
   }
 
   getLocalVisualBounds() {
@@ -1512,20 +1635,56 @@ export class IngredientObject extends RotatableObject {
       return;
     }
 
-    const bounds = this.getKneadMeterBounds();
-    const centerX = bounds.x + bounds.width / 2;
-    const centerY = bounds.y + bounds.height / 2;
-    const radius = Math.hypot(bounds.width / 2, bounds.height / 2) + 7;
+    const { centerX, centerY, radius } = this.getKneadMeterCircle();
     const startAngle = -Math.PI / 2;
     const endAngle = startAngle + Math.PI * 2 * this.kneadProgress;
+    const guideRadius = radius * 0.58;
 
     this.kneadMeter.clear();
     this.kneadMeter.lineStyle(2, 0x6b4a32, 0.35);
     this.kneadMeter.strokeCircle(centerX, centerY, radius);
+    this.kneadMeter.lineStyle(1, 0x6b4a32, 0.24);
+    this.kneadMeter.lineBetween(centerX - guideRadius, centerY, centerX + guideRadius, centerY);
+    this.kneadMeter.lineBetween(centerX, centerY - guideRadius, centerX, centerY + guideRadius);
+    this.drawGuidedKneadTarget(centerX, centerY, guideRadius);
     this.kneadMeter.lineStyle(4, 0xfff2a8, 0.95);
     this.kneadMeter.beginPath();
     this.kneadMeter.arc(centerX, centerY, radius, startAngle, endAngle, false);
     this.kneadMeter.strokePath();
+  }
+
+  drawGuidedKneadTarget(centerX, centerY, guideRadius) {
+    if (!this.guidedKneadStrokes || !this.kneadMeter) {
+      return;
+    }
+
+    if (this.kneadAwaitingCenter) {
+      this.kneadMeter.fillStyle(0xfff2a8, 0.38);
+      this.kneadMeter.fillCircle(centerX, centerY, 5);
+      this.kneadMeter.lineStyle(2, 0xfff2a8, 0.82);
+      this.kneadMeter.strokeCircle(centerX, centerY, 8);
+      return;
+    }
+
+    const vectors = {
+      up: { x: 0, y: -1 },
+      down: { x: 0, y: 1 },
+      left: { x: -1, y: 0 },
+      right: { x: 1, y: 0 },
+    };
+    const vector = vectors[this.kneadTargetStrokeKind];
+
+    if (!vector) {
+      return;
+    }
+
+    const targetX = centerX + vector.x * guideRadius;
+    const targetY = centerY + vector.y * guideRadius;
+
+    this.kneadMeter.lineStyle(4, 0xfff2a8, 0.8);
+    this.kneadMeter.lineBetween(centerX, centerY, targetX, targetY);
+    this.kneadMeter.fillStyle(0xfff2a8, 0.92);
+    this.kneadMeter.fillCircle(targetX, targetY, 4);
   }
 
   updateSpreadMeter() {
@@ -1566,10 +1725,12 @@ export class IngredientObject extends RotatableObject {
     const baseScaleX = this.scaleX || 1;
     const baseScaleY = this.scaleY || 1;
     const topping = this.getKneadTopping();
+    const axis = this.getKneadStrokeAxis(strokeKind);
+    const isHorizontal = axis === 'horizontal';
 
     this.setScale(
-      baseScaleX * (strokeKind === 'side' ? 1.05 : 1.03),
-      baseScaleY * (strokeKind === 'side' ? 0.97 : 0.94),
+      baseScaleX * (isHorizontal ? 1.05 : 1.03),
+      baseScaleY * (isHorizontal ? 0.97 : 0.94),
     );
 
     this.kneadPulseTween = this.scene.tweens.add({
@@ -1584,8 +1745,8 @@ export class IngredientObject extends RotatableObject {
     });
 
     if (topping) {
-      const property = strokeKind === 'side' ? 'x' : 'y';
-      const offset = strokeKind === 'side' ? 2 : -2;
+      const property = isHorizontal ? 'x' : 'y';
+      const offset = strokeKind === 'left' || strokeKind === 'up' ? -2 : 2;
       const original = topping[property];
 
       this.scene.tweens.add({
@@ -1767,9 +1928,36 @@ export class IngredientObject extends RotatableObject {
     const pointer = this.scene.input.activePointer;
 
     this.suppressedDragPointerId = this.getDragPointerId(pointer);
+    this.abortInProgressDrag();
 
     topping.detachFromStackParent();
     topping.beginManualDrag?.(pointer);
+  }
+
+  abortInProgressDrag() {
+    if (!this.isDragging) {
+      releaseActiveDrag(this);
+      return;
+    }
+
+    const snapBackX = this.lastValidX;
+    const snapBackY = this.lastValidY;
+
+    this.isDragging = false;
+    releaseActiveDrag(this);
+    this.stopDragPositionUpdates();
+    this.clearStackHoverHighlight?.();
+    this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
+      if (!this.isDragging) {
+        this.applyRestingDepth();
+        this.refreshOtherRestingDepths();
+      }
+    });
+
+    if (Number.isFinite(snapBackX) && Number.isFinite(snapBackY)
+      && (snapBackX !== this.x || snapBackY !== this.y)) {
+      this.snapBackTo(snapBackX, snapBackY);
+    }
   }
 
   setStackHighlight(active) {
@@ -1870,7 +2058,8 @@ export class IngredientObject extends RotatableObject {
       this.detachFromStackParent();
     }
 
-    const dropOffset = target.getStackPlacementOffset?.(this, { x: this.x, y: this.y });
+    const dropPoint = this.getPlacementPointAt?.(this.x, this.y) ?? { x: this.x, y: this.y };
+    const dropOffset = target.getStackPlacementOffset?.(this, dropPoint);
     const offsetX = dropOffset?.x ?? target.stackOffsetX ?? 0;
     const offsetY = dropOffset?.y ?? target.stackOffsetY ?? 0;
     const preservedWorldRotation = target.preserveStackChildRotation ? (this.rotation ?? 0) : 0;

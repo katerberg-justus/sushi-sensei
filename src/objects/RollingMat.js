@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { IngredientObject } from './IngredientObject.js';
 import { NoriSheet } from './NoriSheet.js';
+import { SushiRoll } from './SushiRoll.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 2;
@@ -41,6 +42,17 @@ export class RollingMat extends IngredientObject {
     this.kneadableStackCategory = 'nori';
     this.kneadRequiredStrokes = 5;
     this.kneadStrokeDistance = 16;
+    this.rollProgressBase = null;
+    this.rollStartSide = null;
+    this.rollDragStartLocalY = null;
+    this.rollClipGraphics = null;
+    this.rollClipMask = null;
+    this.rollWrapOverlay = null;
+    this.rollStartSideDepth = 18;
+    this.rollHoverHighlight = null;
+    this.rollHoverSide = null;
+    this.rollHoverPointerMoveHandler = null;
+    this.softness = 0.05;
     this.spreadRequiresCoverage = true;
     this.spreadRequiredStrokes = 18;
     this.spreadStrokeDistance = 8;
@@ -54,6 +66,14 @@ export class RollingMat extends IngredientObject {
     this.sprite.setScale(PIXEL, PIXEL * MAT_PERSPECTIVE_SQUASH);
     this.sprite.setOrigin(0.5);
     this.addDraggablePart(this.sprite);
+
+    this.on('pointerover', this.handleRollHoverMove, this);
+    this.on('pointermove', this.handleRollHoverMove, this);
+    this.on('pointerout', this.hideRollHoverHighlight, this);
+    this.rollHoverPointerMoveHandler = (pointer) => {
+      this.handleRollHoverPointerMove(pointer);
+    };
+    this.scene.input.on('pointermove', this.rollHoverPointerMoveHandler);
 
     this.refreshCompositionShadow();
     this.applyRestingDepth();
@@ -238,16 +258,536 @@ export class RollingMat extends IngredientObject {
     return !this.isFinishedStack
       && !this.stackLocked
       && Boolean(nori?.hasSpreadRice)
-      && Boolean(nori?.stackChildren?.length)
-      && nori.getRollCoverage().covered;
+      && this.hasRollFilling(nori);
+  }
+
+  hasRollFilling(nori = this.getNoriSheet()) {
+    return Boolean(
+      nori?.stackChildren?.some((child) => child?.stackCategory === 'fish'),
+    );
   }
 
   getKneadTopping() {
     return this.getNoriSheet();
   }
 
+  handleRollHoverPointerMove(pointer) {
+    if (!this.scene || this.isKneading || !this.canStartKneading()) {
+      this.hideRollHoverHighlight();
+      return;
+    }
+
+    const position = pointer ? { x: pointer.x, y: pointer.y } : null;
+
+    if (!this.isRollHoverPositionInsideMat(position)) {
+      this.hideRollHoverHighlight();
+      return;
+    }
+
+    this.rollHoverSide = this.getRollStartSide(position);
+    this.showRollHoverHighlight();
+  }
+
+  handleRollHoverMove(pointer) {
+    if (this.isKneading || !this.canStartKneading()) {
+      this.hideRollHoverHighlight();
+      return;
+    }
+
+    const position = pointer ? { x: pointer.x, y: pointer.y } : null;
+    const nextSide = this.getRollStartSide(position);
+
+    if (!nextSide) {
+      this.hideRollHoverHighlight();
+      return;
+    }
+
+    this.rollHoverSide = nextSide;
+    this.showRollHoverHighlight();
+  }
+
+  getRollMatBounds() {
+    return new Phaser.Geom.Rectangle(
+      -MAT_WIDTH * PIXEL / 2,
+      -MAT_HEIGHT * PIXEL * MAT_PERSPECTIVE_SQUASH / 2,
+      MAT_WIDTH * PIXEL,
+      MAT_HEIGHT * PIXEL * MAT_PERSPECTIVE_SQUASH,
+    );
+  }
+
+  showRollHoverHighlight() {
+    if (!this.sprite) {
+      return;
+    }
+
+    if (!this.rollHoverHighlight) {
+      this.rollHoverHighlight = this.scene.add.graphics();
+      this.rollHoverHighlight.excludeFromCompositionShadow = true;
+      this.add(this.rollHoverHighlight);
+    }
+
+    const bounds = this.getRollMatBounds();
+    const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
+    const topY = bounds.y;
+    const bottomY = bounds.y + bounds.height - sideDepth;
+    const bandY = this.rollHoverSide === 'top'
+      ? topY
+      : this.rollHoverSide === 'bottom'
+        ? bottomY
+        : null;
+
+    if (bandY === null) {
+      this.hideRollHoverHighlight();
+      return;
+    }
+
+    this.rollHoverHighlight.clear();
+    this.drawRollHoverBand(bounds.x, bandY, bounds.width, sideDepth);
+    this.rollHoverHighlight.setVisible(true);
+  }
+
+  drawRollHoverBand(x, y, width, height) {
+    if (!this.rollHoverHighlight) {
+      return;
+    }
+
+    this.rollHoverHighlight.fillStyle(0xfff2a8, 0.18);
+    this.rollHoverHighlight.fillRect(x, y, width, height);
+    this.rollHoverHighlight.lineStyle(3, 0xfff2a8, 0.72);
+    this.rollHoverHighlight.strokeRect(x, y, width, height);
+  }
+
+  hideRollHoverHighlight() {
+    this.rollHoverSide = null;
+    this.rollHoverHighlight?.setVisible(false);
+  }
+
+  isRollHoverPositionInsideMat(position) {
+    if (!position || !this.sprite) {
+      return false;
+    }
+
+    const local = this.worldToLocalPoint(position);
+    const bounds = this.getRollMatBounds();
+
+    return local.x >= bounds.x
+      && local.x <= bounds.x + bounds.width
+      && local.y >= bounds.y
+      && local.y <= bounds.y + bounds.height;
+  }
+
+  beginKneading(pointer) {
+    const position = this.getKneadPointerPosition(pointer);
+    const startSide = this.getRollStartSide(position);
+
+    if (!startSide) {
+      return false;
+    }
+
+    this.hideRollHoverHighlight();
+    this.rollProgressBase = null;
+    this.rollStartSide = startSide;
+    const nori = this.getNoriSheet();
+
+    if (nori) {
+      this.rollProgressBase = {
+        scaleX: nori.scaleX || 1,
+        scaleY: nori.scaleY || 1,
+        y: nori.y || 0,
+      };
+    }
+
+    this.rollDragStartLocalY = this.worldToLocalPoint(position).y;
+    this.ensureRollWrapOverlay();
+    this.ensureRollClipMask();
+    this.setRollProgress(0);
+
+    const started = super.beginKneading(pointer);
+
+    if (!started) {
+      this.rollProgressBase = null;
+      this.rollStartSide = null;
+      this.rollDragStartLocalY = null;
+      this.hideRollWrapOverlay();
+      this.clearRollClipMask();
+    }
+
+    return started;
+  }
+
+  getRollStartSide(position) {
+    if (!position || !this.sprite) {
+      return null;
+    }
+
+    const local = this.worldToLocalPoint(position);
+    const bounds = this.getRollMatBounds();
+    const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
+    const insideX = local.x >= bounds.x && local.x <= bounds.x + bounds.width;
+
+    if (!insideX) {
+      return null;
+    }
+
+    if (local.y >= bounds.y && local.y <= bounds.y + sideDepth) {
+      return 'top';
+    }
+
+    if (local.y <= bounds.y + bounds.height && local.y >= bounds.y + bounds.height - sideDepth) {
+      return 'bottom';
+    }
+
+    return null;
+  }
+
+  handleKneadPointerMove(pointer) {
+    if (!this.isKneading) {
+      return;
+    }
+
+    if (!this.kneadUsesTouch && this.getDragPointerId(pointer) !== this.kneadPointerId) {
+      return;
+    }
+
+    const position = this.getKneadPointerPosition(pointer);
+
+    if (!position) {
+      return;
+    }
+
+    const local = this.worldToLocalPoint(position);
+    const startY = this.rollDragStartLocalY ?? this.worldToLocalPoint(this.kneadGestureAnchor).y;
+    const directionalDistance = this.rollStartSide === 'top'
+      ? local.y - startY
+      : startY - local.y;
+
+    if (directionalDistance <= 0) {
+      return;
+    }
+
+    const nextProgress = Phaser.Math.Clamp(
+      directionalDistance / this.getRollRequiredDragDistance(),
+      0,
+      1,
+    );
+
+    if (nextProgress <= this.kneadProgress) {
+      return;
+    }
+
+    this.kneadGestureAnchor = position;
+    this.setRollProgress(nextProgress);
+
+    if (this.kneadProgress < 1) {
+      return;
+    }
+
+    this.completeKneading();
+  }
+
+  getRollRequiredDragDistance() {
+    if (!this.sprite) {
+      return 56;
+    }
+
+    const bounds = this.getRollMatBounds();
+    const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
+
+    return Math.max(42, bounds.height - sideDepth);
+  }
+
+  updateKneadMeter() {
+    if (!this.kneadMeter) {
+      return;
+    }
+
+    const bounds = this.getKneadMeterBounds();
+    const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
+    const trackWidth = 8;
+    const trackHeight = Math.max(48, bounds.height - 12);
+    const x = bounds.x + bounds.width + 9;
+    const y = bounds.y + bounds.height / 2 - trackHeight / 2;
+    const fillHeight = trackHeight * progress;
+    const arrowInset = 8;
+    const nextDirection = this.getNextRollDirection();
+
+    this.kneadMeter.clear();
+    this.kneadMeter.fillStyle(0x2f2419, 0.22);
+    this.kneadMeter.fillRoundedRect(x, y, trackWidth, trackHeight, 3);
+    this.kneadMeter.lineStyle(2, 0x6b4a32, 0.45);
+    this.kneadMeter.strokeRoundedRect(x, y, trackWidth, trackHeight, 3);
+
+    if (fillHeight > 0) {
+      this.kneadMeter.fillStyle(0xfff2a8, 0.9);
+      this.kneadMeter.fillRoundedRect(x, y + trackHeight - fillHeight, trackWidth, fillHeight, 3);
+    }
+
+    const centerX = x + trackWidth / 2;
+
+    this.kneadMeter.lineStyle(2, 0xfff2a8, nextDirection === 'down' ? 0.9 : 0.45);
+    this.kneadMeter.lineBetween(centerX - 8, y + arrowInset, centerX - 8, y + trackHeight - arrowInset);
+    this.kneadMeter.lineBetween(centerX - 8, y + trackHeight - arrowInset, centerX - 11, y + trackHeight - arrowInset - 5);
+    this.kneadMeter.lineBetween(centerX - 8, y + trackHeight - arrowInset, centerX - 5, y + trackHeight - arrowInset - 5);
+    this.kneadMeter.lineStyle(2, 0xfff2a8, nextDirection === 'up' ? 0.9 : 0.45);
+    this.kneadMeter.lineBetween(centerX + 8, y + trackHeight - arrowInset, centerX + 8, y + arrowInset);
+    this.kneadMeter.lineBetween(centerX + 8, y + arrowInset, centerX + 5, y + arrowInset + 5);
+    this.kneadMeter.lineBetween(centerX + 8, y + arrowInset, centerX + 11, y + arrowInset + 5);
+  }
+
+  getNextRollDirection() {
+    return this.rollStartSide === 'top' ? 'down' : 'up';
+  }
+
+  setRollProgress(progress) {
+    this.kneadProgress = Phaser.Math.Clamp(progress, 0, 1);
+    this.kneadStrokeCount = Math.round(this.kneadProgress * this.kneadRequiredStrokes);
+    this.updateRollVisuals();
+    this.updateKneadMeter();
+  }
+
+  updateRollVisuals() {
+    this.applyRollProgressVisual();
+    this.updateRolledMatCrop();
+    this.updateRollClipMask();
+    this.drawRollWrapOverlay();
+  }
+
+  updateRolledMatCrop() {
+    if (!this.sprite) {
+      return;
+    }
+
+    const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
+    const rolledPixels = Math.round(MAT_HEIGHT * progress);
+
+    if (this.rollStartSide === 'top') {
+      const cropY = Math.min(MAT_HEIGHT - 1, rolledPixels);
+
+      this.sprite.setCrop(0, cropY, MAT_WIDTH, MAT_HEIGHT - cropY);
+      return;
+    }
+
+    if (this.rollStartSide === 'bottom') {
+      const cropHeight = Math.max(1, MAT_HEIGHT - rolledPixels);
+
+      this.sprite.setCrop(0, 0, MAT_WIDTH, cropHeight);
+    }
+  }
+
+  resetRolledMatCrop() {
+    this.sprite?.setCrop();
+  }
+
+  ensureRollClipMask() {
+    const nori = this.getNoriSheet();
+
+    if (!nori) {
+      return;
+    }
+
+    if (!this.rollClipGraphics) {
+      this.rollClipGraphics = this.scene.add.graphics();
+      this.rollClipGraphics.setVisible(false);
+    }
+
+    if (!this.rollClipMask) {
+      this.rollClipMask = this.rollClipGraphics.createGeometryMask();
+    }
+
+    nori.setMask(this.rollClipMask);
+  }
+
+  updateRollClipMask() {
+    const nori = this.getNoriSheet();
+
+    if (!nori || !this.rollClipGraphics || !this.sprite) {
+      return;
+    }
+
+    const bounds = this.getRollMatBounds();
+    const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
+    const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
+    const travel = bounds.height - sideDepth;
+    const fromTop = this.rollStartSide === 'top';
+    const edgeY = fromTop
+      ? bounds.y + travel * progress + sideDepth
+      : bounds.y + bounds.height - sideDepth - travel * progress;
+    const top = fromTop ? edgeY : bounds.y;
+    const bottom = fromTop ? bounds.y + bounds.height : edgeY;
+
+    this.rollClipGraphics.clear();
+
+    if (bottom <= top) {
+      return;
+    }
+
+    const corners = [
+      this.localToWorldPoint({ x: bounds.x, y: top }),
+      this.localToWorldPoint({ x: bounds.x + bounds.width, y: top }),
+      this.localToWorldPoint({ x: bounds.x + bounds.width, y: bottom }),
+      this.localToWorldPoint({ x: bounds.x, y: bottom }),
+    ];
+
+    this.rollClipGraphics.fillStyle(0xffffff);
+    this.rollClipGraphics.beginPath();
+    this.rollClipGraphics.moveTo(corners[0].x, corners[0].y);
+    corners.slice(1).forEach((corner) => {
+      this.rollClipGraphics.lineTo(corner.x, corner.y);
+    });
+    this.rollClipGraphics.closePath();
+    this.rollClipGraphics.fillPath();
+  }
+
+  clearRollClipMask() {
+    this.getNoriSheet()?.clearMask();
+    this.rollClipGraphics?.clear();
+  }
+
+  applyRollProgressVisual() {
+    const nori = this.getNoriSheet();
+
+    if (!nori) {
+      return;
+    }
+
+    const base = this.rollProgressBase ?? {
+      scaleX: nori.scaleX || 1,
+      scaleY: nori.scaleY || 1,
+      y: nori.y || 0,
+    };
+    const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
+    const targetScaleX = base.scaleX * Phaser.Math.Linear(1, 1.06, progress);
+    const targetScaleY = base.scaleY * Phaser.Math.Linear(1, 0.62, progress);
+    const targetY = base.y + Phaser.Math.Linear(0, 1.5, progress);
+
+    nori.setScale(targetScaleX, targetScaleY);
+    nori.setY(targetY);
+    this.refreshCompositionShadow?.();
+  }
+
+  ensureRollWrapOverlay() {
+    if (!this.rollWrapOverlay) {
+      this.rollWrapOverlay = this.scene.add.graphics();
+      this.rollWrapOverlay.excludeFromCompositionShadow = true;
+      this.rollWrapOverlay.excludeFromComputedShade = true;
+      this.add(this.rollWrapOverlay);
+    }
+
+    this.bringToTop(this.rollWrapOverlay);
+    this.rollWrapOverlay.setVisible(true);
+  }
+
+  drawRollWrapOverlay() {
+    if (!this.rollWrapOverlay || !this.sprite) {
+      return;
+    }
+
+    const bounds = this.getRollMatBounds();
+    const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
+    const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
+    const travel = bounds.height - sideDepth;
+    const foldDepth = Phaser.Math.Linear(sideDepth * 0.9, sideDepth * 1.45, Math.min(1, progress * 1.5));
+    const fromTop = this.rollStartSide === 'top';
+    const leadingY = fromTop
+      ? bounds.y + travel * progress
+      : bounds.y + bounds.height - sideDepth - travel * progress;
+    const lipY = fromTop
+      ? Math.min(bounds.y + bounds.height - foldDepth, leadingY)
+      : Math.max(bounds.y, leadingY + sideDepth - foldDepth);
+    const stage = progress < 0.34 ? 1 : progress < 0.74 ? 2 : 3;
+
+    this.rollWrapOverlay.clear();
+    this.drawOpaqueMatLip(bounds.x + 5, lipY, bounds.width - 10, foldDepth);
+
+    if (stage >= 2) {
+      const tuckHeight = Math.max(5, foldDepth * 0.42);
+      const tuckY = fromTop ? lipY + foldDepth - tuckHeight : lipY;
+
+      this.rollWrapOverlay.fillStyle(0xae8c5e);
+      this.rollWrapOverlay.fillRect(bounds.x + 8, tuckY, bounds.width - 16, tuckHeight);
+      this.drawMatSlats(bounds.x + 8, tuckY, bounds.width - 16, tuckHeight, 0.5);
+    }
+
+    if (stage >= 3) {
+      const rollHeight = Math.max(7, foldDepth * 0.58);
+      const rollY = fromTop ? lipY + foldDepth - rollHeight : lipY;
+
+      this.rollWrapOverlay.fillStyle(0xae8c5e);
+      this.rollWrapOverlay.fillRect(bounds.x + 10, rollY, bounds.width - 20, rollHeight);
+      this.rollWrapOverlay.fillStyle(0xd4be93);
+      this.rollWrapOverlay.fillRect(bounds.x + 12, rollY + 1, bounds.width - 24, Math.max(1, rollHeight - 2));
+    }
+  }
+
+  drawOpaqueMatLip(x, y, width, height) {
+    this.rollWrapOverlay.fillStyle(0xae8c5e);
+    this.rollWrapOverlay.fillRect(x, y, width, height);
+    this.rollWrapOverlay.fillStyle(0xd4be93);
+    this.rollWrapOverlay.fillRect(x + 3, y + 2, width - 6, Math.max(1, height - 4));
+    this.drawMatSlats(x + 3, y + 2, width - 6, Math.max(1, height - 4), 0.8);
+    this.rollWrapOverlay.lineStyle(2, 0xae8c5e, 1);
+    this.rollWrapOverlay.strokeRect(x, y, width, height);
+  }
+
+  drawMatSlats(x, y, width, height, alpha = 0.8) {
+    this.rollWrapOverlay.fillStyle(0xae8c5e, alpha);
+    for (let lineY = y + 3; lineY < y + height - 1; lineY += 4) {
+      this.rollWrapOverlay.fillRect(x, lineY, width, 1);
+    }
+  }
+
+  hideRollWrapOverlay() {
+    this.rollWrapOverlay?.clear();
+    this.rollWrapOverlay?.setVisible(false);
+    this.resetRolledMatCrop();
+    this.clearRollClipMask();
+  }
+
+  finishKneading() {
+    const shouldResetRoll = this.isKneading
+      && this.kneadProgress < 1
+      && this.rollProgressBase;
+    const completedRoll = this.kneadProgress >= 1;
+    const nori = shouldResetRoll ? this.getNoriSheet() : null;
+    const base = this.rollProgressBase;
+
+    super.finishKneading();
+    this.rollStartSide = null;
+    this.rollDragStartLocalY = null;
+
+    if (!completedRoll) {
+      this.hideRollWrapOverlay();
+    }
+
+    if (!shouldResetRoll || !nori || !base) {
+      return;
+    }
+
+    this.scene.tweens.add({
+      targets: nori,
+      scaleX: base.scaleX,
+      scaleY: base.scaleY,
+      y: base.y,
+      duration: 120,
+      ease: 'Cubic.Out',
+      onComplete: () => {
+        this.rollProgressBase = null;
+        this.refreshCompositionShadow?.();
+      },
+    });
+  }
+
   completeKneading() {
     const nori = this.getNoriSheet();
+    const base = this.rollProgressBase ?? (
+      nori
+        ? { scaleX: nori.scaleX || 1, scaleY: nori.scaleY || 1, y: nori.y || 0 }
+        : null
+    );
+    const fillingType = this.resolveRollFillingType(nori);
+    const rollWorldX = this.x;
+    const rollWorldY = this.y;
+    const rollRotation = this.rotation ?? 0;
 
     this.finishKneading();
 
@@ -256,49 +796,74 @@ export class RollingMat extends IngredientObject {
     this.kneadProgress = 1;
     this.displayName = this.finishedStackDisplayName;
 
+    const spawnSushiRoll = () => {
+      this.refreshCompositionShadow?.();
+      this.rollProgressBase = null;
+      this.hideRollWrapOverlay();
+
+      if (!this.scene) {
+        return;
+      }
+
+      const sushiRoll = new SushiRoll(this.scene, rollWorldX, rollWorldY, { fillingType });
+
+      sushiRoll.setObjectRotation(rollRotation);
+      this.replaceWithKneadedStackResult(sushiRoll);
+    };
+
     if (nori) {
       this.scene.tweens.add({
         targets: nori,
-        scaleX: (nori.scaleX || 1) * 0.42,
-        scaleY: (nori.scaleY || 1) * 1.1,
-        y: nori.y + 2,
+        scaleX: (base?.scaleX ?? nori.scaleX ?? 1) * 1.1,
+        scaleY: (base?.scaleY ?? nori.scaleY ?? 1) * 0.42,
+        y: (base?.y ?? nori.y ?? 0) + 2,
         duration: 180,
         ease: 'Back.Out',
-        onComplete: () => {
-          this.refreshCompositionShadow?.();
-        },
+        onComplete: spawnSushiRoll,
       });
+    } else {
+      spawnSushiRoll();
     }
 
     this.playFinishedStackPulse();
   }
 
-  static paintTexture(context, rng) {
-    const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
+  resolveRollFillingType(nori = this.getNoriSheet()) {
+    const fishChild = nori?.stackChildren?.find((child) => (
+      child?.stackCategory === 'fish' && typeof child.fishType === 'string'
+    ));
 
-    context.fillStyle = toHexColor(0x8a7556);
+    return fishChild?.fishType ?? 'salmon';
+  }
+
+  destroy(fromScene) {
+    if (this.rollHoverPointerMoveHandler) {
+      this.scene?.input?.off('pointermove', this.rollHoverPointerMoveHandler);
+      this.rollHoverPointerMoveHandler = null;
+    }
+
+    this.rollHoverHighlight?.destroy();
+    this.rollHoverHighlight = null;
+    this.rollWrapOverlay?.destroy();
+    this.rollWrapOverlay = null;
+    this.clearRollClipMask();
+    this.rollClipGraphics?.destroy();
+    this.rollClipGraphics = null;
+    this.rollClipMask = null;
+
+    super.destroy(fromScene);
+  }
+
+  static paintTexture(context, rng) {
+    context.fillStyle = toHexColor(0xae8c5e);
     context.fillRect(6, 5, 64, 3);
     context.fillRect(4, 8, 68, 49);
     context.fillRect(7, 57, 62, 3);
 
-    for (let x = 7; x < 70; x += 5) {
-      const color = x % 10 === 7 ? 0xc7b081 : 0xb79a70;
-      context.fillStyle = toHexColor(color);
-      context.fillRect(x + jitter(1), 7, 3, 51);
-      context.fillStyle = toHexColor(0xddc796);
-      context.fillRect(x + jitter(1), 9, 1, 45);
+    context.fillStyle = toHexColor(0xd4be93);
+    for (let y = 9; y < 57; y += 10) {
+      context.fillRect(9, y, 58, 6);
     }
-
-    context.fillStyle = toHexColor(0x6f6048);
-    for (let y = 11; y < 55; y += 9) {
-      context.fillRect(5, y, 66, 1);
-      if (rng() < 0.75) {
-        context.fillRect(8 + Math.floor(rng() * 56), y + 2, 8 + Math.floor(rng() * 8), 1);
-      }
-    }
-
-    context.fillStyle = toHexColor(0xe2d0a4);
-    context.fillRect(10, 8, 54, 1);
-    context.fillRect(11, 56, 50, 1);
+    void rng;
   }
 }

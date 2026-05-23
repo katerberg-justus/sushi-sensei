@@ -5,11 +5,61 @@ import { getCachedFullImageData, sliceCachedImageData } from './ProceduralTextur
 let shadowTextureId = 0;
 
 const draggableRegistry = new Set();
+let activeDragOwner = null;
+
+function getDragRoot(object) {
+  let root = object;
+
+  while (root?.stackParent) {
+    root = root.stackParent;
+  }
+
+  return root;
+}
+
+export function isDragAllowedFor(object) {
+  if (!activeDragOwner) {
+    return true;
+  }
+
+  return getDragRoot(object) === activeDragOwner;
+}
+
+export function claimActiveDrag(object) {
+  if (activeDragOwner && getDragRoot(object) !== activeDragOwner) {
+    return false;
+  }
+
+  activeDragOwner = getDragRoot(object);
+  return true;
+}
+
+export function releaseActiveDrag(object) {
+  if (activeDragOwner === getDragRoot(object) || activeDragOwner === object) {
+    activeDragOwner = null;
+  }
+}
 const shadowImageDataCache = new WeakMap();
 const shadowTextureCache = new Map();
 const SHADOW_TEXTURE_CACHE_MAX = 200;
 
 const sharedTextureRefs = new Map();
+
+function isFinitePoint(x, y) {
+  return Number.isFinite(x) && Number.isFinite(y);
+}
+
+function isFiniteRect(rect) {
+  return Boolean(rect)
+    && Number.isFinite(rect.x)
+    && Number.isFinite(rect.y)
+    && Number.isFinite(rect.width)
+    && Number.isFinite(rect.height);
+}
+
+function finiteOr(value, fallback) {
+  return Number.isFinite(value) ? value : fallback;
+}
 
 export function holdSharedTexture(key) {
   if (!key) {
@@ -56,7 +106,7 @@ export class DraggableObject extends SceneObject {
     this.isDragging = false;
     this.dragDepth = 100;
     this.restDepth = 10;
-    this.dragLift = 10;
+    this.dragLift = 18;
     this.dragLiftDuration = 120;
     this.dropLiftDuration = 90;
     this.softness = 0.35;
@@ -71,11 +121,11 @@ export class DraggableObject extends SceneObject {
     this.suppressedDragPointerId = null;
     this.dragAnchorX = x;
     this.dragAnchorY = y;
-    this.dragFollowSmoothing = 0.18;
+    this.dragFollowSmoothing = 0.48;
     this.dragSnapDistance = 0.75;
     this.dragUpdateHandler = null;
-    this.dragShadowOffset = 6;
-    this.restShadowOffset = 6;
+    this.dragShadowOffset = 0;
+    this.restShadowOffset = 0;
     this.dragShadowAlpha = 0.72;
     this.restShadowAlpha = 0;
     this.shadowEdgeAlpha = 0.22;
@@ -100,9 +150,9 @@ export class DraggableObject extends SceneObject {
     this.setCenteredHitbox(width, height);
     this.input.cursor = 'grab';
     scene.input.setDraggable(this);
-    scene.input.dragDistanceThreshold = Math.max(
-      scene.input.dragDistanceThreshold ?? 0,
-      4,
+    scene.input.dragDistanceThreshold = Math.min(
+      scene.input.dragDistanceThreshold ?? 1,
+      1,
     );
 
     this.on('dragstart', this.handleDragStart, this);
@@ -943,6 +993,7 @@ export class DraggableObject extends SceneObject {
 
   destroy(fromScene) {
     draggableRegistry.delete(this);
+    releaseActiveDrag(this);
 
     if (this.stackDragShadow) {
       this.deactivateStackDragShadow();
@@ -989,6 +1040,10 @@ export class DraggableObject extends SceneObject {
     const footprint = this.getFootprint();
     const bottom = footprint.y + footprint.height;
 
+    if (!Number.isFinite(bottom)) {
+      return;
+    }
+
     this.setDepth(this.restDepth + bottom);
   }
 
@@ -1001,6 +1056,10 @@ export class DraggableObject extends SceneObject {
       const footprint = other.getFootprint();
       const bottom = footprint.y + footprint.height;
 
+      if (!Number.isFinite(bottom)) {
+        continue;
+      }
+
       other.setDepth(other.restDepth + bottom);
     }
   }
@@ -1010,17 +1069,36 @@ export class DraggableObject extends SceneObject {
   }
 
   getPlacementRectAt(x = this.x, y = this.y) {
-    return this.getWorldShadowRectAt(x, y) ?? this.getFootprintAt(x, y);
+    const shadowRect = this.getWorldShadowRectAt(x, y);
+
+    if (isFiniteRect(shadowRect)) {
+      return shadowRect;
+    }
+
+    return this.getFootprintAt(x, y);
+  }
+
+  getPlacementPointAt(x = this.x, y = this.y) {
+    const placementRect = this.getPlacementRectAt(x, y);
+
+    if (!isFiniteRect(placementRect)) {
+      return { x, y };
+    }
+
+    return {
+      x: placementRect.x + placementRect.width / 2,
+      y: placementRect.y + placementRect.height / 2,
+    };
   }
 
   getWorldShadowRectAt(x = this.x, y = this.y) {
-    if (!this.shadow) {
+    if (!this.shadow || !isFinitePoint(x, y)) {
       return null;
     }
 
     const localBounds = this.getShadowLocalBounds();
 
-    if (!localBounds) {
+    if (!isFiniteRect(localBounds)) {
       return null;
     }
 
@@ -1034,12 +1112,14 @@ export class DraggableObject extends SceneObject {
     const width = localBounds.width * Math.abs(this.scaleX || 1);
     const height = localBounds.height * Math.abs(this.scaleY || 1);
 
-    return new Phaser.Geom.Rectangle(
+    const rect = new Phaser.Geom.Rectangle(
       worldCenterX - width / 2,
       worldCenterY - height / 2,
       width,
       height,
     );
+
+    return isFiniteRect(rect) ? rect : null;
   }
 
   getShadowLocalBounds() {
@@ -1090,6 +1170,15 @@ export class DraggableObject extends SceneObject {
   }
 
   getFootprintAt(x = this.x, y = this.y) {
+    if (!isFinitePoint(x, y) || !isFiniteRect(this.hitbox)) {
+      return new Phaser.Geom.Rectangle(
+        finiteOr(this.lastValidX, 0),
+        finiteOr(this.lastValidY, 0),
+        0,
+        0,
+      );
+    }
+
     const depthFactor = Phaser.Math.Clamp(this.footprintDepthFactor ?? 1, 0, 1);
     const footprintHeight = this.hitbox.height * depthFactor;
     const bottom = y + this.hitbox.y + this.hitbox.height;
@@ -1114,6 +1203,10 @@ export class DraggableObject extends SceneObject {
     const shadowRect = this.getPlacementRectAt(x, y);
     const bodyRect = this.getWorldHitboxRect(x, y);
 
+    if (!isFiniteRect(shadowRect) || !isFiniteRect(bodyRect)) {
+      return false;
+    }
+
     for (const other of draggableRegistry) {
       if (other === this || !other.scene) {
         continue;
@@ -1124,6 +1217,10 @@ export class DraggableObject extends SceneObject {
       }
 
       const otherRect = other.getWorldHitboxRect();
+
+      if (!isFiniteRect(otherRect)) {
+        continue;
+      }
 
       if (!Phaser.Geom.Intersects.RectangleToRectangle(shadowRect, otherRect)) {
         continue;
@@ -1167,6 +1264,11 @@ export class DraggableObject extends SceneObject {
   }
 
   handleDragStart(pointer) {
+    if (this.isDragSuppressed(pointer)) {
+      this.isDragging = false;
+      return false;
+    }
+
     if (this.shouldSuppressDragStart(pointer)) {
       this.suppressedDragPointerId = this.getDragPointerId(pointer);
       this.isDragging = false;
@@ -1175,6 +1277,11 @@ export class DraggableObject extends SceneObject {
 
     if (this.stackParent && this.detachFromStackParent) {
       this.detachFromStackParent();
+    }
+
+    if (!claimActiveDrag(this)) {
+      this.isDragging = false;
+      return false;
     }
 
     this.suppressedDragPointerId = null;
@@ -1197,6 +1304,10 @@ export class DraggableObject extends SceneObject {
       return false;
     }
 
+    if (!isFinitePoint(dragX, dragY)) {
+      return false;
+    }
+
     this.dragAnchorX = dragX;
     this.dragAnchorY = dragY;
 
@@ -1205,7 +1316,7 @@ export class DraggableObject extends SceneObject {
       this.lastValidY = dragY;
     }
 
-    this.updateStackHoverHighlight(this.x, this.y);
+    this.updateDragPosition();
 
     return true;
   }
@@ -1256,6 +1367,7 @@ export class DraggableObject extends SceneObject {
     }
 
     this.isDragging = false;
+    releaseActiveDrag(this);
     this.stopDragPositionUpdates();
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
       if (!this.isDragging) {
@@ -1279,6 +1391,15 @@ export class DraggableObject extends SceneObject {
   }
 
   getWorldHitboxRect(centerX = this.x, centerY = this.y) {
+    if (!isFinitePoint(centerX, centerY) || !isFiniteRect(this.hitbox)) {
+      return new Phaser.Geom.Rectangle(
+        finiteOr(this.lastValidX, 0),
+        finiteOr(this.lastValidY, 0),
+        0,
+        0,
+      );
+    }
+
     return new Phaser.Geom.Rectangle(
       centerX + this.hitbox.x,
       centerY + this.hitbox.y,
@@ -1293,6 +1414,10 @@ export class DraggableObject extends SceneObject {
 
   beginManualDrag(pointer) {
     if (this.isDragging) {
+      return false;
+    }
+
+    if (!claimActiveDrag(this)) {
       return false;
     }
 
@@ -1320,6 +1445,10 @@ export class DraggableObject extends SceneObject {
       const x = movePointer.x + this.manualDragOffsetX;
       const y = movePointer.y + this.manualDragOffsetY;
 
+      if (!isFinitePoint(x, y)) {
+        return;
+      }
+
       this.dragAnchorX = x;
       this.dragAnchorY = y;
 
@@ -1328,7 +1457,7 @@ export class DraggableObject extends SceneObject {
         this.lastValidY = y;
       }
 
-      this.updateStackHoverHighlight(this.x, this.y);
+      this.updateDragPosition();
     };
 
     this.manualDragUpHandler = () => {
@@ -1354,6 +1483,7 @@ export class DraggableObject extends SceneObject {
     this.manualDragUpHandler = null;
     this.isManualDrag = false;
     this.isDragging = false;
+    releaseActiveDrag(this);
     this.stopDragPositionUpdates();
 
     this.tweenDragLift(0, this.dropLiftDuration, 'Quad.easeIn', () => {
@@ -1383,6 +1513,11 @@ export class DraggableObject extends SceneObject {
     }
 
     const shadowRect = this.getStackProbeRect(x, y);
+
+    if (!isFiniteRect(shadowRect)) {
+      return null;
+    }
+
     let bestTarget = null;
     let bestDepth = -Infinity;
 
@@ -1396,6 +1531,10 @@ export class DraggableObject extends SceneObject {
       }
 
       const otherRect = other.getWorldHitboxRect();
+
+      if (!isFiniteRect(otherRect)) {
+        continue;
+      }
 
       if (!Phaser.Geom.Intersects.RectangleToRectangle(shadowRect, otherRect)) {
         continue;
@@ -1418,6 +1557,15 @@ export class DraggableObject extends SceneObject {
 
   getDragDebugLines(x, y) {
     const sourceRect = this.getStackProbeRect(x, y);
+
+    if (!isFiniteRect(sourceRect)) {
+      return [
+        `${this.displayName ?? this.constructor.name}`,
+        'shadow invalid',
+        'collision: none',
+      ];
+    }
+
     const lines = [
       `${this.displayName ?? this.constructor.name}`,
       `shadow ${Math.round(sourceRect.x)},${Math.round(sourceRect.y)} ${Math.round(sourceRect.width)}x${Math.round(sourceRect.height)}`,
@@ -1430,6 +1578,10 @@ export class DraggableObject extends SceneObject {
       }
 
       const targetRect = other.getWorldHitboxRect();
+
+      if (!isFiniteRect(targetRect)) {
+        continue;
+      }
 
       if (!Phaser.Geom.Intersects.RectangleToRectangle(sourceRect, targetRect)) {
         continue;
@@ -1456,6 +1608,10 @@ export class DraggableObject extends SceneObject {
   }
 
   snapBackTo(x, y) {
+    if (!isFinitePoint(x, y)) {
+      return;
+    }
+
     this.stopSnapBack();
 
     this.snapBackTween = this.scene.tweens.add({
@@ -1493,9 +1649,16 @@ export class DraggableObject extends SceneObject {
     });
 
     if (this.shadow) {
-      const liftProgress = Phaser.Math.Clamp(lift / this.dragLift, 0, 1);
+      const liftProgress = this.dragLift > 0
+        ? Phaser.Math.Clamp(lift / this.dragLift, 0, 1)
+        : 0;
+      const shadowOffset = Phaser.Math.Linear(
+        this.restShadowOffset,
+        this.dragShadowOffset,
+        liftProgress,
+      );
 
-      this.setShadowScreenOffset(this.restShadowOffset);
+      this.setShadowScreenOffset(shadowOffset);
       this.shadow.setAlpha(Phaser.Math.Linear(this.restShadowAlpha, this.dragShadowAlpha, liftProgress));
 
       if (this.shadow.setPixelBlurProgress) {
@@ -1700,6 +1863,10 @@ export class DraggableObject extends SceneObject {
   }
 
   updateDragPosition(delta = 16.67, snap = false) {
+    if (!isFinitePoint(this.dragAnchorX, this.dragAnchorY)) {
+      return;
+    }
+
     if (snap || !this.isDragging) {
       this.setPosition(this.dragAnchorX, this.dragAnchorY);
       if (this.isDragging) {

@@ -53,6 +53,20 @@ export class GameScene extends Phaser.Scene {
     this.bowls = [
       new Bowl(this, width * 0.23, height * 0.6, { color: 'blue' }),
       new Bowl(this, width * 0.34, height * 0.6, { color: 'red' }),
+      new Bowl(this, width * 0.43, height * 0.65, {
+        preset: 'smallBowl',
+        displayName: 'Wasabi Bowl',
+        color: 'green',
+        acceptedStackCategories: [],
+        contents: { style: 'wasabi', fullness: 0.72 },
+      }),
+      new Bowl(this, width * 0.5, height * 0.64, {
+        preset: 'tinyCup',
+        displayName: 'Nikiri Sauce',
+        color: 'black',
+        acceptedStackCategories: [],
+        contents: { style: 'nikiri', fullness: 0.62 },
+      }),
     ];
     this.cuttableObjects = [
       this.cuttableSalmon,
@@ -270,8 +284,15 @@ export class GameScene extends Phaser.Scene {
 
   getStackedIngredientName(gameObject) {
     const names = this.getStackedIngredientNames(gameObject);
+    const counts = new Map();
 
-    return names.join(' + ');
+    for (const name of names) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
+      .join(' + ');
   }
 
   getStackedIngredientNames(gameObject) {

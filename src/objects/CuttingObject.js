@@ -28,14 +28,16 @@ export class CuttingObject extends RotatableObject {
   }
 
   handleDrag(pointer, dragX, dragY) {
-    if (!this.isDragging) {
-      return false;
-    }
-
-    const previousCutPoint = this.lastCutPoint || this.getCutPoint();
+    const wasDragging = this.isDragging;
+    const previousCutPoint = wasDragging ? (this.lastCutPoint || this.getCutPoint()) : null;
 
     if (!super.handleDrag(pointer, dragX, dragY)) {
       return false;
+    }
+
+    if (!wasDragging) {
+      this.lastCutPoint = this.getCutPoint();
+      return true;
     }
 
     const nextCutPoint = this.getCutPoint();

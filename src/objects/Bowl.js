@@ -6,11 +6,9 @@ import { toHexColor } from './ProceduralTexture.js';
 const PIXEL = 2.25;
 const BOWL_TEXTURE_WIDTH = 60;
 const BOWL_TEXTURE_HEIGHT = 38;
-const BOWL_DISPLAY_WIDTH = BOWL_TEXTURE_WIDTH * PIXEL;
-const BOWL_DISPLAY_HEIGHT = BOWL_TEXTURE_HEIGHT * PIXEL;
 const BOWL_CAPACITY_GRAMS = 180;
 const MAX_CONTENT_WEIGHT_GRAMS = 10;
-const CONTENT_RIM_Y = 16;
+const CONTENT_RIM_Y = 17;
 const CONTENT_RIM_OVERFLOW = 3;
 const CONTENT_ELLIPSE = {
   x: 30,
@@ -64,6 +62,78 @@ const BOWL_PALETTES = {
   },
 };
 
+const VESSEL_PRESETS = {
+  bowl: {
+    displayName: 'Bowl',
+    pixelScale: PIXEL,
+    textureWidth: BOWL_TEXTURE_WIDTH,
+    textureHeight: BOWL_TEXTURE_HEIGHT,
+    capacityGrams: BOWL_CAPACITY_GRAMS,
+    maxContentWeightGrams: MAX_CONTENT_WEIGHT_GRAMS,
+    weightGrams: 120,
+    stackOffsetY: -8,
+    contentRimY: CONTENT_RIM_Y,
+    contentRimOverflow: CONTENT_RIM_OVERFLOW,
+    contentEllipse: CONTENT_ELLIPSE,
+    hitbox: { width: 0.92, height: 0.76, offsetY: 6 },
+    composition: { height: 0.82, offsetY: 5 },
+    shadow: {
+      restOffset: 7,
+      edgeScaleX: 0.9,
+      edgeScaleY: 0.48,
+      coreScaleX: 0.8,
+      coreScaleY: 0.4,
+      footprintDepthFactor: 0.55,
+    },
+  },
+  smallBowl: {
+    displayName: 'Small Bowl',
+    pixelScale: 1.65,
+    textureWidth: BOWL_TEXTURE_WIDTH,
+    textureHeight: BOWL_TEXTURE_HEIGHT,
+    capacityGrams: 45,
+    maxContentWeightGrams: 5,
+    weightGrams: 45,
+    stackOffsetY: -6,
+    contentRimY: CONTENT_RIM_Y,
+    contentRimOverflow: CONTENT_RIM_OVERFLOW,
+    contentEllipse: CONTENT_ELLIPSE,
+    hitbox: { width: 0.9, height: 0.72, offsetY: 5 },
+    composition: { height: 0.82, offsetY: 4 },
+    shadow: {
+      restOffset: 5,
+      edgeScaleX: 0.82,
+      edgeScaleY: 0.42,
+      coreScaleX: 0.72,
+      coreScaleY: 0.34,
+      footprintDepthFactor: 0.52,
+    },
+  },
+  tinyCup: {
+    displayName: 'Tiny Cup',
+    pixelScale: 1.2,
+    textureWidth: BOWL_TEXTURE_WIDTH,
+    textureHeight: BOWL_TEXTURE_HEIGHT,
+    capacityGrams: 18,
+    maxContentWeightGrams: 3,
+    weightGrams: 22,
+    stackOffsetY: -4,
+    contentRimY: CONTENT_RIM_Y,
+    contentRimOverflow: 2,
+    contentEllipse: { x: 30, y: 14, rx: 19, ry: 4 },
+    hitbox: { width: 0.86, height: 0.68, offsetY: 4 },
+    composition: { height: 0.78, offsetY: 3 },
+    shadow: {
+      restOffset: 4,
+      edgeScaleX: 0.74,
+      edgeScaleY: 0.36,
+      coreScaleX: 0.64,
+      coreScaleY: 0.3,
+      footprintDepthFactor: 0.48,
+    },
+  },
+};
+
 const INGREDIENT_CONTENT_STYLES = {
   rice: {
     base: COLORS.riceWhite,
@@ -110,6 +180,16 @@ const INGREDIENT_CONTENT_STYLES = {
     light: 0xfff4df,
     dark: 0x9c8261,
   },
+  wasabi: {
+    base: 0x7fbf5b,
+    light: 0xb8e282,
+    dark: 0x426f32,
+  },
+  nikiri: {
+    base: 0x4b2518,
+    light: 0x9b5a35,
+    dark: 0x21100b,
+  },
 };
 
 function clamp(value, min, max) {
@@ -128,46 +208,99 @@ function paletteFromOption(color) {
   return { ...BOWL_PALETTES.blue };
 }
 
-export class Bowl extends IngredientObject {
+function resolveVesselPreset(options = {}) {
+  const presetName = options.preset ?? options.type ?? 'bowl';
+  const preset = VESSEL_PRESETS[presetName] ?? VESSEL_PRESETS.bowl;
+  const profile = options.profile ?? {};
+
+  return {
+    ...preset,
+    ...profile,
+    hitbox: { ...preset.hitbox, ...profile.hitbox },
+    composition: { ...preset.composition, ...profile.composition },
+    contentEllipse: { ...preset.contentEllipse, ...profile.contentEllipse },
+    shadow: { ...preset.shadow, ...profile.shadow },
+  };
+}
+
+function normalizeFixedContents(contents) {
+  if (!contents) {
+    return null;
+  }
+
+  if (typeof contents === 'string') {
+    return { style: contents, fullness: 0.7 };
+  }
+
+  return {
+    style: contents.style ?? contents.type ?? 'mixed',
+    fullness: clamp(contents.fullness ?? 0.7, 0, 1),
+  };
+}
+
+export class ContainerVessel extends IngredientObject {
   constructor(scene, x, y, options = {}) {
-    super(scene, x, y, BOWL_DISPLAY_WIDTH, BOWL_DISPLAY_HEIGHT, {
+    const profile = resolveVesselPreset(options);
+    const pixelScale = options.pixelScale ?? options.scale ?? profile.pixelScale ?? PIXEL;
+    const textureWidth = profile.textureWidth ?? BOWL_TEXTURE_WIDTH;
+    const textureHeight = profile.textureHeight ?? BOWL_TEXTURE_HEIGHT;
+    const displayWidth = textureWidth * pixelScale;
+    const displayHeight = textureHeight * pixelScale;
+
+    super(scene, x, y, displayWidth, displayHeight, {
       ...options,
       visualVariation: false,
     });
 
-    this.displayName = options.displayName ?? 'Bowl';
+    this.vesselProfile = profile;
+    this.pixelScale = pixelScale;
+    this.textureWidth = textureWidth;
+    this.textureHeight = textureHeight;
+    this.vesselDisplayWidth = displayWidth;
+    this.vesselDisplayHeight = displayHeight;
+    this.contentEllipse = profile.contentEllipse;
+    this.contentRimY = profile.contentRimY;
+    this.contentRimOverflow = profile.contentRimOverflow;
+    this.maxContentWeightGrams = options.maxContentWeightGrams ?? profile.maxContentWeightGrams;
+    this.fixedContents = normalizeFixedContents(options.contents ?? options.content);
+    this.displayName = options.displayName ?? profile.displayName;
     this.isRotatable = false;
     this.stackCategory = 'bowl';
     this.acceptedStackCategories = options.acceptedStackCategories ?? ['rice', 'fish', 'nori'];
     this.maxStackedItems = options.maxStackedItems ?? 10;
     this.stackLocked = true;
     this.stackOffsetX = 0;
-    this.stackOffsetY = -8;
-    this.ownWeightGrams = options.weightGrams ?? 120;
-    this.capacityGrams = options.capacityGrams ?? BOWL_CAPACITY_GRAMS;
+    this.stackOffsetY = options.stackOffsetY ?? profile.stackOffsetY;
+    this.ownWeightGrams = options.weightGrams ?? profile.weightGrams;
+    this.capacityGrams = options.capacityGrams ?? profile.capacityGrams;
     this.restDepth = 16;
     this.softness = 0.25;
-    this.restShadowOffset = 7;
-    this.dragShadowOffset = 7;
-    this.shadowEdgeScaleX = 0.9;
-    this.shadowEdgeScaleY = 0.48;
-    this.shadowCoreScaleX = 0.8;
-    this.shadowCoreScaleY = 0.4;
-    this.footprintDepthFactor = 0.55;
+    this.restShadowOffset = profile.shadow.restOffset;
+    this.dragShadowOffset = profile.shadow.restOffset;
+    this.shadowEdgeScaleX = profile.shadow.edgeScaleX;
+    this.shadowEdgeScaleY = profile.shadow.edgeScaleY;
+    this.shadowCoreScaleX = profile.shadow.coreScaleX;
+    this.shadowCoreScaleY = profile.shadow.coreScaleY;
+    this.footprintDepthFactor = profile.shadow.footprintDepthFactor;
     this.preserveStackChildRotation = true;
-    this.bowlPalette = paletteFromOption(options.color ?? options.palette ?? 'blue');
-    this.textureKey = `bowl-pixel-${bowlTextureId}`;
+    this.bowlPalette = paletteFromOption(options.color ?? options.palette ?? options.material ?? 'blue');
+    this.textureKey = `container-vessel-pixel-${bowlTextureId}`;
     bowlTextureId += 1;
     this.ensureTexture();
 
     this.sprite = scene.add.image(0, 0, this.textureKey);
-    this.sprite.setScale(PIXEL);
+    this.sprite.setScale(pixelScale);
     this.sprite.setOrigin(0.5);
-    this.sprite.compositionWidth = BOWL_DISPLAY_WIDTH;
-    this.sprite.compositionHeight = BOWL_DISPLAY_HEIGHT * 0.82;
-    this.sprite.compositionOffsetY = 5;
+    this.sprite.compositionWidth = displayWidth;
+    this.sprite.compositionHeight = displayHeight * profile.composition.height;
+    this.sprite.compositionOffsetY = profile.composition.offsetY;
 
-    this.setCenteredHitbox(BOWL_DISPLAY_WIDTH * 0.92, BOWL_DISPLAY_HEIGHT * 0.76, 0, 6);
+    this.setCenteredHitbox(
+      displayWidth * profile.hitbox.width,
+      displayHeight * profile.hitbox.height,
+      0,
+      profile.hitbox.offsetY,
+    );
     this.addDraggablePart(this.sprite);
     this.refreshCompositionShadow();
     this.applyRestingDepth();
@@ -175,6 +308,10 @@ export class Bowl extends IngredientObject {
 
   static get palettes() {
     return BOWL_PALETTES;
+  }
+
+  static get presets() {
+    return VESSEL_PRESETS;
   }
 
   get contentItems() {
@@ -188,8 +325,9 @@ export class Bowl extends IngredientObject {
     );
     const byWeight = contentsWeight / this.capacityGrams;
     const byCount = this.contentItems.length / this.maxStackedItems;
+    const fixed = this.fixedContents?.fullness ?? 0;
 
-    return clamp(Math.max(byWeight, byCount), 0, 1);
+    return clamp(Math.max(byWeight, byCount, fixed), 0, 1);
   }
 
   acceptsStackPlacement(other, placement = {}) {
@@ -202,7 +340,7 @@ export class Bowl extends IngredientObject {
 
   getStackPlacementRejectionReason(other, placement = {}) {
     if (!this.isSmallCutIngredient(other)) {
-      return `ingredient must be a cut piece up to ${MAX_CONTENT_WEIGHT_GRAMS}g`;
+      return `ingredient must be a cut piece up to ${this.maxContentWeightGrams}g`;
     }
 
     return this.getLocalContentPoint(other, placement) ? 'stack OK' : 'outside bowl';
@@ -225,7 +363,7 @@ export class Bowl extends IngredientObject {
     const wasCut = width < sourceWidth || height < sourceHeight;
     const weight = child.ownWeightGrams ?? child.weightGrams;
 
-    return wasCut && Number.isFinite(weight) && weight <= MAX_CONTENT_WEIGHT_GRAMS;
+    return wasCut && Number.isFinite(weight) && weight <= this.maxContentWeightGrams;
   }
 
   getStackPlacementOffset(child, drop = {}) {
@@ -243,9 +381,9 @@ export class Bowl extends IngredientObject {
     const dropY = drop.y ?? child?.y ?? this.y;
     const localPoint = this.worldToLocalPoint({ x: dropX, y: dropY });
     const ellipseCenterX = 0;
-    const ellipseCenterY = (CONTENT_ELLIPSE.y - BOWL_TEXTURE_HEIGHT / 2) * PIXEL;
-    const radiusX = CONTENT_ELLIPSE.rx * PIXEL * 0.94;
-    const radiusY = CONTENT_ELLIPSE.ry * PIXEL * 1.3;
+    const ellipseCenterY = (this.contentEllipse.y - this.textureHeight / 2) * this.pixelScale;
+    const radiusX = this.contentEllipse.rx * this.pixelScale * 0.94;
+    const radiusY = this.contentEllipse.ry * this.pixelScale * 1.3;
     const dx = localPoint.x - ellipseCenterX;
     const dy = localPoint.y - ellipseCenterY;
     const normalized = (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY);
@@ -263,9 +401,9 @@ export class Bowl extends IngredientObject {
   }
 
   getPlacementRectAt(x = this.x, y = this.y) {
-    const width = CONTENT_ELLIPSE.rx * PIXEL * 2;
-    const height = CONTENT_ELLIPSE.ry * PIXEL * 1.45;
-    const centerOffsetY = (CONTENT_ELLIPSE.y - BOWL_TEXTURE_HEIGHT / 2) * PIXEL + 2;
+    const width = this.contentEllipse.rx * this.pixelScale * 2;
+    const height = this.contentEllipse.ry * this.pixelScale * 1.45;
+    const centerOffsetY = (this.contentEllipse.y - this.textureHeight / 2) * this.pixelScale + 2;
 
     return new Phaser.Geom.Rectangle(
       x - width / 2,
@@ -277,10 +415,10 @@ export class Bowl extends IngredientObject {
 
   getWorldHitboxRect(centerX = this.x, centerY = this.y) {
     return new Phaser.Geom.Rectangle(
-      centerX - BOWL_DISPLAY_WIDTH * 0.46,
-      centerY - BOWL_DISPLAY_HEIGHT * 0.22,
-      BOWL_DISPLAY_WIDTH * 0.92,
-      BOWL_DISPLAY_HEIGHT * 0.48,
+      centerX - this.vesselDisplayWidth * 0.46,
+      centerY - this.vesselDisplayHeight * 0.22,
+      this.vesselDisplayWidth * 0.92,
+      this.vesselDisplayHeight * 0.48,
     );
   }
 
@@ -348,7 +486,7 @@ export class Bowl extends IngredientObject {
 
   ensureTexture() {
     if (!this.scene.textures.exists(this.textureKey)) {
-      this.scene.textures.createCanvas(this.textureKey, BOWL_TEXTURE_WIDTH, BOWL_TEXTURE_HEIGHT);
+      this.scene.textures.createCanvas(this.textureKey, this.textureWidth, this.textureHeight);
     }
 
     this.refreshBowlTexture();
@@ -363,7 +501,7 @@ export class Bowl extends IngredientObject {
     }
 
     context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, BOWL_TEXTURE_WIDTH, BOWL_TEXTURE_HEIGHT);
+    context.clearRect(0, 0, this.textureWidth, this.textureHeight);
     this.paintBowlTexture(context);
     texture.refresh();
 
@@ -383,15 +521,13 @@ export class Bowl extends IngredientObject {
   paintInterior(context, palette) {
     const basin = this.mixColors(palette.rim, palette.body, 0.4);
     const innerBand = this.mixColors(palette.rim, palette.body, 0.18);
+    const ellipse = this.contentEllipse;
 
     context.fillStyle = toHexColor(basin);
-    context.fillRect(12, 10, 36, 2);
-    context.fillRect(8, 12, 44, 2);
-    context.fillRect(6, 14, 48, 3);
+    this.fillPixelEllipse(context, ellipse.x, ellipse.y, ellipse.rx, ellipse.ry + 2);
 
     context.fillStyle = toHexColor(innerBand);
-    context.fillRect(11, 12, 38, 1);
-    context.fillRect(9, 14, 42, 1);
+    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 1, Math.max(1, ellipse.rx - 4), Math.max(1, ellipse.ry - 1));
   }
 
   paintContents(context) {
@@ -401,27 +537,29 @@ export class Bowl extends IngredientObject {
       const interiorLine = this.mixColors(this.bowlPalette.rim, this.bowlPalette.body, 0.28);
 
       context.fillStyle = toHexColor(interiorLine);
-      context.fillRect(11, 13, 38, 1);
-      context.fillRect(9, 15, 42, 1);
+      this.strokePixelEllipse(context, this.contentEllipse.x, this.contentEllipse.y + 1, this.contentEllipse.rx - 5, this.contentEllipse.ry - 1);
       return;
     }
 
     const styles = this.getContentStyles();
     const mixed = this.mixContentStyles(styles);
-    const bottomY = CONTENT_RIM_Y + CONTENT_RIM_OVERFLOW;
-    const surfaceY = CONTENT_RIM_Y - Math.round(1 + fullness * 5);
-    const halfWidth = Math.round(15 + fullness * 8);
+    const surfaceY = this.contentRimY - Math.round(1 + fullness * 5);
+    const radiusX = Math.round((this.contentEllipse.rx - 6) * Phaser.Math.Linear(0.72, 1, fullness));
+    const radiusY = Math.max(2, Math.round((this.contentEllipse.ry - 1) * Phaser.Math.Linear(0.7, 1.05, fullness)));
+    const frontY = this.getFrontRimBottomY();
 
     context.fillStyle = toHexColor(mixed.base);
-    this.fillContentMass(context, CONTENT_ELLIPSE.x, surfaceY, bottomY, halfWidth);
+    this.fillContentBasin(context, surfaceY, frontY, radiusX);
+    this.fillPixelEllipse(context, this.contentEllipse.x, surfaceY, radiusX, radiusY);
 
     styles.forEach((style, index) => {
       const color = index % 2 === 0 ? style.light : style.dark;
-      const y = Math.min(bottomY - 1, surfaceY + 1 + index);
-      const startX = CONTENT_ELLIPSE.x - halfWidth + 4 + (index % 3) * 3;
+      const y = surfaceY - Math.floor(radiusY / 2) + 1 + index;
+      const rowHalfWidth = this.getEllipseHalfWidth(surfaceY, radiusX - 3, radiusY, y);
+      const startX = this.contentEllipse.x - rowHalfWidth + 3 + (index % 3) * 3;
 
       context.fillStyle = toHexColor(color);
-      for (let x = startX; x < CONTENT_ELLIPSE.x + halfWidth - 3; x += 7) {
+      for (let x = startX; x < this.contentEllipse.x + rowHalfWidth - 3; x += 7) {
         context.fillRect(x, y, 2, 1);
       }
     });
@@ -477,6 +615,11 @@ export class Bowl extends IngredientObject {
     const styles = [];
     const seen = new Set();
 
+    if (this.fixedContents?.style) {
+      seen.add(this.fixedContents.style);
+      styles.push(INGREDIENT_CONTENT_STYLES[this.fixedContents.style] ?? INGREDIENT_CONTENT_STYLES.mixed);
+    }
+
     this.contentItems.forEach((child) => {
       const key = this.getContentStyleKey(child);
 
@@ -509,20 +652,78 @@ export class Bowl extends IngredientObject {
 
   paintFrontWall(context, palette) {
     context.fillStyle = toHexColor(palette.body);
-    context.fillRect(6, 16, 48, 2);
-    context.fillRect(9, 16, 42, 9);
-    context.fillRect(12, 25, 36, 4);
-    context.fillRect(17, 29, 26, 2);
-    context.fillRect(6, 18, 4, 5);
-    context.fillRect(50, 18, 4, 5);
+    this.fillBowlFrontBody(context, palette);
+  }
+
+  fillContentBasin(context, surfaceY, frontY, maxHalfWidth) {
+    const ellipse = this.contentEllipse;
+    const openingRadiusY = ellipse.ry + 2;
+    const topY = Math.min(surfaceY, frontY);
+    const bottomY = Math.max(surfaceY, frontY);
+
+    for (let y = topY; y <= bottomY; y += 1) {
+      const openingHalfWidth = this.getEllipseHalfWidth(ellipse.y, ellipse.rx - 4, openingRadiusY, y);
+      const fillProgress = bottomY === topY ? 1 : (y - topY) / (bottomY - topY);
+      const halfWidth = Math.min(
+        maxHalfWidth,
+        Math.max(1, Math.round(openingHalfWidth * Phaser.Math.Linear(0.82, 1, fillProgress))),
+      );
+
+      context.fillRect(ellipse.x - halfWidth, y, halfWidth * 2, 1);
+    }
+  }
+
+  fillBowlFrontBody(context, palette) {
+    const ellipse = this.contentEllipse;
+    const centerX = ellipse.x;
+    const topY = ellipse.y;
+    const rimBottomY = this.getFrontRimBottomY();
+    const bottomY = 31;
+    const lowerHeight = Math.max(1, bottomY - rimBottomY);
+    const rimRadiusX = ellipse.rx + 1;
+    const rimRadiusY = ellipse.ry;
+
+    for (let y = topY; y <= bottomY; y += 1) {
+      const lowerProgress = clamp((y - rimBottomY) / lowerHeight, 0, 1);
+      const belly = Math.sin(lowerProgress * Math.PI) * 2.5;
+      const halfWidth = Math.round(rimRadiusX - lowerProgress * 11 + belly);
+      const rowColor = lowerProgress > 0.72 ? palette.bodyDark : palette.body;
+
+      context.fillStyle = toHexColor(rowColor);
+
+      for (let x = centerX - halfWidth; x < centerX + halfWidth; x += 1) {
+        const rimCurveY = this.getLowerEllipseYForX(centerX, topY, rimRadiusX, rimRadiusY, x);
+
+        if (y < rimCurveY) {
+          continue;
+        }
+
+        context.fillRect(x, y, 1, 1);
+      }
+
+      if (lowerProgress > 0.08 && lowerProgress < 0.72) {
+        context.fillStyle = toHexColor(this.mixColors(palette.body, palette.bodyDark, 0.34));
+        context.fillRect(centerX - halfWidth, y, 2, 1);
+        context.fillRect(centerX + halfWidth - 2, y, 2, 1);
+      }
+    }
+
+    context.fillStyle = toHexColor(this.mixColors(palette.body, palette.rim, 0.22));
+    this.fillLowerEllipseBand(context, centerX, rimBottomY, 21, 3, 1);
   }
 
   paintFrontRim(context, palette) {
+    const ellipse = this.contentEllipse;
+
     context.fillStyle = toHexColor(palette.rim);
-    context.fillRect(6, 14, 48, 2);
-    context.fillRect(7, 16, 46, 1);
-    context.fillRect(10, 16, 40, 2);
-    context.fillRect(15, 18, 30, 1);
+    this.fillLowerEllipseBand(context, ellipse.x, ellipse.y + 1, ellipse.rx + 1, ellipse.ry, 1);
+
+    context.fillStyle = toHexColor(palette.rimLight);
+    this.strokePixelEllipseArc(context, ellipse.x, ellipse.y, ellipse.rx, ellipse.ry + 1, ellipse.y);
+  }
+
+  getFrontRimBottomY() {
+    return this.contentEllipse.y + this.contentEllipse.ry;
   }
 
   paintFoot(context, palette) {
@@ -544,6 +745,87 @@ export class Bowl extends IngredientObject {
     }
   }
 
+  strokePixelEllipse(context, centerX, centerY, radiusX, radiusY) {
+    const radiusXSquared = radiusX * radiusX;
+    const radiusYSquared = radiusY * radiusY;
+
+    for (let y = Math.floor(centerY - radiusY); y <= Math.ceil(centerY + radiusY); y += 1) {
+      for (let x = Math.floor(centerX - radiusX); x <= Math.ceil(centerX + radiusX); x += 1) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const value = (dx * dx) / radiusXSquared + (dy * dy) / radiusYSquared;
+
+        if (value > 0.72 && value <= 1.12) {
+          context.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+  }
+
+  strokePixelEllipseArc(context, centerX, centerY, radiusX, radiusY, minY = -Infinity) {
+    const radiusXSquared = radiusX * radiusX;
+    const radiusYSquared = radiusY * radiusY;
+
+    for (let y = Math.floor(centerY - radiusY); y <= Math.ceil(centerY + radiusY); y += 1) {
+      if (y < minY) {
+        continue;
+      }
+
+      for (let x = Math.floor(centerX - radiusX); x <= Math.ceil(centerX + radiusX); x += 1) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const value = (dx * dx) / radiusXSquared + (dy * dy) / radiusYSquared;
+
+        if (value > 0.78 && value <= 1.14) {
+          context.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+  }
+
+  fillLowerEllipseBand(context, centerX, centerY, radiusX, radiusY, thickness) {
+    for (let y = centerY; y <= Math.ceil(centerY + radiusY); y += 1) {
+      const outerHalfWidth = this.getEllipseHalfWidth(centerY, radiusX, radiusY, y);
+      const innerHalfWidth = this.getEllipseHalfWidth(
+        centerY,
+        Math.max(1, radiusX - thickness),
+        Math.max(1, radiusY - thickness),
+        y,
+      );
+
+      if (outerHalfWidth <= 0) {
+        continue;
+      }
+
+      context.fillRect(centerX - outerHalfWidth, y, Math.max(1, outerHalfWidth - innerHalfWidth), 1);
+      context.fillRect(centerX + innerHalfWidth, y, Math.max(1, outerHalfWidth - innerHalfWidth), 1);
+
+      if (y >= centerY + radiusY - thickness) {
+        context.fillRect(centerX - outerHalfWidth, y, outerHalfWidth * 2, 1);
+      }
+    }
+  }
+
+  getEllipseHalfWidth(centerY, radiusX, radiusY, y) {
+    const dy = (y - centerY) / radiusY;
+
+    if (Math.abs(dy) > 1) {
+      return 0;
+    }
+
+    return Math.max(1, Math.round(radiusX * Math.sqrt(1 - dy * dy)));
+  }
+
+  getLowerEllipseYForX(centerX, centerY, radiusX, radiusY, x) {
+    const dx = (x - centerX) / radiusX;
+
+    if (Math.abs(dx) >= 1) {
+      return centerY;
+    }
+
+    return Math.round(centerY + radiusY * Math.sqrt(1 - dx * dx));
+  }
+
   destroy(fromScene) {
     const textureKey = this.textureKey;
     const scene = this.scene;
@@ -553,5 +835,14 @@ export class Bowl extends IngredientObject {
     if (textureKey && scene?.textures?.exists(textureKey)) {
       scene.textures.remove(textureKey);
     }
+  }
+}
+
+export class Bowl extends ContainerVessel {
+  constructor(scene, x, y, options = {}) {
+    super(scene, x, y, {
+      preset: 'bowl',
+      ...options,
+    });
   }
 }

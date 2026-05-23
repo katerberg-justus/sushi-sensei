@@ -35,6 +35,7 @@ export class RiceBall extends IngredientObject {
     this.stackOffsetX = 0;
     this.stackOffsetY = -10;
     this.kneadableStackCategory = 'fish';
+    this.guidedKneadStrokes = true;
     this.finishedStackDisplayName = 'Nigiri';
 
     this.sprite = scene.add.image(0, 0, textureKey);
