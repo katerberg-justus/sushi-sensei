@@ -10,6 +10,9 @@ import { NoriSheet } from '../objects/NoriSheet.js';
 import { Plate } from '../objects/Plate.js';
 import { RiceBall } from '../objects/RiceBall.js';
 import { RollingMat } from '../objects/RollingMat.js';
+import { SushiRoll } from '../objects/SushiRoll.js';
+import { DraggableObject } from '../objects/DraggableObject.js';
+import { RotatableObject } from '../objects/RotatableObject.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -51,9 +54,8 @@ export class GameScene extends Phaser.Scene {
     this.rollingMat = new RollingMat(this, width * 0.61, height * 0.7);
     this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58);
     this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, { fishType: 'salmon' });
+    this.sushiRoll = new SushiRoll(this, width * 0.68, height * 0.48, { fillingType: 'salmon' });
     this.bowls = [
-      new Bowl(this, width * 0.23, height * 0.6, { color: 'blue' }),
-      new Bowl(this, width * 0.34, height * 0.6, { color: 'red' }),
       new Bowl(this, width * 0.43, height * 0.65, {
         preset: 'smallBowl',
         displayName: 'Wasabi Bowl',
@@ -89,6 +91,7 @@ export class GameScene extends Phaser.Scene {
       this.cuttableUnagi,
       this.cuttableTamago,
       this.noriSheet,
+      this.sushiRoll,
     ];
     this.knife = new Knife(this, width * 0.5, height * 0.72);
     this.knife.displayName = 'Knife';
@@ -96,16 +99,20 @@ export class GameScene extends Phaser.Scene {
 
     this.createNameSignboard();
     this.positionNameSignboard();
+    this.createHoverActionIndicator();
+    this.positionHoverActionIndicator();
     this.createDragDebugPanel();
     this.positionDragDebugPanel();
     this.createFpsCounter();
     this.positionFpsCounter();
     this.scale.on('resize', this.positionNameSignboard, this);
+    this.scale.on('resize', this.positionHoverActionIndicator, this);
     this.scale.on('resize', this.positionDragDebugPanel, this);
     this.scale.on('resize', this.positionFpsCounter, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.positionNameSignboard, this);
+      this.scale.off('resize', this.positionHoverActionIndicator, this);
       this.scale.off('resize', this.positionDragDebugPanel, this);
       this.scale.off('resize', this.positionFpsCounter, this);
       this.input.keyboard.off('keydown-R', this.resetScene, this);
@@ -216,6 +223,160 @@ export class GameScene extends Phaser.Scene {
     this.dragDebugText.setDepth(1000);
   }
 
+  createHoverActionIndicator() {
+    this.createHoverActionIconTextures();
+
+    const iconSize = 24;
+    const gap = 6;
+    const grabIcon = this.add.image(iconSize / 2, iconSize / 2, 'hover-grab-hand-icon');
+    const resetIcon = this.add.image(iconSize + gap + iconSize / 2, iconSize / 2, 'hover-reset-arrow-icon');
+    grabIcon.setOrigin(0.5);
+    resetIcon.setOrigin(0.5);
+    resetIcon.setVisible(false);
+
+    const container = this.add.container(0, 0, [grabIcon, resetIcon]);
+    container.setDepth(1000);
+    container.setVisible(false);
+    container.setAlpha(0);
+    container.iconSize = iconSize;
+    container.iconGap = gap;
+    container.indicatorWidth = iconSize;
+    container.indicatorHeight = iconSize;
+    container.icons = { grab: grabIcon, reset: resetIcon };
+
+    this.hoverActionIndicator = container;
+    this.hoverActionIndicatorObject = null;
+    this.hoverActionIndicatorModes = [];
+  }
+
+  createHoverActionIconTextures() {
+    this.createGrabHandIconTexture();
+    this.createResetArrowIconTexture();
+  }
+
+  createGrabHandIconTexture() {
+    const key = 'hover-grab-hand-icon';
+
+    if (this.textures.exists(key)) {
+      this.textures.remove(key);
+    }
+
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillRect(8, 1, 4, 12);
+    graphics.fillRect(13, 3, 4, 11);
+    graphics.fillRect(18, 6, 4, 11);
+    graphics.fillRect(4, 7, 4, 10);
+    graphics.fillRect(1, 12, 6, 6);
+    graphics.fillRect(4, 16, 18, 5);
+    graphics.fillRect(7, 21, 12, 3);
+    graphics.fillRect(21, 11, 3, 8);
+
+    graphics.generateTexture(key, 24, 24);
+    graphics.destroy();
+  }
+
+  createResetArrowIconTexture() {
+    const key = 'hover-reset-arrow-icon';
+
+    if (this.textures.exists(key)) {
+      this.textures.remove(key);
+    }
+
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillRect(8, 3, 8, 3);
+    graphics.fillRect(15, 5, 4, 3);
+    graphics.fillRect(18, 8, 3, 4);
+    graphics.fillRect(19, 12, 3, 4);
+    graphics.fillRect(17, 16, 3, 3);
+    graphics.fillRect(14, 18, 4, 3);
+    graphics.fillRect(9, 18, 5, 3);
+    graphics.fillRect(5, 16, 4, 3);
+    graphics.fillRect(3, 12, 3, 5);
+    graphics.fillRect(4, 8, 3, 4);
+    graphics.fillRect(6, 5, 5, 3);
+    graphics.fillRect(2, 4, 8, 3);
+    graphics.fillRect(2, 7, 5, 3);
+    graphics.fillRect(2, 10, 8, 3);
+    graphics.fillRect(0, 7, 3, 3);
+
+    graphics.generateTexture(key, 24, 24);
+    graphics.destroy();
+  }
+
+  positionHoverActionIndicator() {
+    if (!this.hoverActionIndicator) {
+      return;
+    }
+
+    const visibleArea = this.getVisibleGameArea();
+    const margin = 10;
+
+    this.hoverActionIndicator.setPosition(
+      Math.round(visibleArea.left + margin),
+      Math.round(visibleArea.bottom - margin - this.hoverActionIndicator.indicatorHeight),
+    );
+  }
+
+  setHoverActionIndicator(modes, gameObject = null) {
+    const indicator = this.hoverActionIndicator;
+
+    if (!indicator) {
+      return;
+    }
+
+    if (!modes?.length) {
+      this.hoverActionIndicatorObject = null;
+      this.hoverActionIndicatorModes = [];
+      indicator.setVisible(false);
+      indicator.setAlpha(0);
+      return;
+    }
+
+    this.hoverActionIndicatorObject = gameObject;
+    this.hoverActionIndicatorModes = modes;
+    indicator.indicatorWidth = modes.length * indicator.iconSize
+      + (modes.length - 1) * indicator.iconGap;
+
+    const iconEntries = {
+      grab: indicator.icons.grab,
+      reset: indicator.icons.reset,
+    };
+
+    Object.values(iconEntries).forEach((icon) => icon.setVisible(false));
+    modes.forEach((mode, index) => {
+      const icon = iconEntries[mode];
+
+      if (!icon) {
+        return;
+      }
+
+      icon.setPosition(
+        indicator.iconSize / 2 + index * (indicator.iconSize + indicator.iconGap),
+        indicator.iconSize / 2,
+      );
+      icon.setVisible(true);
+    });
+
+    indicator.setVisible(true);
+    indicator.setAlpha(1);
+  }
+
+  getHoverActionModes(gameObject) {
+    const modes = [];
+
+    if (gameObject instanceof DraggableObject) {
+      modes.push('grab');
+    }
+
+    if (gameObject instanceof RotatableObject && gameObject.isRotatable) {
+      modes.push('reset');
+    }
+
+    return modes;
+  }
+
   positionDragDebugPanel() {
     if (!this.dragDebugText) {
       return;
@@ -252,6 +413,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   handleObjectOver(_pointer, gameObject) {
+    this.setHoverActionIndicator(this.getHoverActionModes(gameObject), gameObject);
+
     const name = gameObject?.displayName;
 
     if (!name || !gameObject.isIngredient || !this.nameSignboard) {
@@ -264,6 +427,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   handleObjectOut(_pointer, gameObject) {
+    if (gameObject && this.hoverActionIndicatorObject === gameObject) {
+      this.setHoverActionIndicator(null);
+    }
+
     if (!this.nameSignboard) {
       return;
     }

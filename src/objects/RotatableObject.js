@@ -10,10 +10,10 @@ export class RotatableObject extends DraggableObject {
     this.rotationDuration = 180;
     this.doubleClickInterval = 300;
     this.rotateClickDragTolerance = 6;
+    this.clickDragTolerance = this.rotateClickDragTolerance;
     this.lastRotateClickTime = -Infinity;
     this.rotationTween = null;
     this.rotationOnlyPointerId = null;
-    this.pendingRotateClickDragPointerId = null;
 
     this.on('pointerdown', this.handleRotatePointerDown, this);
   }
@@ -28,7 +28,7 @@ export class RotatableObject extends DraggableObject {
     if (clickTime - this.lastRotateClickTime <= this.doubleClickInterval) {
       this.lastRotateClickTime = -Infinity;
       this.rotationOnlyPointerId = this.getDragPointerId(pointer);
-      this.pendingRotateClickDragPointerId = null;
+      this.pendingClickDragPointerId = null;
       this.rotateBy(this.rotationStep);
       return;
     }
@@ -38,14 +38,7 @@ export class RotatableObject extends DraggableObject {
   }
 
   isRotatePointer(pointer) {
-    return !(
-      pointer?.rightButtonDown?.()
-      || pointer?.middleButtonDown?.()
-      || pointer?.button === 1
-      || pointer?.button === 2
-      || pointer?.event?.button === 1
-      || pointer?.event?.button === 2
-    );
+    return this.isPrimaryDragPointer(pointer);
   }
 
   shouldSuppressDragStart(pointer) {
@@ -55,83 +48,9 @@ export class RotatableObject extends DraggableObject {
       return false;
     }
 
-    return pointerId === this.rotationOnlyPointerId
+    return super.shouldSuppressDragStart(pointer)
+      || pointerId === this.rotationOnlyPointerId
       || pointerId === this.suppressedDragPointerId;
-  }
-
-  handleDragStart(pointer) {
-    if (this.shouldDeferRotateClickDrag(pointer)) {
-      this.pendingRotateClickDragPointerId = this.getDragPointerId(pointer);
-      this.suppressedDragPointerId = this.pendingRotateClickDragPointerId;
-      this.isDragging = false;
-      return false;
-    }
-
-    this.pendingRotateClickDragPointerId = null;
-    return super.handleDragStart(pointer);
-  }
-
-  handleDrag(pointer, dragX, dragY) {
-    if (this.isPendingRotateClickDrag(pointer)) {
-      if (!this.hasMovedBeyondRotateClickTolerance(pointer)) {
-        return false;
-      }
-
-      this.pendingRotateClickDragPointerId = null;
-      this.suppressedDragPointerId = null;
-
-      if (!super.handleDragStart(pointer)) {
-        return false;
-      }
-    }
-
-    return super.handleDrag(pointer, dragX, dragY);
-  }
-
-  handleDragEnd(pointer) {
-    if (this.isPendingRotateClickDrag(pointer)) {
-      this.pendingRotateClickDragPointerId = null;
-      this.suppressedDragPointerId = null;
-      return false;
-    }
-
-    return super.handleDragEnd(pointer);
-  }
-
-  shouldDeferRotateClickDrag(pointer) {
-    if (
-      !this.isRotatable
-      || !this.isRotatePointer(pointer)
-      || this.shouldSuppressDragStart(pointer)
-    ) {
-      return false;
-    }
-
-    return !this.hasMovedBeyondRotateClickTolerance(pointer);
-  }
-
-  isPendingRotateClickDrag(pointer) {
-    const pointerId = this.getDragPointerId(pointer);
-
-    return pointerId !== null
-      && pointerId === this.pendingRotateClickDragPointerId;
-  }
-
-  hasMovedBeyondRotateClickTolerance(pointer) {
-    return this.getPointerDownDistance(pointer) > this.rotateClickDragTolerance;
-  }
-
-  getPointerDownDistance(pointer) {
-    const downX = pointer?.downX ?? pointer?.x;
-    const downY = pointer?.downY ?? pointer?.y;
-    const x = pointer?.x;
-    const y = pointer?.y;
-
-    if (![downX, downY, x, y].every(Number.isFinite)) {
-      return 0;
-    }
-
-    return Phaser.Math.Distance.Between(downX, downY, x, y);
   }
 
   rotateBy(angle) {

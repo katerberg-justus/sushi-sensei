@@ -412,6 +412,8 @@ export class RollingMat extends IngredientObject {
       this.clearRollClipMask();
     }
 
+    this.bringRollWrapOverlayToTop();
+
     return started;
   }
 
@@ -673,8 +675,16 @@ export class RollingMat extends IngredientObject {
       this.add(this.rollWrapOverlay);
     }
 
-    this.bringToTop(this.rollWrapOverlay);
+    this.bringRollWrapOverlayToTop();
     this.rollWrapOverlay.setVisible(true);
+  }
+
+  bringRollWrapOverlayToTop() {
+    if (!this.rollWrapOverlay) {
+      return;
+    }
+
+    this.bringToTop(this.rollWrapOverlay);
   }
 
   drawRollWrapOverlay() {
@@ -686,45 +696,22 @@ export class RollingMat extends IngredientObject {
     const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
     const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
     const travel = bounds.height - sideDepth;
-    const foldDepth = Phaser.Math.Linear(sideDepth * 0.9, sideDepth * 1.45, Math.min(1, progress * 1.5));
     const fromTop = this.rollStartSide === 'top';
     const leadingY = fromTop
       ? bounds.y + travel * progress
       : bounds.y + bounds.height - sideDepth - travel * progress;
-    const lipY = fromTop
-      ? Math.min(bounds.y + bounds.height - foldDepth, leadingY)
-      : Math.max(bounds.y, leadingY + sideDepth - foldDepth);
-    const stage = progress < 0.34 ? 1 : progress < 0.74 ? 2 : 3;
 
     this.rollWrapOverlay.clear();
-    this.drawOpaqueMatLip(bounds.x + 5, lipY, bounds.width - 10, foldDepth);
-
-    if (stage >= 2) {
-      const tuckHeight = Math.max(5, foldDepth * 0.42);
-      const tuckY = fromTop ? lipY + foldDepth - tuckHeight : lipY;
-
-      this.rollWrapOverlay.fillStyle(0xae8c5e);
-      this.rollWrapOverlay.fillRect(bounds.x + 8, tuckY, bounds.width - 16, tuckHeight);
-      this.drawMatSlats(bounds.x + 8, tuckY, bounds.width - 16, tuckHeight, 0.5);
-    }
-
-    if (stage >= 3) {
-      const rollHeight = Math.max(7, foldDepth * 0.58);
-      const rollY = fromTop ? lipY + foldDepth - rollHeight : lipY;
-
-      this.rollWrapOverlay.fillStyle(0xae8c5e);
-      this.rollWrapOverlay.fillRect(bounds.x + 10, rollY, bounds.width - 20, rollHeight);
-      this.rollWrapOverlay.fillStyle(0xd4be93);
-      this.rollWrapOverlay.fillRect(bounds.x + 12, rollY + 1, bounds.width - 24, Math.max(1, rollHeight - 2));
-    }
+    this.bringRollWrapOverlayToTop();
+    this.drawOpaqueMatLip(bounds.x, leadingY, bounds.width, sideDepth);
   }
 
   drawOpaqueMatLip(x, y, width, height) {
     this.rollWrapOverlay.fillStyle(0xae8c5e);
     this.rollWrapOverlay.fillRect(x, y, width, height);
     this.rollWrapOverlay.fillStyle(0xd4be93);
-    this.rollWrapOverlay.fillRect(x + 3, y + 2, width - 6, Math.max(1, height - 4));
-    this.drawMatSlats(x + 3, y + 2, width - 6, Math.max(1, height - 4), 0.8);
+    this.rollWrapOverlay.fillRect(x + 2, y + 2, width - 4, Math.max(1, height - 4));
+    this.drawMatSlats(x + 2, y + 2, width - 4, Math.max(1, height - 4), 0.8);
     this.rollWrapOverlay.lineStyle(2, 0xae8c5e, 1);
     this.rollWrapOverlay.strokeRect(x, y, width, height);
   }

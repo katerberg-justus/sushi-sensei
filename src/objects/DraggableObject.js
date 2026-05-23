@@ -119,6 +119,10 @@ export class DraggableObject extends SceneObject {
     this.dragLiftTween = null;
     this.dropImpactTween = null;
     this.suppressedDragPointerId = null;
+    this.doubleClickInterval = 300;
+    this.lastPrimaryClickTime = -Infinity;
+    this.clickDragTolerance = 6;
+    this.pendingClickDragPointerId = null;
     this.dragAnchorX = x;
     this.dragAnchorY = y;
     this.dragFollowSmoothing = 0.48;
@@ -158,6 +162,7 @@ export class DraggableObject extends SceneObject {
     this.on('dragstart', this.handleDragStart, this);
     this.on('drag', this.handleDrag, this);
     this.on('dragend', this.handleDragEnd, this);
+    this.on('pointerdown', this.handleSuppressDoubleClickDragPointerDown, this);
 
     this.applyRestingDepth();
   }
@@ -1238,8 +1243,39 @@ export class DraggableObject extends SceneObject {
     return true;
   }
 
-  shouldSuppressDragStart(_pointer) {
-    return false;
+  shouldSuppressDragStart(pointer) {
+    return this.isDragSuppressed(pointer);
+  }
+
+  handleSuppressDoubleClickDragPointerDown(pointer) {
+    if (!this.isPrimaryDragPointer(pointer)) {
+      return;
+    }
+
+    const clickTime = pointer.downTime ?? this.scene?.time?.now;
+
+    if (!Number.isFinite(clickTime)) {
+      return;
+    }
+
+    if (clickTime - this.lastPrimaryClickTime <= this.doubleClickInterval) {
+      this.suppressedDragPointerId = this.getDragPointerId(pointer);
+      this.lastPrimaryClickTime = -Infinity;
+      return;
+    }
+
+    this.lastPrimaryClickTime = clickTime;
+  }
+
+  isPrimaryDragPointer(pointer) {
+    return !(
+      pointer?.rightButtonDown?.()
+      || pointer?.middleButtonDown?.()
+      || pointer?.button === 1
+      || pointer?.button === 2
+      || pointer?.event?.button === 1
+      || pointer?.event?.button === 2
+    );
   }
 
   getDragPointerId(pointer) {
@@ -1263,6 +1299,35 @@ export class DraggableObject extends SceneObject {
     return pointerId !== null && pointerId === this.suppressedDragPointerId;
   }
 
+  shouldDeferClickDrag(pointer) {
+    return this.isPrimaryDragPointer(pointer)
+      && !this.shouldSuppressDragStart(pointer)
+      && !this.hasMovedBeyondClickDragTolerance(pointer);
+  }
+
+  isPendingClickDrag(pointer) {
+    const pointerId = this.getDragPointerId(pointer);
+
+    return pointerId !== null && pointerId === this.pendingClickDragPointerId;
+  }
+
+  hasMovedBeyondClickDragTolerance(pointer) {
+    return this.getPointerDownDistance(pointer) > this.clickDragTolerance;
+  }
+
+  getPointerDownDistance(pointer) {
+    const downX = pointer?.downX ?? pointer?.x;
+    const downY = pointer?.downY ?? pointer?.y;
+    const x = pointer?.x;
+    const y = pointer?.y;
+
+    if (![downX, downY, x, y].every(Number.isFinite)) {
+      return 0;
+    }
+
+    return Phaser.Math.Distance.Between(downX, downY, x, y);
+  }
+
   handleDragStart(pointer) {
     if (this.isDragSuppressed(pointer)) {
       this.isDragging = false;
@@ -1271,6 +1336,13 @@ export class DraggableObject extends SceneObject {
 
     if (this.shouldSuppressDragStart(pointer)) {
       this.suppressedDragPointerId = this.getDragPointerId(pointer);
+      this.isDragging = false;
+      return false;
+    }
+
+    if (this.shouldDeferClickDrag(pointer)) {
+      this.pendingClickDragPointerId = this.getDragPointerId(pointer);
+      this.suppressedDragPointerId = this.pendingClickDragPointerId;
       this.isDragging = false;
       return false;
     }
@@ -1285,6 +1357,8 @@ export class DraggableObject extends SceneObject {
     }
 
     this.suppressedDragPointerId = null;
+    this.pendingClickDragPointerId = null;
+    this.lastPrimaryClickTime = -Infinity;
     this.ensureCompositionShadowReady();
     this.isDragging = true;
     this.dragAnchorX = this.x;
@@ -1299,7 +1373,20 @@ export class DraggableObject extends SceneObject {
     return true;
   }
 
-  handleDrag(_pointer, dragX, dragY) {
+  handleDrag(pointer, dragX, dragY) {
+    if (this.isPendingClickDrag(pointer)) {
+      if (!this.hasMovedBeyondClickDragTolerance(pointer)) {
+        return false;
+      }
+
+      this.pendingClickDragPointerId = null;
+      this.suppressedDragPointerId = null;
+
+      if (!this.handleDragStart(pointer)) {
+        return false;
+      }
+    }
+
     if (!this.isDragging) {
       return false;
     }
@@ -1357,6 +1444,12 @@ export class DraggableObject extends SceneObject {
   }
 
   handleDragEnd(pointer) {
+    if (this.isPendingClickDrag(pointer)) {
+      this.pendingClickDragPointerId = null;
+      this.suppressedDragPointerId = null;
+      return false;
+    }
+
     if (this.isDragSuppressed(pointer)) {
       this.suppressedDragPointerId = null;
       return false;

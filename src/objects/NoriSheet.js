@@ -9,8 +9,8 @@ const NORI_VARIANT_POOL = 6;
 const NORI_WIDTH = 58;
 const NORI_HEIGHT = 40;
 const NORI_WEIGHT_GRAMS = 3;
-const NORI_PERSPECTIVE_SQUASH = 0.6;
-const RICE_SPREAD_TARGET = { left: 4, top: 4, right: 54, bottom: 36 };
+const NORI_PERSPECTIVE_SQUASH = 0.66;
+const RICE_SPREAD_TARGET = { left: 6, top: 6, right: 52, bottom: 34 };
 const RICE_SPREAD_COMPLETE_COVERAGE = 0.97;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -319,13 +319,15 @@ export class NoriSheet extends IngredientObject {
         }
 
         const hash = NoriSheet.hashSpreadCell(x, y, this.variantIndex);
-        const color = hash % 13 === 0
-          ? 0xfff8e8
-          : hash % 7 === 0
-            ? 0xd6cab2
-            : hash % 5 === 0
-              ? 0xeee5cf
-              : 0xf6f0df;
+        const hasOpenNeighbor = !NoriSheet.isRiceSpreadTargetCell(x - 1, y)
+          || !NoriSheet.isRiceSpreadTargetCell(x + 1, y)
+          || !NoriSheet.isRiceSpreadTargetCell(x, y - 1)
+          || !NoriSheet.isRiceSpreadTargetCell(x, y + 1)
+          || !this.riceSpreadCoverage[y * NORI_WIDTH + x - 1]
+          || !this.riceSpreadCoverage[y * NORI_WIDTH + x + 1]
+          || !this.riceSpreadCoverage[(y - 1) * NORI_WIDTH + x]
+          || !this.riceSpreadCoverage[(y + 1) * NORI_WIDTH + x];
+        const color = NoriSheet.getRiceSpreadCellColor(hash, hasOpenNeighbor);
 
         context.fillStyle = toHexColor(color);
         context.fillRect(x, y, 1, 1);
@@ -507,6 +509,22 @@ export class NoriSheet extends IngredientObject {
     return (value ^ (value >>> 16)) >>> 0;
   }
 
+  static getRiceSpreadCellColor(hash, isEdge = false) {
+    if (isEdge) {
+      return hash % 5 === 0 ? 0xd6cab2 : 0xe6ddc7;
+    }
+
+    if (hash % 13 === 0) {
+      return 0xfff8e8;
+    }
+
+    if (hash % 7 === 0) {
+      return 0xd6cab2;
+    }
+
+    return hash % 5 === 0 ? 0xeee5cf : 0xf6f0df;
+  }
+
   static paintTexture(context, rng) {
     const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
     const chance = (probability) => rng() < probability;
@@ -534,23 +552,23 @@ export class NoriSheet extends IngredientObject {
       }
     };
 
-    context.fillStyle = toHexColor(0x102821);
+    context.fillStyle = toHexColor(0x17342b);
     context.fillRect(5, 3, 48, 2);
     context.fillRect(3, 5, 52, 31);
     context.fillRect(6, 36, 46, 2);
 
-    context.fillStyle = toHexColor(0x18372e);
+    context.fillStyle = toHexColor(0x21483b);
     context.fillRect(5, 6, 48, 28);
     context.fillRect(7, 4, 44, 2);
     context.fillRect(7, 34, 44, 2);
 
-    context.fillStyle = toHexColor(0x142e27);
+    context.fillStyle = toHexColor(0x1b3c32);
     for (let y = 7; y < 34; y += 3) {
       const offset = jitter(2);
       context.fillRect(6 + offset, y + jitter(1), 45 - Math.abs(offset), 1);
     }
 
-    context.fillStyle = toHexColor(0x214b3d);
+    context.fillStyle = toHexColor(0x2b5a49);
     for (let i = 0; i < 18; i += 1) {
       const x = 7 + Math.floor(rng() * 42);
       const y = 7 + Math.floor(rng() * 25);
@@ -559,7 +577,7 @@ export class NoriSheet extends IngredientObject {
       context.fillRect(x, y, Math.min(width, 52 - x), 2);
     }
 
-    context.fillStyle = toHexColor(0x0f241e);
+    context.fillStyle = toHexColor(0x153028);
     for (let i = 0; i < 14; i += 1) {
       const x = 6 + Math.floor(rng() * 44);
       const y = 8 + Math.floor(rng() * 24);
@@ -568,13 +586,13 @@ export class NoriSheet extends IngredientObject {
       context.fillRect(x, y, Math.min(width, 53 - x), 2);
     }
 
-    context.fillStyle = toHexColor(0x0b1a16);
+    context.fillStyle = toHexColor(0x10251f);
     context.fillRect(5, 5, 48, 1);
     context.fillRect(4, 7, 1, 27);
     context.fillRect(53, 7, 1, 27);
     context.fillRect(7, 35, 44, 1);
 
-    context.fillStyle = toHexColor(0x2d5d4a);
+    context.fillStyle = toHexColor(0x367057);
     for (let y = 8; y < 33; y += 4) {
       if (chance(0.8)) {
         context.fillRect(7 + jitter(1), y + jitter(1), 12 + Math.floor(rng() * 12), 2);
@@ -582,7 +600,7 @@ export class NoriSheet extends IngredientObject {
       }
     }
 
-    context.fillStyle = toHexColor(0x143026);
+    context.fillStyle = toHexColor(0x1b3d31);
     for (let x = 9; x < 51; x += 5) {
       if (chance(0.75)) {
         const y = 8 + Math.floor(rng() * 4);
@@ -591,57 +609,54 @@ export class NoriSheet extends IngredientObject {
       }
     }
 
-    fillSpeckles(0x3f745d, 22, 7, 6, 49, 33, 0.48, 0.2);
-    fillSpeckles(0x2b5646, 28, 6, 7, 49, 34, 0.6, 0.22);
-    fillSpeckles(0x0a1714, 22, 6, 6, 50, 34, 0.4, 0.2);
-    fillSpeckles(0x1b4035, 30, 7, 7, 49, 33, 0.7, 0.26);
+    fillSpeckles(0x4b8468, 22, 7, 6, 49, 33, 0.48, 0.2);
+    fillSpeckles(0x356550, 28, 6, 7, 49, 34, 0.6, 0.22);
+    fillSpeckles(0x10251f, 22, 6, 6, 50, 34, 0.4, 0.2);
+    fillSpeckles(0x265140, 30, 7, 7, 49, 33, 0.7, 0.26);
   }
 
   static paintRiceSpreadTexture(context, rng) {
-    const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
     const chance = (probability) => rng() < probability;
 
     NoriSheet.paintTexture(context, rng);
 
-    context.fillStyle = toHexColor(0xe6ddc7);
-    context.fillRect(5, 5, 48, 29);
-    context.fillRect(4, 10, 50, 20);
-    context.fillRect(8, 3, 42, 4);
-    context.fillRect(9, 33, 40, 3);
+    for (let y = RICE_SPREAD_TARGET.top; y < RICE_SPREAD_TARGET.bottom; y += 1) {
+      for (let x = RICE_SPREAD_TARGET.left; x < RICE_SPREAD_TARGET.right; x += 1) {
+        const isEdge = x <= RICE_SPREAD_TARGET.left + 1
+          || x >= RICE_SPREAD_TARGET.right - 2
+          || y <= RICE_SPREAD_TARGET.top + 1
+          || y >= RICE_SPREAD_TARGET.bottom - 2;
+        const hash = NoriSheet.hashSpreadCell(x, y, 0);
 
-    context.fillStyle = toHexColor(0xf6f0df);
-    context.fillRect(6, 6, 46, 26);
-    context.fillRect(5, 12, 48, 16);
-    context.fillRect(9, 4, 39, 3);
-    context.fillRect(10, 32, 37, 2);
+        context.fillStyle = toHexColor(NoriSheet.getRiceSpreadCellColor(hash, isEdge));
+        context.fillRect(x, y, 1, 1);
+
+        if (!isEdge && hash % 17 === 0 && x + 1 < RICE_SPREAD_TARGET.right - 1) {
+          context.fillStyle = toHexColor(0xcfc3ac);
+          context.fillRect(x + 1, y, 1, 1);
+        }
+      }
+    }
 
     context.fillStyle = toHexColor(0xfff8e8);
-    context.fillRect(8, 8, 15, 3);
-    context.fillRect(28, 7, 18, 2);
-    context.fillRect(7, 15, 22, 3);
-    context.fillRect(33, 17, 18, 3);
-    context.fillRect(10, 25, 18, 3);
-    context.fillRect(31, 27, 15, 2);
+    context.fillRect(9, 8, 14, 2);
+    context.fillRect(29, 8, 16, 2);
+    context.fillRect(8, 15, 20, 2);
+    context.fillRect(33, 17, 17, 2);
+    context.fillRect(10, 25, 17, 2);
+    context.fillRect(31, 28, 14, 2);
 
     context.fillStyle = toHexColor(0xcfc3ac);
-    for (let i = 0; i < 48; i += 1) {
-      if (!chance(0.78)) {
+    for (let i = 0; i < 36; i += 1) {
+      if (!chance(0.7)) {
         continue;
       }
 
-      context.fillRect(
-        6 + Math.floor(rng() * 46) + jitter(1),
-        5 + Math.floor(rng() * 29) + jitter(1),
-        chance(0.4) ? 2 : 1,
-        1,
-      );
-    }
+      const x = RICE_SPREAD_TARGET.left + 2 + Math.floor(rng() * (RICE_SPREAD_TARGET.right - RICE_SPREAD_TARGET.left - 4));
+      const y = RICE_SPREAD_TARGET.top + 2 + Math.floor(rng() * (RICE_SPREAD_TARGET.bottom - RICE_SPREAD_TARGET.top - 4));
 
-    context.fillStyle = toHexColor(0x214b3d);
-    context.fillRect(5, 5, 48, 1);
-    context.fillRect(4, 8, 1, 26);
-    context.fillRect(53, 8, 1, 26);
-    context.fillRect(7, 35, 44, 1);
+      context.fillRect(x, y, chance(0.4) ? 2 : 1, 1);
+    }
   }
 }
 

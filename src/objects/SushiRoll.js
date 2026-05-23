@@ -10,6 +10,8 @@ const FRAME_COUNT = 13;
 const ROLL_WEIGHT_GRAMS = 90;
 const ROLL_AXIS_CAP_PERSPECTIVE = 0.72;
 const ROLL_DISC_DEPTH_PERSPECTIVE = 0.72;
+const FLIPPABLE_MAX_WEIGHT_GRAMS = 20;
+const FLIPPED_DISC_HEIGHT_SCALE = 0.86;
 
 const FILLING_STYLES = {
   salmon: { displayName: 'Salmon', base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
@@ -244,6 +246,9 @@ export class SushiRoll extends IngredientObject {
 
     this.frames = frames;
     this.currentFrameIndex = -1;
+    this.isFlippedUpright = false;
+    this.unflippedRotation = this.rotation ?? 0;
+    this.unflippedIsRotatable = this.isRotatable;
     this.sprite = null;
 
     CuttableObject.setupCuttable(this, frames[0].key, cropWidth, cropHeight, PIXEL, {
@@ -263,9 +268,59 @@ export class SushiRoll extends IngredientObject {
       }, options);
     }
 
+    this.setFlippedUpright(options.isFlippedUpright ?? false);
     this.applyRollViewForCurrentRotation();
     this.refreshCompositionShadow();
     this.applyRestingDepth();
+
+    this.on('pointerdown', this.handleFlipPointerDown, this);
+  }
+
+  handleFlipPointerDown(pointer) {
+    if (!this.canFlipUpright() || !this.isRightButtonPointer(pointer)) {
+      return;
+    }
+
+    pointer.event?.preventDefault?.();
+    this.suppressedDragPointerId = this.getDragPointerId(pointer);
+    this.toggleFlippedUpright();
+  }
+
+  canFlipUpright() {
+    return (this.weightGrams ?? this.ownWeightGrams ?? 0) < FLIPPABLE_MAX_WEIGHT_GRAMS;
+  }
+
+  toggleFlippedUpright() {
+    this.setFlippedUpright(!this.isFlippedUpright);
+
+    return this;
+  }
+
+  setFlippedUpright(isFlippedUpright) {
+    const nextValue = Boolean(isFlippedUpright);
+
+    if (this.isFlippedUpright === nextValue) {
+      return this;
+    }
+
+    this.stopRotationTween?.();
+
+    if (nextValue) {
+      this.unflippedRotation = this.rotation ?? 0;
+      this.unflippedIsRotatable = this.isRotatable;
+      this.isRotatable = false;
+      this.setRotation(0);
+    } else {
+      this.isRotatable = this.unflippedIsRotatable ?? true;
+      this.setRotation(this.unflippedRotation ?? 0);
+    }
+
+    this.isFlippedUpright = nextValue;
+    this.applyRollViewForCurrentRotation();
+    this.refreshCuttableGeometry?.();
+    this.refreshCompositionShadow?.();
+
+    return this;
   }
 
   beforeObjectRotationTween() {
@@ -342,6 +397,22 @@ export class SushiRoll extends IngredientObject {
   applyRollViewForCurrentRotation() {
     if (!this.frames || !this.pieces?.length) return;
 
+    if (this.isFlippedUpright) {
+      const frameIndex = FRAME_COUNT - 1;
+
+      this.currentFrameIndex = frameIndex;
+      this.pieces.forEach((piece) => {
+        this.syncRollPieceImage(piece, {
+          frameIndex,
+          flipX: false,
+          flipY: true,
+          rotation: 0,
+          scaleY: FLIPPED_DISC_HEIGHT_SCALE,
+        });
+      });
+      return;
+    }
+
     const half = Math.PI;
     const quarter = Math.PI / 2;
     const raw = this.rotation ?? 0;
@@ -382,9 +453,10 @@ export class SushiRoll extends IngredientObject {
     const anchorFrameY = this.anchorTextureY * scaleY;
     const visibleBounds = piece.visibleBounds ?? this.getPieceVisibleTextureBounds(piece);
     const visibleWidth = (visibleBounds.right - visibleBounds.left) * scaleX * this.pixelScale;
-    const visibleHeight = (visibleBounds.bottom - visibleBounds.top) * scaleY * this.pixelScale;
+    const displayScaleY = options.scaleY ?? 1;
+    const visibleHeight = (visibleBounds.bottom - visibleBounds.top) * scaleY * this.pixelScale * displayScaleY;
     const visibleLeft = (visibleBounds.left * scaleX - anchorFrameX) * this.pixelScale;
-    const visibleTop = (visibleBounds.top * scaleY - anchorFrameY) * this.pixelScale;
+    const visibleTop = (visibleBounds.top * scaleY - anchorFrameY) * this.pixelScale * displayScaleY;
 
     if (image.rollFrameIndex !== frameIndex || image.texture?.key !== frame.key) {
       image.setTexture(frame.key);
@@ -392,17 +464,17 @@ export class SushiRoll extends IngredientObject {
     }
 
     image.setCrop(cropX, cropY, cropWidth, cropHeight);
-    image.setScale(this.pixelScale);
+    image.setScale(this.pixelScale, this.pixelScale * displayScaleY);
     image.setPosition(
       (frame.w / 2 - anchorFrameX) * this.pixelScale,
-      (frame.h / 2 - anchorFrameY) * this.pixelScale,
+      (frame.h / 2 - anchorFrameY) * this.pixelScale * displayScaleY,
     );
     image.compositionWidth = visibleWidth;
     image.compositionHeight = visibleHeight;
     image.compositionOffsetX = visibleLeft + visibleWidth / 2 - image.x;
     image.compositionOffsetY = visibleTop + visibleHeight / 2 - image.y;
     image.setFlipX(options.flipX ?? false);
-    image.setFlipY(false);
+    image.setFlipY(options.flipY ?? false);
     image.setRotation(options.rotation ?? -(this.rotation ?? 0));
   }
 

@@ -175,7 +175,7 @@ export class Plate extends IngredientObject {
     this.maxStackedItems = options.maxStackedItems ?? profile.maxStackedItems;
     this.stackOffsetX = 0;
     this.stackOffsetY = options.stackOffsetY ?? profile.stackOffsetY;
-    this.stackLocked = true;
+    this.stackLocked = options.stackLocked ?? false;
     this.ownWeightGrams = options.weightGrams ?? profile.weightGrams;
     this.capacityGrams = options.capacityGrams ?? profile.capacityGrams;
     this.maxFishWeightGrams = options.maxFishWeightGrams
@@ -370,13 +370,15 @@ export class Plate extends IngredientObject {
     const ellipse = this.surfaceEllipse;
 
     context.fillStyle = toHexColor(palette.foot);
-    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 13, ellipse.rx - 10, 4);
+    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 9, ellipse.rx - 12, 2);
 
     context.fillStyle = toHexColor(palette.surfaceDark);
-    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 5, ellipse.rx + 5, ellipse.ry + 6);
+    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 3, ellipse.rx + 4, ellipse.ry + 3);
+    context.clearRect(ellipse.x - 1, ellipse.y + ellipse.ry + 6, 3, 1);
 
     context.fillStyle = toHexColor(palette.rim);
-    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 2, ellipse.rx + 3, ellipse.ry + 4);
+    this.fillPixelEllipse(context, ellipse.x, ellipse.y + 1, ellipse.rx + 3, ellipse.ry + 2);
+    context.fillRect(ellipse.x - 2, ellipse.y - ellipse.ry - 1, 5, 1);
 
     context.fillStyle = toHexColor(palette.rimLight);
     this.strokePixelEllipse(context, ellipse.x, ellipse.y, ellipse.rx + 2, ellipse.ry + 3, 0.72, 1.1);

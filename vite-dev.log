@@ -1,0 +1,4 @@
+
+> sushi-sensei@0.1.0 dev
+> vite --configLoader native --host 127.0.0.1 --port 5174 --strictPort
+
