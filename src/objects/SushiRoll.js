@@ -9,6 +9,7 @@ const ROLL_DIAMETER = 14;
 const FRAME_COUNT = 13;
 const ROLL_WEIGHT_GRAMS = 90;
 const ROLL_AXIS_CAP_PERSPECTIVE = 0.72;
+const ROLL_DISC_DEPTH_PERSPECTIVE = 0.72;
 
 const FILLING_STYLES = {
   salmon: { displayName: 'Salmon', base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
@@ -82,6 +83,30 @@ function getCoarseNoriColor(lx, ly, majorR, halfLength, edgePerp, seed = 0) {
   return color;
 }
 
+function getCoarseRiceColor(lx, ly, majorR, halfLength, seed = 0) {
+  const blockX = Math.floor((lx + halfLength + 6) / 3);
+  const blockY = Math.floor((ly + majorR + 2) / 2);
+  const hash = hashNoriBlock(blockX, blockY, seed);
+
+  if (hash % 19 === 0) {
+    return RICE_GLINT;
+  }
+
+  if (ly > 0 && hash % 5 === 0) {
+    return RICE_SHADOW;
+  }
+
+  if (hash % 3 === 0) {
+    return RICE_LIGHT;
+  }
+
+  return RICE_BASE;
+}
+
+function getRollAxisBodyLength(rollLength, sinT) {
+  return rollLength * (1 - (1 - ROLL_AXIS_CAP_PERSPECTIVE) * sinT);
+}
+
 function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
   const frames = [];
   const frameKeySuffix = `${Math.round(rollLength * 100)}x${Math.round(rollDiameter * 100)}`;
@@ -90,17 +115,18 @@ function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL
     const theta = (i / (FRAME_COUNT - 1)) * (Math.PI / 2);
     const cosT = Math.cos(theta);
     const sinT = Math.sin(theta);
-    const axisCapDepth = rollDiameter * ROLL_AXIS_CAP_PERSPECTIVE;
-    const w = Math.max(2, Math.round(rollLength * cosT + rollDiameter * sinT));
-    const h = Math.max(2, Math.round(rollLength * sinT + rollDiameter * cosT + axisCapDepth * sinT));
-    const key = `sushi-roll-${fillingType}-${frameKeySuffix}-q15-${i}`;
+    const axisBodyLength = getRollAxisBodyLength(rollLength, sinT);
+    const axisCapDepth = rollDiameter * ROLL_DISC_DEPTH_PERSPECTIVE * sinT;
+    const w = Math.max(2, Math.round(axisBodyLength * cosT + rollDiameter * sinT));
+    const h = Math.max(2, Math.round(axisBodyLength * sinT + rollDiameter * cosT + axisCapDepth));
+    const key = `sushi-roll-${fillingType}-${frameKeySuffix}-q18-${i}`;
 
     if (!scene.textures.exists(key)) {
       const texture = scene.textures.createCanvas(key, w, h);
       const ctx = texture.getContext();
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, w, h);
-      paintFrame(ctx, cosT, sinT, w, h, fillingStyle, mulberry32(0x51b1 ^ (i * 0x9e37)), rollLength, rollDiameter);
+      paintFrame(ctx, cosT, sinT, w, h, fillingStyle, mulberry32(0x51b1 ^ (i * 0x9e37)), rollLength, rollDiameter, axisBodyLength, axisCapDepth);
       texture.refresh();
     }
     frames.push({ key, w, h });
@@ -108,11 +134,11 @@ function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL
   return frames;
 }
 
-function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
-  const halfLength = rollLength / 2;
+function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER, axisBodyLength = getRollAxisBodyLength(rollLength, sinT), axisCapDepth = rollDiameter * ROLL_DISC_DEPTH_PERSPECTIVE * sinT) {
+  const halfLength = axisBodyLength / 2;
   const halfDiameter = rollDiameter / 2;
   const majorR = halfDiameter;
-  const minorR = halfDiameter * ROLL_AXIS_CAP_PERSPECTIVE * sinT;
+  const minorR = axisCapDepth / 2;
   const halfBodyL = halfLength;
   const discVisible = minorR > 0.4;
 
@@ -168,11 +194,7 @@ function paintFrame(ctx, cosT, sinT, w, h, fillingStyle, rng, rollLength = ROLL_
               color = fillingStyle.base;
             }
           } else {
-            const r = rng();
-            if (r < 0.22) color = RICE_LIGHT;
-            else if (r < 0.30) color = RICE_GLINT;
-            else if (r < 0.42 && ly > 0) color = RICE_SHADOW;
-            else color = RICE_BASE;
+            color = getCoarseRiceColor(lx, ly, majorR, halfLength, 13);
           }
         }
       } else if (inNorthExt) {

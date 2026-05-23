@@ -2081,6 +2081,10 @@ export class IngredientObject extends RotatableObject {
     target.stackChildren.push(this);
     target.handleStackChildAttached?.(this, { x: offsetX, y: offsetY });
 
+    if (this.stackParent === target) {
+      target.playDropImpact?.();
+    }
+
     return true;
   }
 

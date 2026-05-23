@@ -7,6 +7,7 @@ import { CuttableTamago } from '../objects/CuttableTamago.js';
 import { Knife } from '../objects/Knife.js';
 import { Nigiri } from '../objects/Nigiri.js';
 import { NoriSheet } from '../objects/NoriSheet.js';
+import { Plate } from '../objects/Plate.js';
 import { RiceBall } from '../objects/RiceBall.js';
 import { RollingMat } from '../objects/RollingMat.js';
 
@@ -66,6 +67,18 @@ export class GameScene extends Phaser.Scene {
         color: 'black',
         acceptedStackCategories: [],
         contents: { style: 'nikiri', fullness: 0.62 },
+      }),
+    ];
+    this.plates = [
+      new Plate(this, width * 0.79, height * 0.73, {
+        size: 'medium',
+        material: 'ceramic',
+      }),
+      new Plate(this, width * 0.91, height * 0.73, {
+        size: 'small',
+        material: 'slate',
+        displayName: 'Sashimi Plate',
+        maxFishWeightGrams: 12,
       }),
     ];
     this.cuttableObjects = [
