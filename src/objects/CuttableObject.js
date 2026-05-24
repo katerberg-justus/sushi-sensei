@@ -3,6 +3,7 @@ import { SceneObject } from './SceneObject.js';
 
 const visibleBoundsCache = new Map();
 const visiblePixelCountCache = new Map();
+const MIN_CUTTABLE_STROKE_COVERAGE = 0.8;
 
 export class CuttableObject extends SceneObject {
   static DEFAULT_MINIMUM_CUT_WIDTH = 5;
@@ -89,18 +90,16 @@ export class CuttableObject extends SceneObject {
       return false;
     }
 
-    const bounds = this.getLocalCutRectangle();
-    const stroke = new Phaser.Geom.Line(startLocal.x, startLocal.y, endLocal.x, endLocal.y);
-    const startsInside = Phaser.Geom.Rectangle.Contains(bounds, startLocal.x, startLocal.y);
-    const endsInside = Phaser.Geom.Rectangle.Contains(bounds, endLocal.x, endLocal.y);
-
-    if (!startsInside && !endsInside && !Phaser.Geom.Intersects.LineToRectangle(stroke, bounds)) {
-      return false;
-    }
-
     const orientation = Math.abs(localDx) >= Math.abs(localDy) ? 'horizontal' : 'vertical';
 
     if (!this.allowedCutOrientations.has(orientation)) {
+      return false;
+    }
+
+    const bounds = this.getLocalCutRectangle();
+    const clippedStroke = this.clipStrokeToLocalBounds(startLocal, endLocal, bounds);
+
+    if (!clippedStroke || !this.hasEnoughStrokeCoverage(orientation, clippedStroke, bounds)) {
       return false;
     }
 
@@ -116,6 +115,61 @@ export class CuttableObject extends SceneObject {
     }
 
     return replacements;
+  }
+
+  clipStrokeToLocalBounds(start, end, bounds) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    let entry = 0;
+    let exit = 1;
+    const edges = [
+      [-dx, start.x - bounds.left],
+      [dx, bounds.right - start.x],
+      [-dy, start.y - bounds.top],
+      [dy, bounds.bottom - start.y],
+    ];
+
+    for (const [direction, distance] of edges) {
+      if (Math.abs(direction) < 0.0001) {
+        if (distance < 0) {
+          return null;
+        }
+        continue;
+      }
+
+      const progress = distance / direction;
+
+      if (direction < 0) {
+        entry = Math.max(entry, progress);
+      } else {
+        exit = Math.min(exit, progress);
+      }
+
+      if (entry > exit) {
+        return null;
+      }
+    }
+
+    return {
+      start: new Phaser.Math.Vector2(
+        Phaser.Math.Linear(start.x, end.x, entry),
+        Phaser.Math.Linear(start.y, end.y, entry),
+      ),
+      end: new Phaser.Math.Vector2(
+        Phaser.Math.Linear(start.x, end.x, exit),
+        Phaser.Math.Linear(start.y, end.y, exit),
+      ),
+    };
+  }
+
+  hasEnoughStrokeCoverage(orientation, clippedStroke, bounds) {
+    const coverage = orientation === 'horizontal'
+      ? Math.abs(clippedStroke.end.x - clippedStroke.start.x)
+      : Math.abs(clippedStroke.end.y - clippedStroke.start.y);
+    const required = (orientation === 'horizontal' ? bounds.width : bounds.height)
+      * MIN_CUTTABLE_STROKE_COVERAGE;
+
+    return coverage >= required;
   }
 
   cut(orientation, localPosition) {

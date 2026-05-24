@@ -28,33 +28,8 @@ export class CuttingObject extends RotatableObject {
   }
 
   handleDrag(pointer, dragX, dragY) {
-    const wasDragging = this.isDragging;
-    const previousCutPoint = wasDragging ? (this.lastCutPoint || this.getCutPoint()) : null;
-
     if (!super.handleDrag(pointer, dragX, dragY)) {
       return false;
-    }
-
-    if (!wasDragging) {
-      this.lastCutPoint = this.getCutPoint();
-      return true;
-    }
-
-    const nextCutPoint = this.getCutPoint();
-    const distance = Phaser.Math.Distance.Between(
-      previousCutPoint.x,
-      previousCutPoint.y,
-      nextCutPoint.x,
-      nextCutPoint.y,
-    );
-
-    if (distance >= this.minCutStrokeDistance) {
-      this.emit('cutstroke', {
-        cutter: this,
-        start: previousCutPoint,
-        end: nextCutPoint,
-      });
-      this.lastCutPoint = nextCutPoint;
     }
 
     return true;

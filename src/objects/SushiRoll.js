@@ -273,7 +273,7 @@ export class SushiRoll extends IngredientObject {
     this.rollStyle = 'maki';
     this.fillingType = fillingType;
     this.restDepth = 24;
-    this.softness = 0.22;
+    this.softness = 0.9;
     this.stackCategory = 'roll';
 
     this.computedShadeDarkAlpha = 0;

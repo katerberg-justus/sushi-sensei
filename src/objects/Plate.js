@@ -427,9 +427,6 @@ export class Plate extends IngredientObject {
 
     context.fillStyle = toHexColor(this.mixColors(palette.surface, palette.surfaceDark, 0.28));
     this.strokePixelEllipse(context, ellipse.x, ellipse.y + 1, ellipse.rx - 11, Math.max(2, ellipse.ry - 4), 0.84, 1.14);
-
-    context.fillStyle = toHexColor(palette.accent);
-    context.fillRect(ellipse.x - Math.round(ellipse.rx * 0.45), ellipse.y - ellipse.ry + 3, Math.round(ellipse.rx * 0.52), 1);
   }
 
   fillPixelEllipse(context, centerX, centerY, radiusX, radiusY) {

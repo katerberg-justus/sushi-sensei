@@ -1,3 +1,4 @@
+import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
 import { IngredientObject } from './IngredientObject.js';
@@ -9,6 +10,8 @@ const NIGIRI_VARIANT_POOL = 6;
 const NIGIRI_WIDTH = 32;
 const NIGIRI_HEIGHT = 27;
 const NIGIRI_WEIGHT_GRAMS = 34;
+const NIGIRI_GLAZE_KEY = 'nigiri-glaze-pixel';
+const NIGIRI_FISH_REGION = { x: 3, y: 5, width: 26, height: 13 };
 
 const FISH_STYLES = {
   ...CUTTABLE_FISH_STYLES,
@@ -55,8 +58,77 @@ export class Nigiri extends IngredientObject {
     this.sprite.setOrigin(0.5);
 
     this.addDraggablePart(this.sprite);
+
+    Nigiri.ensureGlazeTexture(scene);
+    this.glazeSprite = scene.add.image(0, 0, NIGIRI_GLAZE_KEY);
+    this.glazeSprite.setScale(PIXEL);
+    this.glazeSprite.setOrigin(0.5);
+    this.glazeSprite.setVisible(false);
+    this.glazeSprite.excludeFromCompositionShadow = true;
+    this.addDraggablePart(this.glazeSprite);
+
+    this.isGlazed = false;
+
     this.refreshCompositionShadow();
     this.applyRestingDepth();
+  }
+
+  setGlazed(active = true) {
+    if (this.isGlazed === active) {
+      return false;
+    }
+
+    this.isGlazed = active;
+    this.glazeSprite?.setVisible(active);
+    return true;
+  }
+
+  getFishWorldRect() {
+    const localX = (NIGIRI_FISH_REGION.x - NIGIRI_WIDTH / 2) * PIXEL;
+    const localY = (NIGIRI_FISH_REGION.y - NIGIRI_HEIGHT / 2) * PIXEL;
+    const width = NIGIRI_FISH_REGION.width * PIXEL;
+    const height = NIGIRI_FISH_REGION.height * PIXEL;
+
+    return new Phaser.Geom.Rectangle(this.x + localX, this.y + localY, width, height);
+  }
+
+  containsFishPoint(point) {
+    if (!point) {
+      return false;
+    }
+
+    return Phaser.Geom.Rectangle.Contains(this.getFishWorldRect(), point.x, point.y);
+  }
+
+  static ensureGlazeTexture(scene) {
+    if (scene.textures.exists(NIGIRI_GLAZE_KEY)) {
+      return;
+    }
+
+    const texture = scene.textures.createCanvas(NIGIRI_GLAZE_KEY, NIGIRI_WIDTH, NIGIRI_HEIGHT);
+    const context = texture.getContext();
+
+    context.imageSmoothingEnabled = false;
+    context.clearRect(0, 0, NIGIRI_WIDTH, NIGIRI_HEIGHT);
+
+    context.fillStyle = 'rgba(255, 235, 175, 0.22)';
+    context.fillRect(5, 6, 22, 4);
+    context.fillRect(4, 10, 24, 4);
+    context.fillRect(6, 14, 20, 3);
+
+    context.fillStyle = 'rgba(255, 250, 220, 0.55)';
+    context.fillRect(8, 7, 4, 1);
+    context.fillRect(18, 7, 5, 1);
+    context.fillRect(6, 11, 6, 1);
+    context.fillRect(19, 11, 5, 1);
+    context.fillRect(9, 15, 4, 1);
+    context.fillRect(18, 15, 6, 1);
+
+    context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    context.fillRect(10, 8, 2, 1);
+    context.fillRect(20, 12, 2, 1);
+
+    texture.refresh();
   }
 
   static paintTexture(context, rng, fishStyle) {

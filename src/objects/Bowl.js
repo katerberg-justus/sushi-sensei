@@ -16,6 +16,17 @@ const CONTENT_ELLIPSE = {
   rx: 23,
   ry: 5,
 };
+const DEFAULT_FOOT = {
+  topY: 32,
+  topWidth: 18,
+  topHeight: 2,
+  bottomY: 34,
+  bottomWidth: 12,
+  bottomHeight: 1,
+};
+const DEFAULT_BODY_BOTTOM_Y = 31;
+const DEFAULT_BODY_TAPER = 11;
+const DEFAULT_LOWER_BAND_RADIUS_X = 21;
 
 let bowlTextureId = 0;
 
@@ -75,6 +86,10 @@ const VESSEL_PRESETS = {
     contentRimY: CONTENT_RIM_Y,
     contentRimOverflow: CONTENT_RIM_OVERFLOW,
     contentEllipse: CONTENT_ELLIPSE,
+    foot: DEFAULT_FOOT,
+    bodyBottomY: DEFAULT_BODY_BOTTOM_Y,
+    bodyTaper: DEFAULT_BODY_TAPER,
+    lowerBandRadiusX: DEFAULT_LOWER_BAND_RADIUS_X,
     hitbox: { width: 0.92, height: 0.76, offsetY: 6 },
     composition: { height: 0.82, offsetY: 5 },
     shadow: {
@@ -83,6 +98,108 @@ const VESSEL_PRESETS = {
       edgeScaleY: 0.48,
       coreScaleX: 0.8,
       coreScaleY: 0.4,
+      footprintDepthFactor: 0.55,
+    },
+  },
+  wideBowl: {
+    displayName: 'Wide Bowl',
+    pixelScale: PIXEL,
+    textureWidth: 76,
+    textureHeight: BOWL_TEXTURE_HEIGHT,
+    capacityGrams: 240,
+    maxContentWeightGrams: 14,
+    weightGrams: 150,
+    stackOffsetY: -8,
+    contentRimY: CONTENT_RIM_Y,
+    contentRimOverflow: CONTENT_RIM_OVERFLOW,
+    contentEllipse: { x: 38, y: 14, rx: 30, ry: 5 },
+    foot: {
+      topY: 32,
+      topWidth: 24,
+      topHeight: 2,
+      bottomY: 34,
+      bottomWidth: 16,
+      bottomHeight: 1,
+    },
+    bodyBottomY: DEFAULT_BODY_BOTTOM_Y,
+    bodyTaper: 14,
+    lowerBandRadiusX: 27,
+    hitbox: { width: 0.92, height: 0.76, offsetY: 6 },
+    composition: { height: 0.82, offsetY: 5 },
+    shadow: {
+      restOffset: 7,
+      edgeScaleX: 0.92,
+      edgeScaleY: 0.48,
+      coreScaleX: 0.82,
+      coreScaleY: 0.4,
+      footprintDepthFactor: 0.55,
+    },
+  },
+  smallWideBowl: {
+    displayName: 'Small Wide Bowl',
+    pixelScale: 0.95,
+    textureWidth: 76,
+    textureHeight: BOWL_TEXTURE_HEIGHT,
+    capacityGrams: 24,
+    maxContentWeightGrams: 4,
+    weightGrams: 28,
+    stackOffsetY: -4,
+    contentRimY: CONTENT_RIM_Y,
+    contentRimOverflow: CONTENT_RIM_OVERFLOW,
+    contentEllipse: { x: 38, y: 14, rx: 30, ry: 5 },
+    foot: {
+      topY: 32,
+      topWidth: 24,
+      topHeight: 2,
+      bottomY: 34,
+      bottomWidth: 16,
+      bottomHeight: 1,
+    },
+    bodyBottomY: DEFAULT_BODY_BOTTOM_Y,
+    bodyTaper: 14,
+    lowerBandRadiusX: 27,
+    hitbox: { width: 0.9, height: 0.72, offsetY: 5 },
+    composition: { height: 0.82, offsetY: 4 },
+    shadow: {
+      restOffset: 5,
+      edgeScaleX: 0.84,
+      edgeScaleY: 0.44,
+      coreScaleX: 0.74,
+      coreScaleY: 0.36,
+      footprintDepthFactor: 0.52,
+    },
+  },
+  thinBowl: {
+    displayName: 'Thin Bowl',
+    pixelScale: PIXEL,
+    textureWidth: 46,
+    textureHeight: BOWL_TEXTURE_HEIGHT,
+    capacityGrams: 120,
+    maxContentWeightGrams: 7,
+    weightGrams: 95,
+    stackOffsetY: -8,
+    contentRimY: CONTENT_RIM_Y,
+    contentRimOverflow: CONTENT_RIM_OVERFLOW,
+    contentEllipse: { x: 23, y: 14, rx: 17, ry: 5 },
+    foot: {
+      topY: 32,
+      topWidth: 14,
+      topHeight: 2,
+      bottomY: 34,
+      bottomWidth: 8,
+      bottomHeight: 1,
+    },
+    bodyBottomY: DEFAULT_BODY_BOTTOM_Y,
+    bodyTaper: 8,
+    lowerBandRadiusX: 15,
+    hitbox: { width: 0.92, height: 0.76, offsetY: 6 },
+    composition: { height: 0.82, offsetY: 5 },
+    shadow: {
+      restOffset: 7,
+      edgeScaleX: 0.86,
+      edgeScaleY: 0.46,
+      coreScaleX: 0.76,
+      coreScaleY: 0.38,
       footprintDepthFactor: 0.55,
     },
   },
@@ -98,6 +215,10 @@ const VESSEL_PRESETS = {
     contentRimY: CONTENT_RIM_Y,
     contentRimOverflow: CONTENT_RIM_OVERFLOW,
     contentEllipse: CONTENT_ELLIPSE,
+    foot: DEFAULT_FOOT,
+    bodyBottomY: DEFAULT_BODY_BOTTOM_Y,
+    bodyTaper: DEFAULT_BODY_TAPER,
+    lowerBandRadiusX: DEFAULT_LOWER_BAND_RADIUS_X,
     hitbox: { width: 0.9, height: 0.72, offsetY: 5 },
     composition: { height: 0.82, offsetY: 4 },
     shadow: {
@@ -121,6 +242,10 @@ const VESSEL_PRESETS = {
     contentRimY: CONTENT_RIM_Y,
     contentRimOverflow: 2,
     contentEllipse: { x: 30, y: 14, rx: 19, ry: 4 },
+    foot: DEFAULT_FOOT,
+    bodyBottomY: DEFAULT_BODY_BOTTOM_Y,
+    bodyTaper: DEFAULT_BODY_TAPER,
+    lowerBandRadiusX: DEFAULT_LOWER_BAND_RADIUS_X,
     hitbox: { width: 0.86, height: 0.68, offsetY: 4 },
     composition: { height: 0.78, offsetY: 3 },
     shadow: {
@@ -219,6 +344,7 @@ function resolveVesselPreset(options = {}) {
     hitbox: { ...preset.hitbox, ...profile.hitbox },
     composition: { ...preset.composition, ...profile.composition },
     contentEllipse: { ...preset.contentEllipse, ...profile.contentEllipse },
+    foot: { ...preset.foot, ...profile.foot },
     shadow: { ...preset.shadow, ...profile.shadow },
   };
 }
@@ -315,7 +441,9 @@ export class ContainerVessel extends IngredientObject {
   }
 
   get contentItems() {
-    return (this.stackChildren ?? []).filter((child) => child?.isIngredient);
+    return (this.stackChildren ?? []).filter(
+      (child) => child?.isIngredient && child.stackCategory !== 'brush',
+    );
   }
 
   getFullness() {
@@ -335,15 +463,25 @@ export class ContainerVessel extends IngredientObject {
       return false;
     }
 
-    return this.isSmallCutIngredient(other) && this.getLocalContentPoint(other, placement) !== null;
+    const eligible = this.isSmallCutIngredient(other) || this.isAcceptedTool(other);
+
+    return eligible && this.getLocalContentPoint(other, placement) !== null;
   }
 
   getStackPlacementRejectionReason(other, placement = {}) {
-    if (!this.isSmallCutIngredient(other)) {
+    if (!this.isSmallCutIngredient(other) && !this.isAcceptedTool(other)) {
       return `ingredient must be a cut piece up to ${this.maxContentWeightGrams}g`;
     }
 
     return this.getLocalContentPoint(other, placement) ? 'stack OK' : 'outside bowl';
+  }
+
+  isAcceptedTool(child) {
+    if (!child?.stackCategory) {
+      return false;
+    }
+
+    return (this.acceptedStackCategories ?? []).includes(child.stackCategory);
   }
 
   isSmallCutIngredient(child) {
@@ -367,6 +505,13 @@ export class ContainerVessel extends IngredientObject {
   }
 
   getStackPlacementOffset(child, drop = {}) {
+    if (child?.stackCategory === 'brush') {
+      const restY = (this.contentEllipse.y - this.textureHeight / 2) * this.pixelScale
+        - (child.vesselDisplayHeight ?? child.displayHeight ?? 0) * 0.32;
+
+      return { x: 0, y: restY };
+    }
+
     const local = this.getLocalContentPoint(child, drop);
 
     if (!local) {
@@ -426,6 +571,10 @@ export class ContainerVessel extends IngredientObject {
     this.setChildSunkInBowl(child, true);
     this.refreshBowlTexture();
     this.refreshCompositionShadow?.();
+
+    if (child?.stackCategory === 'brush' && this.sprite && this.exists(child)) {
+      this.moveBelow(child, this.sprite);
+    }
   }
 
   handleStackChildDetached(child) {
@@ -436,6 +585,10 @@ export class ContainerVessel extends IngredientObject {
 
   setChildSunkInBowl(child, active) {
     if (!child) {
+      return;
+    }
+
+    if (child.stackCategory === 'brush') {
       return;
     }
 
@@ -678,7 +831,8 @@ export class ContainerVessel extends IngredientObject {
     const centerX = ellipse.x;
     const topY = ellipse.y;
     const rimBottomY = this.getFrontRimBottomY();
-    const bottomY = 31;
+    const bottomY = this.vesselProfile.bodyBottomY ?? DEFAULT_BODY_BOTTOM_Y;
+    const taper = this.vesselProfile.bodyTaper ?? DEFAULT_BODY_TAPER;
     const lowerHeight = Math.max(1, bottomY - rimBottomY);
     const rimRadiusX = ellipse.rx + 1;
     const rimRadiusY = ellipse.ry;
@@ -686,7 +840,7 @@ export class ContainerVessel extends IngredientObject {
     for (let y = topY; y <= bottomY; y += 1) {
       const lowerProgress = clamp((y - rimBottomY) / lowerHeight, 0, 1);
       const belly = Math.sin(lowerProgress * Math.PI) * 2.5;
-      const halfWidth = Math.round(rimRadiusX - lowerProgress * 11 + belly);
+      const halfWidth = Math.round(rimRadiusX - lowerProgress * taper + belly);
       const rowColor = lowerProgress > 0.72 ? palette.bodyDark : palette.body;
 
       context.fillStyle = toHexColor(rowColor);
@@ -709,7 +863,14 @@ export class ContainerVessel extends IngredientObject {
     }
 
     context.fillStyle = toHexColor(this.mixColors(palette.body, palette.rim, 0.22));
-    this.fillLowerEllipseBand(context, centerX, rimBottomY, 21, 3, 1);
+    this.fillLowerEllipseBand(
+      context,
+      centerX,
+      rimBottomY,
+      this.vesselProfile.lowerBandRadiusX ?? DEFAULT_LOWER_BAND_RADIUS_X,
+      3,
+      1,
+    );
   }
 
   paintFrontRim(context, palette) {
@@ -727,9 +888,22 @@ export class ContainerVessel extends IngredientObject {
   }
 
   paintFoot(context, palette) {
+    const foot = this.vesselProfile.foot ?? DEFAULT_FOOT;
+    const centerX = this.contentEllipse.x;
+
     context.fillStyle = toHexColor(palette.foot);
-    context.fillRect(21, 32, 18, 2);
-    context.fillRect(24, 34, 12, 1);
+    context.fillRect(
+      centerX - Math.floor(foot.topWidth / 2),
+      foot.topY,
+      foot.topWidth,
+      foot.topHeight,
+    );
+    context.fillRect(
+      centerX - Math.floor(foot.bottomWidth / 2),
+      foot.bottomY,
+      foot.bottomWidth,
+      foot.bottomHeight,
+    );
   }
 
   fillPixelEllipse(context, centerX, centerY, radiusX, radiusY) {
@@ -842,6 +1016,24 @@ export class Bowl extends ContainerVessel {
   constructor(scene, x, y, options = {}) {
     super(scene, x, y, {
       preset: 'bowl',
+      ...options,
+    });
+  }
+}
+
+export class WideBowl extends ContainerVessel {
+  constructor(scene, x, y, options = {}) {
+    super(scene, x, y, {
+      preset: 'wideBowl',
+      ...options,
+    });
+  }
+}
+
+export class ThinBowl extends ContainerVessel {
+  constructor(scene, x, y, options = {}) {
+    super(scene, x, y, {
+      preset: 'thinBowl',
       ...options,
     });
   }

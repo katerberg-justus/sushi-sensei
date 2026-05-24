@@ -10,6 +10,8 @@ const KNIFE_TIP_LOCAL_Y = -75;
 const HANDLE_HOLD_WIDTH = 26;
 const HANDLE_HOLD_HEIGHT = 48;
 const HANDLE_HOLD_OFFSET_Y = 56;
+const MANUAL_CUT_STROKE_DISTANCE = 120;
+const MANUAL_CUT_STROKE_DURATION = 88;
 
 export class Knife extends CuttingObject {
   constructor(scene, x, y) {
@@ -23,6 +25,8 @@ export class Knife extends CuttingObject {
     this.dragLift = 6;
     this.restShadowOffset = 8;
     this.dragShadowOffset = 15;
+    this.manualCutStrokeOffset = 0;
+    this.manualCutStrokeTween = null;
 
     const shadowEdge = scene.add.image(0, 0, KNIFE_SHADOW_KEY);
     shadowEdge.setScale(PIXEL * this.shadowEdgeScaleX, PIXEL * this.shadowEdgeScaleY);
@@ -56,6 +60,15 @@ export class Knife extends CuttingObject {
     this.setCutTipOffset(KNIFE_TIP_LOCAL_X, KNIFE_TIP_LOCAL_Y);
     this.setHoldArea(HANDLE_HOLD_WIDTH, HANDLE_HOLD_HEIGHT, 0, HANDLE_HOLD_OFFSET_Y);
     this.applyRestingDepth();
+
+    this.manualCutPointerDownHandler = (pointer) => {
+      this.handleManualCutPointerDown(pointer);
+    };
+    this.manualCutSpaceHandler = (event) => {
+      this.handleManualCutSpace(event);
+    };
+    scene.input.on('pointerdown', this.manualCutPointerDownHandler);
+    scene.input.keyboard?.on('keydown-SPACE', this.manualCutSpaceHandler);
   }
 
   canCutOrientation(orientation, target) {
@@ -77,6 +90,174 @@ export class Knife extends CuttingObject {
       Math.cos(bladeLocalRotation),
       Math.sin(bladeLocalRotation),
     ));
+  }
+
+  getBladeLocalVector() {
+    const bladeLocalRotation = this.sprite?.rotation ?? KNIFE_ROTATION;
+
+    return new Phaser.Math.Vector2(
+      Math.cos(bladeLocalRotation),
+      Math.sin(bladeLocalRotation),
+    ).normalize();
+  }
+
+  handleManualCutPointerDown(pointer) {
+    if (!this.isDragging || !this.isTwoFingerTouchPointer(pointer)) {
+      return;
+    }
+
+    pointer.event?.preventDefault?.();
+    this.triggerManualCutStroke();
+  }
+
+  handleManualCutSpace(event) {
+    if (event?.repeat) {
+      return;
+    }
+
+    if (this.triggerManualCutStroke()) {
+      event?.preventDefault?.();
+    }
+  }
+
+  triggerManualCutStroke() {
+    if (!this.isDragging || this.manualCutStrokeTween || !this.scene) {
+      return false;
+    }
+
+    const stroke = this.getManualCutStroke();
+
+    if (!stroke) {
+      return false;
+    }
+
+    this.playManualCutStrokeAnimation();
+    this.emit('cutstroke', {
+      cutter: this,
+      start: stroke.start,
+      end: stroke.end,
+    });
+
+    return true;
+  }
+
+  getManualCutStroke() {
+    const direction = this.getBladeWorldVector();
+    const length = direction.length();
+
+    if (!Number.isFinite(length) || length <= 0) {
+      return null;
+    }
+
+    direction.scale(1 / length);
+
+    const center = this.getCutPoint();
+    const halfDistance = MANUAL_CUT_STROKE_DISTANCE / 2;
+
+    return {
+      start: new Phaser.Math.Vector2(
+        center.x - direction.x * halfDistance,
+        center.y - direction.y * halfDistance,
+      ),
+      end: new Phaser.Math.Vector2(
+        center.x + direction.x * halfDistance,
+        center.y + direction.y * halfDistance,
+      ),
+    };
+  }
+
+  playManualCutStrokeAnimation() {
+    this.stopManualCutStrokeAnimation();
+
+    this.manualCutStrokeOffset = -MANUAL_CUT_STROKE_DISTANCE / 2;
+    this.applyManualCutStrokeOffset();
+
+    this.manualCutStrokeTween = this.scene.tweens.add({
+      targets: this,
+      manualCutStrokeOffset: MANUAL_CUT_STROKE_DISTANCE / 2,
+      duration: MANUAL_CUT_STROKE_DURATION,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        this.applyManualCutStrokeOffset();
+      },
+      onComplete: () => {
+        this.manualCutStrokeTween = null;
+        this.manualCutStrokeOffset = 0;
+        this.applyManualCutStrokeOffset();
+      },
+      onStop: () => {
+        this.manualCutStrokeTween = null;
+      },
+    });
+  }
+
+  stopManualCutStrokeAnimation() {
+    if (!this.manualCutStrokeTween) {
+      return;
+    }
+
+    this.manualCutStrokeTween.stop();
+    this.manualCutStrokeTween = null;
+    this.manualCutStrokeOffset = 0;
+    this.applyManualCutStrokeOffset();
+  }
+
+  applyManualCutStrokeOffset() {
+    if (!this.sprite) {
+      return;
+    }
+
+    const basePosition = this.draggablePartBasePositions.get(this.sprite) || { x: 0, y: 0 };
+    const liftOffset = this.getLocalVectorForWorldOffset(
+      0,
+      -(this.currentLift ?? 0) + (this.currentImpactSink ?? 0),
+    );
+    const bladeOffset = this.getBladeLocalVector().scale(this.manualCutStrokeOffset);
+
+    this.sprite.setPosition(
+      basePosition.x + liftOffset.x + bladeOffset.x,
+      basePosition.y + liftOffset.y + bladeOffset.y,
+    );
+  }
+
+  setDragLift(lift) {
+    super.setDragLift(lift);
+    this.applyManualCutStrokeOffset();
+  }
+
+  isTouchPointer(pointer) {
+    return pointer?.event?.pointerType === 'touch'
+      || pointer?.pointerType === 'touch'
+      || pointer?.wasTouch === true;
+  }
+
+  isTwoFingerTouchPointer(pointer) {
+    if (!this.isTouchPointer(pointer)) {
+      return false;
+    }
+
+    return pointer.event?.isPrimary === false || this.getActiveTouchPointers().length >= 2;
+  }
+
+  getActiveTouchPointers() {
+    const managerPointers = this.scene?.input?.manager?.pointers;
+    const pluginPointers = this.scene?.input?.pointers;
+    const pointers = Array.isArray(managerPointers)
+      ? managerPointers
+      : pluginPointers;
+
+    if (!Array.isArray(pointers)) {
+      return [];
+    }
+
+    return pointers.filter((pointer) => pointer?.isDown && this.isTouchPointer(pointer));
+  }
+
+  destroy(fromScene) {
+    this.scene?.input?.off('pointerdown', this.manualCutPointerDownHandler);
+    this.scene?.input?.keyboard?.off('keydown-SPACE', this.manualCutSpaceHandler);
+    this.stopManualCutStrokeAnimation();
+    super.destroy(fromScene);
   }
 
   static createTexture(scene) {
@@ -119,15 +300,22 @@ export class Knife extends CuttingObject {
     context.fillRect(41, 6, 1, 8);
 
     context.fillStyle = '#a8b6bb';
-    context.fillRect(7, 7, 35, 5);
+    context.fillRect(9, 7, 33, 1);
+    context.fillRect(7, 8, 35, 2);
+    context.fillRect(5, 10, 37, 2);
     context.fillStyle = '#cbd4d7';
-    context.fillRect(8, 6, 34, 6);
+    context.fillRect(12, 6, 30, 1);
+    context.fillRect(9, 7, 33, 2);
+    context.fillRect(7, 9, 35, 3);
     context.fillStyle = '#edf3f4';
-    context.fillRect(5, 12, 35, 3);
+    context.fillRect(4, 11, 36, 1);
+    context.fillRect(2, 12, 38, 1);
+    context.fillRect(5, 13, 35, 2);
     context.fillStyle = '#8fa2a8';
-    context.fillRect(10, 4, 31, 2);
+    context.fillRect(14, 4, 27, 1);
+    context.fillRect(11, 5, 30, 1);
     context.fillStyle = '#7a8a90';
-    context.fillRect(6, 14, 33, 1);
+    context.fillRect(7, 14, 32, 1);
 
     context.fillStyle = '#ffffff';
     context.fillRect(14, 9, 5, 1);
@@ -137,8 +325,8 @@ export class Knife extends CuttingObject {
     context.fillRect(30, 13, 4, 1);
 
     context.fillStyle = '#f8fbfb';
-    context.fillRect(2, 11, 6, 2);
-    context.fillRect(3, 12, 4, 1);
+    context.fillRect(2, 12, 6, 1);
+    context.fillRect(4, 11, 5, 1);
 
     texture.refresh();
   }

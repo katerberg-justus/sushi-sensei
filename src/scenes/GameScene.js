@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { BITMAP_FONT_PIXEL, COLORS, SCENE_KEYS } from '../game/constants.js';
 import { Bowl } from '../objects/Bowl.js';
+import { Brush } from '../objects/Brush.js';
 import { CuttableFish } from '../objects/CuttableFish.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
@@ -65,13 +66,16 @@ export class GameScene extends Phaser.Scene {
         contents: { style: 'wasabi', fullness: 0.72 },
       }),
       new Bowl(this, width * 0.5, height * 0.64, {
-        preset: 'tinyCup',
+        preset: 'smallWideBowl',
         displayName: 'Nikiri Sauce',
         color: 'black',
-        acceptedStackCategories: [],
+        acceptedStackCategories: ['brush'],
+        maxStackedItems: 1,
         contents: { style: 'nikiri', fullness: 0.62 },
       }),
     ];
+    this.nikiriBowl = this.bowls[1];
+    this.nigiriObjects = [this.nigiri];
     this.plates = [
       new Plate(this, width * 0.79, height * 0.73, {
         size: 'medium',
@@ -97,6 +101,10 @@ export class GameScene extends Phaser.Scene {
     this.knife = new Knife(this, width * 0.5, height * 0.72);
     this.knife.displayName = 'Knife';
     this.knife.on('cutstroke', this.handleCutStroke, this);
+
+    this.brush = new Brush(this, this.nikiriBowl.x, this.nikiriBowl.y);
+    this.brush.on('brushstroke', this.handleBrushStroke, this);
+    this.brush.attachToStackTarget(this.nikiriBowl);
 
     this.createNameSignboard();
     this.positionNameSignboard();
@@ -275,15 +283,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     const graphics = this.add.graphics();
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillRect(8, 1, 4, 12);
-    graphics.fillRect(13, 3, 4, 11);
-    graphics.fillRect(18, 6, 4, 11);
-    graphics.fillRect(4, 7, 4, 10);
-    graphics.fillRect(1, 12, 6, 6);
-    graphics.fillRect(4, 16, 18, 5);
-    graphics.fillRect(7, 21, 12, 3);
-    graphics.fillRect(21, 11, 3, 8);
+    const drawGrabHand = (offsetX, offsetY, color, alpha) => {
+      graphics.fillStyle(color, alpha);
+      graphics.fillRect(offsetX + 8, offsetY + 1, 3, 12);
+      graphics.fillRect(offsetX + 12, offsetY + 2, 3, 12);
+      graphics.fillRect(offsetX + 16, offsetY + 5, 3, 10);
+      graphics.fillRect(offsetX + 4, offsetY + 7, 3, 10);
+      graphics.fillRect(offsetX + 2, offsetY + 12, 5, 4);
+      graphics.fillRect(offsetX + 5, offsetY + 13, 16, 7);
+      graphics.fillRect(offsetX + 7, offsetY + 20, 12, 3);
+      graphics.fillRect(offsetX + 19, offsetY + 11, 3, 7);
+    };
+
+    drawGrabHand(1, 1, 0x10251e, 0.24);
+    drawGrabHand(0, 0, 0xffffff, 1);
 
     graphics.generateTexture(key, 24, 24);
     graphics.destroy();
@@ -297,22 +310,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     const graphics = this.add.graphics();
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillRect(8, 3, 8, 3);
-    graphics.fillRect(15, 5, 4, 3);
-    graphics.fillRect(18, 8, 3, 4);
-    graphics.fillRect(19, 12, 3, 4);
-    graphics.fillRect(17, 16, 3, 3);
-    graphics.fillRect(14, 18, 4, 3);
-    graphics.fillRect(9, 18, 5, 3);
-    graphics.fillRect(5, 16, 4, 3);
-    graphics.fillRect(3, 12, 3, 5);
-    graphics.fillRect(4, 8, 3, 4);
-    graphics.fillRect(6, 5, 5, 3);
-    graphics.fillRect(2, 4, 8, 3);
-    graphics.fillRect(2, 7, 5, 3);
-    graphics.fillRect(2, 10, 8, 3);
-    graphics.fillRect(0, 7, 3, 3);
+    const drawResetArrow = (offsetX, offsetY, color, alpha) => {
+      graphics.fillStyle(color, alpha);
+      graphics.fillRect(offsetX + 10, offsetY + 3, 6, 3);
+      graphics.fillRect(offsetX + 15, offsetY + 4, 3, 3);
+      graphics.fillRect(offsetX + 17, offsetY + 6, 3, 3);
+      graphics.fillRect(offsetX + 19, offsetY + 9, 3, 6);
+      graphics.fillRect(offsetX + 17, offsetY + 15, 3, 3);
+      graphics.fillRect(offsetX + 15, offsetY + 17, 3, 3);
+      graphics.fillRect(offsetX + 8, offsetY + 18, 8, 3);
+      graphics.fillRect(offsetX + 5, offsetY + 16, 4, 3);
+      graphics.fillRect(offsetX + 3, offsetY + 13, 3, 4);
+
+      graphics.fillRect(offsetX + 3, offsetY + 3, 5, 3);
+      graphics.fillRect(offsetX + 3, offsetY + 6, 3, 3);
+      graphics.fillRect(offsetX + 3, offsetY + 9, 7, 3);
+    };
+
+    drawResetArrow(1, 1, 0x10251e, 0.24);
+    drawResetArrow(0, 0, 0xffffff, 1);
 
     graphics.generateTexture(key, 24, 24);
     graphics.destroy();
@@ -555,6 +571,22 @@ export class GameScene extends Phaser.Scene {
         board.setVisible(false);
         board.setY(restY);
       },
+    });
+  }
+
+  handleBrushStroke(stroke) {
+    if (!stroke?.end) {
+      return;
+    }
+
+    (this.nigiriObjects ?? []).forEach((nigiri) => {
+      if (!nigiri || nigiri.isGlazed) {
+        return;
+      }
+
+      if (nigiri.containsFishPoint(stroke.end) || nigiri.containsFishPoint(stroke.start)) {
+        nigiri.setGlazed(true);
+      }
     });
   }
 
