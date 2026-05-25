@@ -12,6 +12,8 @@ const TITLE_PADDING_BOTTOM = 2;
 const TITLE_TOP_OFFSET = -2;
 const TITLE_LINE_HEIGHT = 9;
 const TITLE_BOTTOM_MARGIN = 8;
+const TITLE_MAX_LINES = 3;
+const TITLE_LINE_GAP = 1;
 const STAT_LINE_HEIGHT = 9;
 const QUALITY_BOTTOM_MARGIN = 5;
 const TAG_HEIGHT = 13;
@@ -72,6 +74,16 @@ function isDarkColor(color) {
   const b = color & 0xff;
 
   return r * 0.299 + g * 0.587 + b * 0.114 < 138;
+}
+
+function hasWasabiDescendant(obj) {
+  if (!obj?.stackChildren?.length) {
+    return false;
+  }
+
+  return obj.stackChildren.some((child) => (
+    child?.stackCategory === 'wasabi' || hasWasabiDescendant(child)
+  ));
 }
 
 function toTitleCase(value) {
@@ -333,12 +345,38 @@ export class IngredientTraitOverlay {
   }
 
   refreshContent(gameObject) {
-    const ingredientName = (gameObject.displayName ?? '').toString().trim().toUpperCase();
+    const baseName = (gameObject.displayName ?? '').toString().trim();
+    const withWasabi = hasWasabiDescendant(gameObject) ? `${baseName} w/ Wasabi` : baseName;
+    const ingredientName = withWasabi.toUpperCase();
     const quality = Math.max(1, Math.min(3, Math.round(Number(gameObject.quality) || 1)));
     const freshness = gameObject.hasIngredientTraits ? toTitleCase(gameObject.freshness) : '';
 
-    this.ingredientNameLabel.text.setText(ingredientName);
-    this.ingredientNameLabel.shadow.setText(ingredientName);
+    const titleMaxWidth = PANEL_WIDTH - PANEL_PADDING_X * 2 - TITLE_PADDING_X * 2;
+    this.ingredientNameLabel.text.setMaxWidth?.(titleMaxWidth);
+    this.ingredientNameLabel.shadow.setMaxWidth?.(titleMaxWidth);
+    this.ingredientNameLabel.text.setCenterAlign?.();
+    this.ingredientNameLabel.shadow.setCenterAlign?.();
+
+    let displayName = ingredientName;
+    this.ingredientNameLabel.text.setText(displayName);
+    const measureLines = () => {
+      const h = this.ingredientNameLabel.text.height ?? 0;
+      return Math.max(1, Math.round(h / (TITLE_LINE_HEIGHT + TITLE_LINE_GAP)));
+    };
+    let lineCount = measureLines();
+    while (lineCount > TITLE_MAX_LINES && displayName.length > 4) {
+      const trimmed = displayName.slice(0, -2).replace(/[\s\.…]+$/, '');
+      displayName = `${trimmed}…`;
+      this.ingredientNameLabel.text.setText(displayName);
+      lineCount = measureLines();
+    }
+    this.titleLines = Math.min(TITLE_MAX_LINES, lineCount);
+    this.titleBlockHeight = TITLE_LINE_HEIGHT * this.titleLines
+      + TITLE_LINE_GAP * (this.titleLines - 1)
+      + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM;
+
+    this.ingredientNameLabel.text.setText(displayName);
+    this.ingredientNameLabel.shadow.setText(displayName);
     this.ingredientNameLabel.text.setTint(COLORS.titleText);
     this.ingredientNameLabel.shadow.setTint(COLORS.shadow);
     this.ingredientNameLabel.text.setVisible(Boolean(ingredientName));
@@ -361,7 +399,8 @@ export class IngredientTraitOverlay {
     const tagValues = tags;
     const maxRowWidth = PANEL_WIDTH - PANEL_PADDING_X * 2;
     const titleY = PANEL_PADDING_Y + TITLE_TOP_OFFSET;
-    const titleBlockHeight = TITLE_LINE_HEIGHT + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM;
+    const titleBlockHeight = this.titleBlockHeight
+      ?? (TITLE_LINE_HEIGHT + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM);
     const statStartY = titleY + titleBlockHeight + TITLE_BOTTOM_MARGIN;
     let x = PANEL_PADDING_X;
     let y = statStartY + STAT_LINE_HEIGHT
@@ -420,7 +459,8 @@ export class IngredientTraitOverlay {
     }
 
     const titleY = PANEL_PADDING_Y + TITLE_TOP_OFFSET;
-    const titleBlockHeight = TITLE_LINE_HEIGHT + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM;
+    const titleBlockHeight = this.titleBlockHeight
+      ?? (TITLE_LINE_HEIGHT + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM);
     const titleBackgroundColor = this.isBorderless ? this.backgroundColor : this.titleBackgroundColor;
 
     if (this.ingredientNameLabel.text.visible) {

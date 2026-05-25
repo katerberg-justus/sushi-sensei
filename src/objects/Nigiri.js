@@ -95,13 +95,15 @@ export class Nigiri extends IngredientObject {
       .find((subtype) => subtype.key === normalizedSubtype) ?? null;
   }
 
-  setGlazed(active = true) {
-    if (this.isGlazed === active) {
+  setGlazed() {
+    if (this.isGlazed) {
       return false;
     }
 
-    this.isGlazed = active;
-    this.glazeSprite?.setVisible(active);
+    this.isGlazed = true;
+    this.glazeSprite?.setVisible(true);
+    const baseName = `${this.fishSubtypeDisplayName ?? this.fishDisplayName} Nigiri`;
+    this.displayName = `Nikiri-Glazed ${baseName}`;
     return true;
   }
 

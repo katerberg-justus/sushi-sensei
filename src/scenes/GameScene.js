@@ -563,26 +563,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     const brushRect = this.brush.getWorldHitboxRect();
-
-    (this.nigiriObjects ?? []).forEach((nigiri) => {
-      if (!nigiri || nigiri.isGlazed) {
-        return;
-      }
-
-      nigiri.beginGlazeStroke(brushRect);
-    });
-  }
-
-  endBrushGlazeGesture() {
-    (this.nigiriObjects ?? []).forEach((nigiri) => nigiri?.endGlazeStroke?.());
-  }
-
-  handleBrushDragMove() {
-    if (!this.isGlazeGestureActive() || !this.brush?.isDipped) {
-      return;
-    }
-
-    const brushRect = this.brush.getWorldHitboxRect();
     let glazedAny = false;
 
     (this.nigiriObjects ?? []).forEach((nigiri) => {
@@ -595,28 +575,20 @@ export class GameScene extends Phaser.Scene {
         nigiri.getGlazeTargetWorldRect(),
       );
 
-      if (!intersects) {
-        if (nigiri.glazeStroke) {
-          nigiri.endGlazeStroke();
-        }
-        return;
-      }
-
-      if (nigiri.glazeStroke) {
-        nigiri.extendGlazeStroke(brushRect);
-      } else {
-        nigiri.beginGlazeStroke(brushRect);
-      }
-
-      if (nigiri.isGlazed) {
+      if (intersects && nigiri.setGlazed(true)) {
         glazedAny = true;
       }
     });
 
     if (glazedAny) {
       this.brush.setDipped(false);
-      this.endBrushGlazeGesture();
     }
+  }
+
+  endBrushGlazeGesture() {
+  }
+
+  handleBrushDragMove() {
   }
 
   handleBrushStroke(stroke) {

@@ -84,21 +84,29 @@ export class Brush extends IngredientObject {
   }
 
   handleDragStart(pointer) {
+    const wasOnNikiri = this.stackParent?.fixedContents?.style === 'nikiri';
+
     if (!super.handleDragStart(pointer)) {
       return false;
     }
 
-    this.setDipped(false);
+    if (wasOnNikiri) {
+      this.setDipped(true);
+    }
     this.lastBrushPoint = this.getBrushPoint();
     return true;
   }
 
   beginManualDrag(pointer) {
+    const wasOnNikiri = this.stackParent?.fixedContents?.style === 'nikiri';
+
     if (!super.beginManualDrag(pointer)) {
       return false;
     }
 
-    this.setDipped(false);
+    if (wasOnNikiri) {
+      this.setDipped(true);
+    }
     this.lastBrushPoint = this.getBrushPoint();
     return true;
   }

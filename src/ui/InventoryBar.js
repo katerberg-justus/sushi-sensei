@@ -25,9 +25,13 @@ const INVENTORY_SLOTS_PER_PAGE = INVENTORY_COLUMNS * INVENTORY_ROWS;
 const UNLOCKED_PAGE_COUNT = 1;
 const OVERLAY_MARGIN = 14;
 const OVERLAY_PADDING = 14;
-const OVERLAY_HEADER_HEIGHT = 22;
-const OVERLAY_TAB_HEIGHT = 16;
-const OVERLAY_TAB_GAP = 4;
+const OVERLAY_HEADER_HEIGHT = 0;
+const OVERLAY_TAB_HEIGHT = 26;
+const OVERLAY_TAB_GAP = 2;
+const OVERLAY_PANEL_BORDER = 3;
+const OVERLAY_TAB_PANEL_OVERLAP = OVERLAY_PANEL_BORDER;
+const OVERLAY_TAB_LABEL_Y_OFFSET = 2;
+const OVERLAY_TAB_BOTTOM_SHADOW = 1;
 const OVERLAY_PAGE_BUTTON_HEIGHT = 18;
 const OVERLAY_SECTION_LABEL_HEIGHT = 12;
 const OVERLAY_SLOT_GAP = 3;
@@ -86,6 +90,9 @@ const COLORS = {
   pageButton: 0xefd0a2,
   pageButtonActive: 0xfff2a8,
   pageButtonLocked: 0xdfbc89,
+  tabEdge: 0x8e5d3e,
+  tabShadow: 0x6f452e,
+  tabInactiveTop: 0xe6bd84,
   slotCold: 0xa36d46,
   slotColdInner: 0xf1d3a4,
   slotDry: 0xa36d46,
@@ -987,18 +994,20 @@ export class InventoryBar {
       + OVERLAY_SECTION_LABEL_HEIGHT
       + 18
       + gridHeight;
+    const tabOverhang = OVERLAY_TAB_HEIGHT - OVERLAY_TAB_PANEL_OVERLAP;
     const panelX = Math.round(visibleArea.left + (visibleArea.width - panelWidth) / 2);
-    const balancedGap = (barTop - visibleArea.top - panelHeight) / 2;
-    const panelY = Math.round(visibleArea.top + Math.max(OVERLAY_MARGIN, balancedGap));
+    const balancedGap = (barTop - visibleArea.top - panelHeight - tabOverhang) / 2;
+    const panelY = Math.round(visibleArea.top + Math.max(OVERLAY_MARGIN + tabOverhang, balancedGap + tabOverhang));
+    const tabTop = panelY - tabOverhang;
     const labelY = panelY + OVERLAY_PADDING + OVERLAY_HEADER_HEIGHT;
     const gridX = panelX + OVERLAY_PADDING;
     const gridY = labelY + OVERLAY_SECTION_LABEL_HEIGHT + 7;
     const previewX = gridX + gridWidth + OVERLAY_PREVIEW_GAP;
     const previewY = gridY - 4;
     const previewHeight = gridHeight + 8;
-    const pageButtonY = gridY + gridHeight + 8;
-    const pageButtonX = gridX - 4;
-    const pageButtonWidth = gridWidth + 8;
+    const pageButtonX = panelX + OVERLAY_PANEL_BORDER;
+    const pageButtonY = panelY + panelHeight - OVERLAY_PANEL_BORDER - OVERLAY_PAGE_BUTTON_HEIGHT;
+    const pageButtonWidth = panelWidth - OVERLAY_PANEL_BORDER * 2;
     const isPageUnlocked = this.isInventoryPageUnlocked(this.currentOverlayPage);
 
     this.overlayBounds = {
@@ -1006,6 +1015,7 @@ export class InventoryBar {
       panelY,
       panelWidth,
       panelHeight,
+      tabTop,
       gridX,
       gridY,
       gridWidth,
@@ -1023,9 +1033,9 @@ export class InventoryBar {
       recipeRowCount,
     };
 
-    this.setOverlayZoneRestPosition(this.overlayBackdropZone, panelX, panelY);
-    this.overlayBackdropZone.setSize(panelWidth, panelHeight);
-    this.overlayBackdropZone.input.hitArea.setTo(0, 0, panelWidth, panelHeight);
+    this.setOverlayZoneRestPosition(this.overlayBackdropZone, panelX, tabTop);
+    this.overlayBackdropZone.setSize(panelWidth, panelHeight + tabOverhang);
+    this.overlayBackdropZone.input.hitArea.setTo(0, 0, panelWidth, panelHeight + tabOverhang);
 
     this.overlayGraphics.clear();
     this.overlayGraphics.fillStyle(COLORS.shadow, 0.24);
@@ -1033,7 +1043,12 @@ export class InventoryBar {
     this.overlayGraphics.fillStyle(COLORS.panelOuter, 1);
     this.overlayGraphics.fillRect(panelX, panelY, panelWidth, panelHeight);
     this.overlayGraphics.fillStyle(COLORS.panelInner, 1);
-    this.overlayGraphics.fillRect(panelX + 3, panelY + 3, panelWidth - 6, panelHeight - 6);
+    this.overlayGraphics.fillRect(
+      panelX + OVERLAY_PANEL_BORDER,
+      panelY + OVERLAY_PANEL_BORDER,
+      panelWidth - OVERLAY_PANEL_BORDER * 2,
+      panelHeight - OVERLAY_PANEL_BORDER * 2,
+    );
     this.overlayGraphics.fillStyle(COLORS.slotDryInner, 1);
     this.overlayGraphics.fillRect(gridX - 4, gridY - 4, gridWidth + 8, gridHeight + 8);
     this.drawOverlayPreviewColumn(previewX, previewY, previewWidth, previewHeight);
@@ -1218,8 +1233,9 @@ export class InventoryBar {
 
   positionOverlayHeader(panelX, panelY, panelWidth, isPageUnlocked) {
     const titleX = panelX + OVERLAY_PADDING;
-    const titleY = panelY + OVERLAY_PADDING;
-    const tabWidth = 72;
+    const titleY = panelY - OVERLAY_TAB_HEIGHT + OVERLAY_TAB_PANEL_OVERLAP;
+    const tabWidth = 92;
+    const tabBottomY = panelY + OVERLAY_TAB_PANEL_OVERLAP;
 
     this.overlayTitleShadow.setText('');
     this.setOverlayRestPosition(this.overlayTitleShadow, titleX + 1, titleY + 1);
@@ -1230,23 +1246,22 @@ export class InventoryBar {
       const x = titleX + index * (tabWidth + OVERLAY_TAB_GAP);
       const isActive = (index === 0 && this.currentOverlayMode === 'inventory')
         || (index === 1 && this.currentOverlayMode === 'recipes');
+      const tabHeight = OVERLAY_TAB_HEIGHT - (isActive ? 0 : 4);
+      const tabY = tabBottomY - tabHeight;
 
-      this.overlayGraphics.fillStyle(isActive ? COLORS.pageButtonActive : COLORS.pageButton, 1);
-      this.overlayGraphics.fillRect(x, titleY, tabWidth, OVERLAY_TAB_HEIGHT);
-      this.overlayGraphics.fillStyle(COLORS.shadow, isActive ? 0.06 : 0.12);
-      this.overlayGraphics.fillRect(x, titleY + OVERLAY_TAB_HEIGHT - 2, tabWidth, 2);
+      this.drawBinderTab(x, tabY, tabWidth, tabHeight, isActive);
 
       const text = this.overlayTabTexts[index];
 
       text.setTint(COLORS.textDark);
       this.setOverlayRestAlpha(text, isActive ? 0.95 : 0.62);
-      this.setOverlayRestPosition(text, x + tabWidth / 2, titleY + OVERLAY_TAB_HEIGHT / 2);
+      this.setOverlayRestPosition(text, x + tabWidth / 2, tabY + tabHeight / 2 + OVERLAY_TAB_LABEL_Y_OFFSET);
 
       const zone = this.overlayTabZones[index];
 
       this.setOverlayZoneRestPosition(zone, x, titleY);
-      zone.setSize(tabWidth, OVERLAY_TAB_HEIGHT);
-      zone.input.hitArea.setTo(0, 0, tabWidth, OVERLAY_TAB_HEIGHT);
+      zone.setSize(tabWidth, OVERLAY_TAB_HEIGHT + OVERLAY_TAB_PANEL_OVERLAP);
+      zone.input.hitArea.setTo(0, 0, tabWidth, OVERLAY_TAB_HEIGHT + OVERLAY_TAB_PANEL_OVERLAP);
     });
 
     const closeX = panelX + panelWidth - OVERLAY_PADDING;
@@ -1261,6 +1276,78 @@ export class InventoryBar {
 
     this.overlayCloseZone.setSize(zoneSize, zoneSize);
     this.overlayCloseZone.input.hitArea.setTo(0, 0, zoneSize, zoneSize);
+  }
+
+  drawBinderTab(x, y, width, height, isActive) {
+    const outerColor = isActive ? COLORS.tabEdge : COLORS.tabShadow;
+    const fillColor = isActive ? COLORS.pageButtonActive : COLORS.pageButton;
+    const highlightColor = isActive ? COLORS.highlight : COLORS.tabInactiveTop;
+    const chamfer = 3;
+
+    this.overlayGraphics.fillStyle(COLORS.shadow, isActive ? 0.1 : 0.16);
+    this.fillChamferedTab(x + 2, y + 2, width, height, chamfer);
+
+    this.overlayGraphics.fillStyle(outerColor, 1);
+    this.fillChamferedTab(x, y, width, height, chamfer);
+
+    this.overlayGraphics.fillStyle(fillColor, 1);
+    this.fillChamferedTab(
+      x + OVERLAY_PANEL_BORDER,
+      y + OVERLAY_PANEL_BORDER,
+      width - OVERLAY_PANEL_BORDER * 2,
+      height - OVERLAY_PANEL_BORDER,
+      1,
+    );
+
+    this.overlayGraphics.fillStyle(highlightColor, isActive ? 0.32 : 0.2);
+    this.overlayGraphics.fillRect(x + 7, y + 5, width - 14, 2);
+
+    if (!isActive) {
+      this.overlayGraphics.fillStyle(COLORS.shadow, 0.11);
+      this.overlayGraphics.fillRect(
+        x + OVERLAY_PANEL_BORDER,
+        y + height - OVERLAY_TAB_BOTTOM_SHADOW,
+        width - OVERLAY_PANEL_BORDER * 2,
+        OVERLAY_TAB_BOTTOM_SHADOW,
+      );
+    }
+
+    if (isActive) {
+      this.overlayGraphics.fillStyle(COLORS.pageButtonActive, 1);
+      this.overlayGraphics.fillRect(
+        x,
+        y + height - OVERLAY_TAB_PANEL_OVERLAP,
+        width,
+        OVERLAY_TAB_PANEL_OVERLAP + 1,
+      );
+    }
+  }
+
+  fillChamferedTab(x, y, width, height, chamfer) {
+    const left = Math.round(x);
+    const top = Math.round(y);
+    const tabWidth = Math.round(width);
+    const tabHeight = Math.round(height);
+    const edge = Math.max(1, Math.min(Math.round(chamfer), Math.floor(tabWidth / 2)));
+
+    this.overlayGraphics.fillRect(left + edge, top, tabWidth - edge * 2, edge);
+    this.overlayGraphics.fillRect(left, top + edge, tabWidth, tabHeight - edge);
+    this.overlayGraphics.fillTriangle(
+      left + edge,
+      top,
+      left + edge,
+      top + edge,
+      left,
+      top + edge,
+    );
+    this.overlayGraphics.fillTriangle(
+      left + tabWidth - edge,
+      top,
+      left + tabWidth,
+      top + edge,
+      left + tabWidth - edge,
+      top + edge,
+    );
   }
 
   drawOverlayPageButtons(pageButtonX, pageButtonY, pageButtonWidth) {
@@ -2825,11 +2912,13 @@ export class InventoryBar {
       panelY,
       panelWidth,
       panelHeight,
+      tabTop,
     } = this.overlayBounds;
+    const overlayTop = tabTop ?? panelY;
 
     return x >= panelX
       && x <= panelX + panelWidth
-      && y >= panelY
+      && y >= overlayTop
       && y <= panelY + panelHeight;
   }
 
