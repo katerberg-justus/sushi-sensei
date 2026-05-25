@@ -478,7 +478,9 @@ export class NoriSheet extends IngredientObject {
     const groups = new Map();
 
     this.getRollFillingChildren().forEach((child) => {
-      const key = child.fishType ?? child.displayName ?? child.constructor?.name ?? 'filling';
+      const key = child.fishSubtype
+        ? `${child.fishType ?? 'fish'}:${child.fishSubtype}`
+        : child.fishType ?? child.displayName ?? child.constructor?.name ?? 'filling';
       const existing = groups.get(key);
 
       if (existing) {

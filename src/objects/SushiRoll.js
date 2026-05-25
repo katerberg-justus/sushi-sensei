@@ -17,11 +17,16 @@ const HORIZONTAL_CORNER_RADIUS = 4;
 const HORIZONTAL_RICE_END_THICKNESS = 1;
 
 const FILLING_STYLES = {
-  salmon: { displayName: 'Salmon', base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
-  maguro: { displayName: 'Maguro', base: CUTTABLE_FISH_STYLES.maguro.base, highlight: CUTTABLE_FISH_STYLES.maguro.highlight, fat: CUTTABLE_FISH_STYLES.maguro.fat },
-  hamachi: { displayName: 'Hamachi', base: CUTTABLE_FISH_STYLES.hamachi.base, highlight: CUTTABLE_FISH_STYLES.hamachi.highlight, fat: CUTTABLE_FISH_STYLES.hamachi.fat },
-  tai: { displayName: 'Tai', base: CUTTABLE_FISH_STYLES.tai.base, highlight: CUTTABLE_FISH_STYLES.tai.highlight, fat: CUTTABLE_FISH_STYLES.tai.fat },
-  unagi: { displayName: 'Unagi', base: CUTTABLE_FISH_STYLES.unagi.base, highlight: CUTTABLE_FISH_STYLES.unagi.highlight, fat: CUTTABLE_FISH_STYLES.unagi.fat },
+  salmon: { displayName: 'Salmon', subtypes: CUTTABLE_FISH_STYLES.salmon.subtypes, base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
+  maguro: { displayName: 'Maguro', subtypes: CUTTABLE_FISH_STYLES.maguro.subtypes, base: CUTTABLE_FISH_STYLES.maguro.base, highlight: CUTTABLE_FISH_STYLES.maguro.highlight, fat: CUTTABLE_FISH_STYLES.maguro.fat },
+  hamachi: { displayName: 'Hamachi', subtypes: CUTTABLE_FISH_STYLES.hamachi.subtypes, base: CUTTABLE_FISH_STYLES.hamachi.base, highlight: CUTTABLE_FISH_STYLES.hamachi.highlight, fat: CUTTABLE_FISH_STYLES.hamachi.fat },
+  tai: { displayName: 'Tai', subtypes: CUTTABLE_FISH_STYLES.tai.subtypes, base: CUTTABLE_FISH_STYLES.tai.base, highlight: CUTTABLE_FISH_STYLES.tai.highlight, fat: CUTTABLE_FISH_STYLES.tai.fat },
+  hirame: { displayName: 'Hirame', subtypes: CUTTABLE_FISH_STYLES.hirame.subtypes, base: CUTTABLE_FISH_STYLES.hirame.base, highlight: CUTTABLE_FISH_STYLES.hirame.highlight, fat: CUTTABLE_FISH_STYLES.hirame.fat },
+  suzuki: { displayName: 'Suzuki', subtypes: CUTTABLE_FISH_STYLES.suzuki.subtypes, base: CUTTABLE_FISH_STYLES.suzuki.base, highlight: CUTTABLE_FISH_STYLES.suzuki.highlight, fat: CUTTABLE_FISH_STYLES.suzuki.fat },
+  saba: { displayName: 'Saba', subtypes: CUTTABLE_FISH_STYLES.saba.subtypes, base: CUTTABLE_FISH_STYLES.saba.base, highlight: CUTTABLE_FISH_STYLES.saba.highlight, fat: CUTTABLE_FISH_STYLES.saba.fat },
+  aji: { displayName: 'Aji', subtypes: CUTTABLE_FISH_STYLES.aji.subtypes, base: CUTTABLE_FISH_STYLES.aji.base, highlight: CUTTABLE_FISH_STYLES.aji.highlight, fat: CUTTABLE_FISH_STYLES.aji.fat },
+  iwashi: { displayName: 'Iwashi', subtypes: CUTTABLE_FISH_STYLES.iwashi.subtypes, base: CUTTABLE_FISH_STYLES.iwashi.base, highlight: CUTTABLE_FISH_STYLES.iwashi.highlight, fat: CUTTABLE_FISH_STYLES.iwashi.fat },
+  unagi: { displayName: 'Unagi', subtypes: CUTTABLE_FISH_STYLES.unagi.subtypes, base: CUTTABLE_FISH_STYLES.unagi.base, highlight: CUTTABLE_FISH_STYLES.unagi.highlight, fat: CUTTABLE_FISH_STYLES.unagi.fat },
   tamago: { displayName: 'Tamago', base: 0xf1c35b, highlight: 0xf6d56d, fat: 0xfadf85 },
 };
 
@@ -257,6 +262,9 @@ export class SushiRoll extends IngredientObject {
   constructor(scene, x, y, options = {}) {
     const fillingType = options.fillingType ?? 'salmon';
     const fillingStyle = FILLING_STYLES[fillingType] ?? FILLING_STYLES.salmon;
+    const fillingSubtypeStyle = SushiRoll.getFillingSubtypeStyle(fillingStyle, options.fillingSubtype);
+    const fillingSubtype = fillingSubtypeStyle?.key ?? null;
+    const fillingDisplayName = fillingSubtypeStyle?.displayName ?? fillingStyle.displayName;
     const cropX = options.cropX ?? 0;
     const cropY = options.cropY ?? 0;
     const cropWidth = options.cropWidth ?? ROLL_LENGTH;
@@ -269,9 +277,10 @@ export class SushiRoll extends IngredientObject {
     super(scene, x, y, displayWidth, displayHeight, options);
     this.setCenteredHitbox(displayWidth, displayHeight);
     this.ownWeightGrams = options.weightGrams ?? ROLL_WEIGHT_GRAMS;
-    this.displayName = `${fillingStyle.displayName} Maki`;
+    this.displayName = `${fillingDisplayName} Maki`;
     this.rollStyle = 'maki';
     this.fillingType = fillingType;
+    this.fillingSubtype = fillingSubtype;
     this.restDepth = 24;
     this.softness = 0.9;
     this.stackCategory = 'roll';
@@ -313,6 +322,17 @@ export class SushiRoll extends IngredientObject {
     this.applyRestingDepth();
 
     this.on('pointerdown', this.handleFlipPointerDown, this);
+  }
+
+  static getFillingSubtypeStyle(fillingStyle, fillingSubtype = null) {
+    if (typeof fillingSubtype !== 'string') {
+      return null;
+    }
+
+    const normalizedSubtype = fillingSubtype.trim().toLowerCase();
+
+    return (fillingStyle.subtypes ?? [])
+      .find((subtype) => subtype.key === normalizedSubtype) ?? null;
   }
 
   handleFlipPointerDown(pointer) {
@@ -468,6 +488,7 @@ export class SushiRoll extends IngredientObject {
     const object = new SushiRoll(this.scene, position.x, position.y, {
       ...this.getIngredientTraitOptions?.(),
       fillingType: this.fillingType,
+      fillingSubtype: this.fillingSubtype,
       cropWidth: pieceWidth,
       cropHeight: pieceHeight,
       weightGrams: visualPiece.weightGrams,
@@ -639,6 +660,7 @@ export class SushiRoll extends IngredientObject {
   getCuttableReplacementOptions() {
     return {
       fillingType: this.fillingType,
+      fillingSubtype: this.fillingSubtype,
     };
   }
 

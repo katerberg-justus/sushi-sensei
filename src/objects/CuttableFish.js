@@ -12,6 +12,11 @@ const DEFAULT_WEIGHT_GRAMS = 56;
 export const CUTTABLE_FISH_STYLES = {
   salmon: {
     displayName: 'Salmon',
+    subtypes: [
+      { key: 'taiseiyou-salmon', displayName: 'Taiseiyou Salmon' },
+      { key: 'king-salmon', displayName: 'King Salmon' },
+      { key: 'benizake', displayName: 'Benizake' },
+    ],
     baseKey: 'cuttable-salmon-pixel',
     base: COLORS.salmon,
     shadow: COLORS.salmonStroke,
@@ -21,6 +26,13 @@ export const CUTTABLE_FISH_STYLES = {
   },
   maguro: {
     displayName: 'Maguro',
+    subtypes: [
+      { key: 'akami', displayName: 'Akami' },
+      { key: 'chutoro', displayName: 'Chutoro' },
+      { key: 'otoro', displayName: 'Otoro' },
+      { key: 'kihada', displayName: 'Kihada' },
+      { key: 'mebachi', displayName: 'Mebachi' },
+    ],
     baseKey: 'cuttable-maguro-pixel',
     base: 0xb93446,
     shadow: 0x7f2231,
@@ -30,6 +42,11 @@ export const CUTTABLE_FISH_STYLES = {
   },
   hamachi: {
     displayName: 'Hamachi',
+    subtypes: [
+      { key: 'hamachi', displayName: 'Hamachi' },
+      { key: 'buri', displayName: 'Buri' },
+      { key: 'kanpachi', displayName: 'Kanpachi' },
+    ],
     baseKey: 'cuttable-hamachi-pixel',
     base: 0xf1c49d,
     shadow: 0xd69b72,
@@ -39,6 +56,11 @@ export const CUTTABLE_FISH_STYLES = {
   },
   tai: {
     displayName: 'Tai',
+    subtypes: [
+      { key: 'madai', displayName: 'Madai' },
+      { key: 'kurodai', displayName: 'Kurodai' },
+      { key: 'kinmedai', displayName: 'Kinmedai' },
+    ],
     baseKey: 'cuttable-tai-pixel',
     base: 0xf4ddd7,
     shadow: 0xd7ada7,
@@ -47,8 +69,82 @@ export const CUTTABLE_FISH_STYLES = {
     glint: 0xfff8f4,
     edgeAccent: 0xe7898b,
   },
+  hirame: {
+    displayName: 'Hirame',
+    subtypes: [
+      { key: 'hirame', displayName: 'Hirame' },
+      { key: 'ohyo', displayName: 'Ohyo' },
+      { key: 'engawa', displayName: 'Engawa' },
+    ],
+    baseKey: 'cuttable-hirame-pixel',
+    base: 0xf7eee9,
+    shadow: 0xd9c9c1,
+    highlight: 0xfffaf4,
+    fat: 0xffffff,
+    glint: 0xfffdf8,
+    edgeAccent: 0xd6a7a0,
+  },
+  suzuki: {
+    displayName: 'Suzuki',
+    subtypes: [
+      { key: 'suzuki', displayName: 'Suzuki' },
+    ],
+    baseKey: 'cuttable-suzuki-pixel',
+    base: 0xf0f1e6,
+    shadow: 0xc6cdc0,
+    highlight: 0xfbfff4,
+    fat: 0xffffff,
+    glint: 0xfffffb,
+    edgeAccent: 0xb8c6c0,
+  },
+  saba: {
+    displayName: 'Saba',
+    subtypes: [
+      { key: 'masaba', displayName: 'Masaba' },
+      { key: 'gomasaba', displayName: 'Gomasaba' },
+    ],
+    baseKey: 'cuttable-saba-pixel',
+    base: 0xd7d9dc,
+    shadow: 0x8d9aa5,
+    highlight: 0xf0f4f7,
+    fat: 0xf8f1df,
+    glint: 0xffffff,
+    edgeAccent: 0x5f6f7e,
+  },
+  aji: {
+    displayName: 'Aji',
+    subtypes: [
+      { key: 'ma-aji', displayName: 'Ma-aji' },
+      { key: 'shima-aji', displayName: 'Shima-aji' },
+    ],
+    baseKey: 'cuttable-aji-pixel',
+    base: 0xe0d6c4,
+    shadow: 0xa99b88,
+    highlight: 0xf5ecd8,
+    fat: 0xfff6df,
+    glint: 0xfffbef,
+    edgeAccent: 0xb7c0b0,
+  },
+  iwashi: {
+    displayName: 'Iwashi',
+    subtypes: [
+      { key: 'maiwashi', displayName: 'Maiwashi' },
+      { key: 'katakuchi-iwashi', displayName: 'Katakuchi-iwashi' },
+    ],
+    baseKey: 'cuttable-iwashi-pixel',
+    base: 0xcbd2d7,
+    shadow: 0x7d8994,
+    highlight: 0xe8eef2,
+    fat: 0xf5ecd7,
+    glint: 0xffffff,
+    edgeAccent: 0x53677a,
+  },
   unagi: {
     displayName: 'Unagi',
+    subtypes: [
+      { key: 'unagi', displayName: 'Unagi' },
+      { key: 'anago', displayName: 'Anago' },
+    ],
     baseKey: 'cuttable-unagi-pixel',
     base: 0x875036,
     shadow: 0x66412e,
@@ -67,6 +163,8 @@ export class CuttableFish extends IngredientObject {
   constructor(scene, x, y, options = {}) {
     const fishType = CuttableFish.resolveFishType(options.fishType);
     const fishStyle = CUTTABLE_FISH_STYLES[fishType];
+    const fishSubtype = CuttableFish.resolveFishSubtype(fishType, options.fishSubtype);
+    const fishSubtypeStyle = CuttableFish.getFishSubtypeStyle(fishType, fishSubtype);
     const textureWidth = fishStyle.width ?? DEFAULT_WIDTH;
     const textureHeight = fishStyle.height ?? DEFAULT_HEIGHT;
     const { textureKey, variantIndex } = resolveVariantTexture(scene, fishStyle.baseKey, options, {
@@ -93,8 +191,10 @@ export class CuttableFish extends IngredientObject {
 
     this.stackCategory = 'fish';
     this.fishType = fishType;
+    this.fishSubtype = fishSubtype;
     this.fishDisplayName = fishStyle.displayName;
-    this.displayName = fishStyle.displayName;
+    this.fishSubtypeDisplayName = fishSubtypeStyle?.displayName ?? null;
+    this.displayName = this.fishSubtypeDisplayName ?? fishStyle.displayName;
     this.acceptedStackCategories = ['wasabi'];
     this.maxStackedItems = 1;
     this.stackOffsetX = 0;
@@ -116,6 +216,27 @@ export class CuttableFish extends IngredientObject {
 
   static resolveFishType(fishType = 'salmon') {
     return CUTTABLE_FISH_STYLES[fishType] ? fishType : 'salmon';
+  }
+
+  static resolveFishSubtype(fishType, fishSubtype = null) {
+    if (typeof fishSubtype !== 'string') {
+      return null;
+    }
+
+    const normalizedSubtype = fishSubtype.trim().toLowerCase();
+
+    return CuttableFish.getFishSubtypeStyle(fishType, normalizedSubtype)
+      ? normalizedSubtype
+      : null;
+  }
+
+  static getFishSubtypeStyle(fishType, fishSubtype) {
+    if (!fishSubtype) {
+      return null;
+    }
+
+    return (CUTTABLE_FISH_STYLES[fishType]?.subtypes ?? [])
+      .find((subtype) => subtype.key === fishSubtype) ?? null;
   }
 
   static getPieceWeightGrams(cropWidth, cropHeight, fishStyle = CUTTABLE_FISH_STYLES.salmon) {

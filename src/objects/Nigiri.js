@@ -30,6 +30,9 @@ export class Nigiri extends IngredientObject {
   constructor(scene, x, y, options = {}) {
     const fishType = options.fishType ?? 'salmon';
     const fishStyle = FISH_STYLES[fishType] ?? FISH_STYLES.salmon;
+    const fishSubtypeStyle = Nigiri.getFishSubtypeStyle(fishStyle, options.fishSubtype);
+    const fishSubtype = fishSubtypeStyle?.key ?? null;
+    const fishDisplayName = fishSubtypeStyle?.displayName ?? fishStyle.displayName;
     const { textureKey, variantIndex } = resolveVariantTexture(scene, `${NIGIRI_BASE_KEY}-${fishType}-pixel`, options, {
       width: NIGIRI_WIDTH,
       height: NIGIRI_HEIGHT,
@@ -43,8 +46,11 @@ export class Nigiri extends IngredientObject {
     super(scene, x, y, displayWidth, displayHeight, options);
     this.setCenteredHitbox(54, 44, 0, 3);
     this.ownWeightGrams = options.weightGrams ?? NIGIRI_WEIGHT_GRAMS;
-    this.displayName = `${fishStyle.displayName} Nigiri`;
+    this.displayName = `${fishDisplayName} Nigiri`;
     this.fishType = fishType;
+    this.fishSubtype = fishSubtype;
+    this.fishDisplayName = fishStyle.displayName;
+    this.fishSubtypeDisplayName = fishSubtypeStyle?.displayName ?? null;
     this.stackCategory = 'sushi';
     this.variantIndex = variantIndex;
     this.isRotatable = false;
@@ -76,6 +82,17 @@ export class Nigiri extends IngredientObject {
 
     this.refreshCompositionShadow();
     this.applyRestingDepth();
+  }
+
+  static getFishSubtypeStyle(fishStyle, fishSubtype = null) {
+    if (typeof fishSubtype !== 'string') {
+      return null;
+    }
+
+    const normalizedSubtype = fishSubtype.trim().toLowerCase();
+
+    return (fishStyle.subtypes ?? [])
+      .find((subtype) => subtype.key === normalizedSubtype) ?? null;
   }
 
   setGlazed(active = true) {
@@ -267,6 +284,10 @@ export class Nigiri extends IngredientObject {
   }
 
   static paintTexture(context, rng, fishStyle) {
+    const baseColor = fishStyle.base ?? COLORS.salmon;
+    const highlightColor = fishStyle.highlight ?? baseColor;
+    const fatColor = fishStyle.fat ?? highlightColor;
+    const glintColor = fishStyle.glint ?? fatColor;
     const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
     const chance = (probability) => rng() < probability;
 
@@ -298,7 +319,7 @@ export class Nigiri extends IngredientObject {
       }
     });
 
-    context.fillStyle = toHexColor(fishStyle.base);
+    context.fillStyle = toHexColor(baseColor);
     context.fillRect(7, 17, 18, 2);
     context.fillRect(5, 13, 22, 5);
     context.fillRect(4, 9, 24, 5);
@@ -314,7 +335,7 @@ export class Nigiri extends IngredientObject {
       context.fillRect(6, 17, 20, 1);
     }
 
-    context.fillStyle = toHexColor(fishStyle.highlight);
+    context.fillStyle = toHexColor(highlightColor);
     [
       { x: 9, y: 6, w: 6 },
       { x: 18, y: 6, w: 6 },
@@ -348,7 +369,7 @@ export class Nigiri extends IngredientObject {
       });
     }
 
-    context.fillStyle = toHexColor(fishStyle.fat);
+    context.fillStyle = toHexColor(fatColor);
     [
       { x: 8, y: 7, segments: [3, 3, 3] },
       { x: 17, y: 7, segments: [3, 4, 3] },
@@ -365,7 +386,7 @@ export class Nigiri extends IngredientObject {
       });
     });
 
-    context.fillStyle = toHexColor(fishStyle.glint);
+    context.fillStyle = toHexColor(glintColor);
     for (let i = 0; i < 4; i += 1) {
       if (chance(0.62)) {
         context.fillRect(8 + Math.floor(rng() * 17), 7 + Math.floor(rng() * 9), 1, 1);

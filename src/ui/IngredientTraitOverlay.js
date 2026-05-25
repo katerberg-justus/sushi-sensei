@@ -6,6 +6,12 @@ const PANEL_PADDING_X = 11;
 const PANEL_PADDING_Y = 10;
 const PANEL_GAP = 16;
 const TEXT_SIZE = 8;
+const TITLE_PADDING_X = 6;
+const TITLE_PADDING_TOP = 4;
+const TITLE_PADDING_BOTTOM = 2;
+const TITLE_TOP_OFFSET = -2;
+const TITLE_LINE_HEIGHT = 9;
+const TITLE_BOTTOM_MARGIN = 8;
 const STAT_LINE_HEIGHT = 9;
 const QUALITY_BOTTOM_MARGIN = 5;
 const TAG_HEIGHT = 13;
@@ -29,10 +35,12 @@ const COLORS = {
   shadow: 0x10251e,
   outer: 0xa36d46,
   inner: 0xf1d3a4,
+  titleBackground: 0xe9c28b,
   highlight: 0xfff2a8,
   text: 0x5a3427,
   tagTextDark: 0x4b352b,
   tagTextLight: 0xffffff,
+  titleText: 0xffffff,
 };
 
 const FLAVOR_TAG_COLORS = {
@@ -86,6 +94,7 @@ export class IngredientTraitOverlay {
     this.depth = options.depth ?? UI_DEPTHS.overlay + 3;
     this.isBorderless = options.borderless ?? false;
     this.backgroundColor = options.backgroundColor ?? COLORS.inner;
+    this.titleBackgroundColor = options.titleBackgroundColor ?? COLORS.titleBackground;
 
     this.createStarTexture();
 
@@ -98,6 +107,7 @@ export class IngredientTraitOverlay {
     this.graphics = scene.add.graphics();
     this.container.add(this.graphics);
 
+    this.ingredientNameLabel = this.createTextPair('');
     this.qualityLabel = this.createTextPair('Quality');
     this.freshnessLabel = this.createTextPair('Freshness');
     this.freshnessValue = this.createTextPair('');
@@ -247,6 +257,8 @@ export class IngredientTraitOverlay {
     this.gameObject = null;
     this.tagLayouts = [];
 
+    this.ingredientNameLabel.text.setVisible(false);
+    this.ingredientNameLabel.shadow.setVisible(false);
     this.qualityLabel.text.setVisible(false);
     this.qualityLabel.shadow.setVisible(false);
     this.freshnessLabel.text.setVisible(false);
@@ -321,9 +333,16 @@ export class IngredientTraitOverlay {
   }
 
   refreshContent(gameObject) {
+    const ingredientName = (gameObject.displayName ?? '').toString().trim().toUpperCase();
     const quality = Math.max(1, Math.min(3, Math.round(Number(gameObject.quality) || 1)));
     const freshness = gameObject.hasIngredientTraits ? toTitleCase(gameObject.freshness) : '';
 
+    this.ingredientNameLabel.text.setText(ingredientName);
+    this.ingredientNameLabel.shadow.setText(ingredientName);
+    this.ingredientNameLabel.text.setTint(COLORS.titleText);
+    this.ingredientNameLabel.shadow.setTint(COLORS.shadow);
+    this.ingredientNameLabel.text.setVisible(Boolean(ingredientName));
+    this.ingredientNameLabel.shadow.setVisible(Boolean(ingredientName));
     this.qualityLabel.text.setVisible(true);
     this.qualityLabel.shadow.setVisible(true);
 
@@ -341,8 +360,11 @@ export class IngredientTraitOverlay {
   layoutTags(tags = []) {
     const tagValues = tags;
     const maxRowWidth = PANEL_WIDTH - PANEL_PADDING_X * 2;
+    const titleY = PANEL_PADDING_Y + TITLE_TOP_OFFSET;
+    const titleBlockHeight = TITLE_LINE_HEIGHT + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM;
+    const statStartY = titleY + titleBlockHeight + TITLE_BOTTOM_MARGIN;
     let x = PANEL_PADDING_X;
-    let y = PANEL_PADDING_Y + STAT_LINE_HEIGHT
+    let y = statStartY + STAT_LINE_HEIGHT
       + (this.showFreshness ? STAT_LINE_HEIGHT + QUALITY_BOTTOM_MARGIN : 0)
       + 8;
 
@@ -397,12 +419,41 @@ export class IngredientTraitOverlay {
       this.graphics.fillRect(2, 2, this.width - 4, this.height - 4);
     }
 
-    this.positionTextPair(this.qualityLabel, PANEL_PADDING_X, PANEL_PADDING_Y);
+    const titleY = PANEL_PADDING_Y + TITLE_TOP_OFFSET;
+    const titleBlockHeight = TITLE_LINE_HEIGHT + TITLE_PADDING_TOP + TITLE_PADDING_BOTTOM;
+    const titleBackgroundColor = this.isBorderless ? this.backgroundColor : this.titleBackgroundColor;
+
+    if (this.ingredientNameLabel.text.visible) {
+      const titleMaxWidth = this.width - PANEL_PADDING_X * 2 - TITLE_PADDING_X * 2;
+      this.ingredientNameLabel.text.setMaxWidth?.(titleMaxWidth);
+      this.ingredientNameLabel.shadow.setMaxWidth?.(titleMaxWidth);
+
+      const titleWidth = Math.min(this.ingredientNameLabel.text.width ?? 0, titleMaxWidth);
+      const titleX = Math.round((this.width - titleWidth) / 2);
+      const titleBackgroundX = titleX - TITLE_PADDING_X;
+      const titleBackgroundY = titleY;
+      const titleBackgroundWidth = titleWidth + TITLE_PADDING_X * 2;
+      const titleBackgroundHeight = titleBlockHeight;
+
+      this.graphics.fillStyle(titleBackgroundColor, 1);
+      this.graphics.fillRect(
+        titleBackgroundX,
+        titleBackgroundY,
+        titleBackgroundWidth,
+        titleBackgroundHeight,
+      );
+
+      this.positionTextPair(this.ingredientNameLabel, titleX, titleY + TITLE_PADDING_TOP);
+    }
+
+    const statStartY = titleY + titleBlockHeight + TITLE_BOTTOM_MARGIN;
+
+    this.positionTextPair(this.qualityLabel, PANEL_PADDING_X, statStartY);
     if (this.showFreshness) {
       this.positionTextPair(
         this.freshnessLabel,
         PANEL_PADDING_X,
-        PANEL_PADDING_Y + STAT_LINE_HEIGHT + QUALITY_BOTTOM_MARGIN,
+        statStartY + STAT_LINE_HEIGHT + QUALITY_BOTTOM_MARGIN,
       );
       const freshnessValueX = this.width - PANEL_PADDING_X - this.freshnessValue.text.width;
       const freshnessLabelMaxWidth = Math.max(
@@ -415,7 +466,7 @@ export class IngredientTraitOverlay {
       this.positionTextPair(
         this.freshnessValue,
         freshnessValueX,
-        PANEL_PADDING_Y + STAT_LINE_HEIGHT + QUALITY_BOTTOM_MARGIN,
+        statStartY + STAT_LINE_HEIGHT + QUALITY_BOTTOM_MARGIN,
       );
     }
 
@@ -424,7 +475,7 @@ export class IngredientTraitOverlay {
     const starX = this.width - PANEL_PADDING_X - starRowWidth;
 
     visibleStars.forEach((star, index) => {
-      star.setPosition(starX + index * (STAR_SIZE + STAR_GAP), PANEL_PADDING_Y);
+      star.setPosition(starX + index * (STAR_SIZE + STAR_GAP), statStartY);
     });
 
     this.drawTags();

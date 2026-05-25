@@ -195,6 +195,7 @@ export class RiceBall extends IngredientObject {
     const fishType = topping.fishType ?? 'salmon';
     const nigiri = new Nigiri(this.scene, this.x, this.y, {
       fishType,
+      fishSubtype: topping.fishSubtype ?? null,
       weightGrams: this.weightGrams,
       variant: topping.variantIndex ?? this.variantIndex,
     });

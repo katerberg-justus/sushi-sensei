@@ -868,7 +868,7 @@ export class RollingMat extends IngredientObject {
         ? { scaleX: nori.scaleX || 1, scaleY: nori.scaleY || 1, y: nori.y || 0 }
         : null
     );
-    const fillingType = this.resolveRollFillingType(nori);
+    const { fillingType, fillingSubtype } = this.resolveRollFilling(nori);
     const rollWorldX = this.x;
     const rollWorldY = this.y;
     const rollRotation = this.rotation ?? 0;
@@ -890,7 +890,10 @@ export class RollingMat extends IngredientObject {
 
       this.consumeRolledNori(nori);
 
-      const sushiRoll = new SushiRoll(this.scene, rollWorldX, rollWorldY, { fillingType });
+      const sushiRoll = new SushiRoll(this.scene, rollWorldX, rollWorldY, {
+        fillingType,
+        fillingSubtype,
+      });
 
       sushiRoll.setObjectRotation(rollRotation);
       this.attachRollResult(sushiRoll);
@@ -980,11 +983,18 @@ export class RollingMat extends IngredientObject {
   }
 
   resolveRollFillingType(nori = this.getNoriSheet()) {
+    return this.resolveRollFilling(nori).fillingType;
+  }
+
+  resolveRollFilling(nori = this.getNoriSheet()) {
     const fishChild = nori?.stackChildren?.find((child) => (
       child?.stackCategory === 'fish' && typeof child.fishType === 'string'
     ));
 
-    return fishChild?.fishType ?? 'salmon';
+    return {
+      fillingType: fishChild?.fishType ?? 'salmon',
+      fillingSubtype: fishChild?.fishSubtype ?? null,
+    };
   }
 
   destroy(fromScene) {

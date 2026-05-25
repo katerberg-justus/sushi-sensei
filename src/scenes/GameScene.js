@@ -29,87 +29,76 @@ export class GameScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
     this.input.setPollAlways();
+    this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.input.keyboard?.addCapture?.('SPACE');
     this.cameras.main.setBackgroundColor(COLORS.boardSideB);
     this.createPixelBoardTexture();
 
     this.boardBackground = this.add.image(0, 0, 'pixel-cutting-board').setOrigin(0);
     this.resizeBoardBackground();
 
-    this.riceBalls = Array.from({ length: 10 }, (_value, index) => {
-      const columns = 2;
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      const inwardLean = row * -8;
-      const riceBall = new RiceBall(
-        this,
-        width * 0.12 + column * 54 + inwardLean,
-        height * 0.26 + row * 45,
-        {
-          quality: 2,
-          freshness: 'fresh',
-          flavorTags: ['Clean', 'Sweet'],
-        },
-      );
-
-      riceBall.displayName = 'Rice Ball';
-      return riceBall;
+    this.riceBall = new RiceBall(this, 0, 0, {
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Clean', 'Sweet'],
     });
-    [this.riceBall] = this.riceBalls;
-    this.cuttableSalmon = new CuttableSalmon(this, width * 0.32, height * 0.42, {
+    this.riceBall.displayName = 'Rice Ball';
+    this.riceBalls = [this.riceBall];
+    this.cuttableSalmon = new CuttableSalmon(this, 0, 0, {
       quality: 3,
       freshness: 'pristine',
       flavorTags: ['Umami', 'Fatty', 'Buttery'],
     });
-    this.cuttableMaguro = new CuttableFish(this, width * 0.45, height * 0.42, {
+    this.cuttableMaguro = new CuttableFish(this, 0, 0, {
       fishType: 'maguro',
       quality: 3,
       freshness: 'fresh',
       flavorTags: ['Umami', 'Clean', 'Oceanic'],
     });
-    this.cuttableHamachi = new CuttableFish(this, width * 0.58, height * 0.42, {
+    this.cuttableHamachi = new CuttableFish(this, 0, 0, {
       fishType: 'hamachi',
       quality: 2,
       freshness: 'fresh',
       flavorTags: ['Buttery', 'Fatty', 'Delicate'],
     });
-    this.cuttableTai = new CuttableFish(this, width * 0.71, height * 0.42, {
+    this.cuttableTai = new CuttableFish(this, 0, 0, {
       fishType: 'tai',
       quality: 2,
       freshness: 'fresh',
       flavorTags: ['Clean', 'Delicate', 'Oceanic'],
     });
-    this.cuttableUnagi = new CuttableFish(this, width * 0.84, height * 0.42, {
+    this.cuttableUnagi = new CuttableFish(this, 0, 0, {
       fishType: 'unagi',
       quality: 2,
       freshness: 'good',
       flavorTags: ['Smoky', 'Sweet', 'Caramelized'],
     });
-    this.cuttableTamago = new CuttableTamago(this, width * 0.45, height * 0.58, {
+    this.cuttableTamago = new CuttableTamago(this, 0, 0, {
       quality: 2,
       freshness: 'good',
       flavorTags: ['Sweet', 'Umami', 'Delicate'],
     });
     this.cuttableTamago.displayName = 'Tamago';
-    this.rollingMat = new RollingMat(this, width * 0.61, height * 0.7, { quality: 2 });
-    this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58, {
+    this.rollingMat = new RollingMat(this, width * 0.22, height * 0.62, { quality: 2 });
+    this.noriSheet = new NoriSheet(this, 0, 0, {
       quality: 2,
       freshness: 'good',
       flavorTags: ['Briny', 'Oceanic', 'Toasty'],
     });
-    this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, {
+    this.nigiri = new Nigiri(this, 0, 0, {
       fishType: 'salmon',
       quality: 3,
       freshness: 'pristine',
       flavorTags: ['Umami', 'Fatty', 'Clean'],
     });
-    this.sushiRoll = new SushiRoll(this, width * 0.68, height * 0.48, {
+    this.sushiRoll = new SushiRoll(this, 0, 0, {
       fillingType: 'salmon',
       quality: 2,
       freshness: 'fresh',
       flavorTags: ['Umami', 'Oceanic', 'Clean'],
     });
     this.bowls = [
-      new Bowl(this, width * 0.43, height * 0.65, {
+      new Bowl(this, width * 0.1, height * 0.22, {
         preset: 'smallBowl',
         displayName: 'Wasabi Bowl',
         color: 'black',
@@ -117,7 +106,7 @@ export class GameScene extends Phaser.Scene {
         contents: { style: 'wasabi', fullness: 0.72 },
         quality: 2,
       }),
-      new Bowl(this, width * 0.5, height * 0.64, {
+      new Bowl(this, width * 0.22, height * 0.22, {
         preset: 'smallWideBowl',
         displayName: 'Nikiri Sauce',
         color: 'black',
@@ -130,12 +119,12 @@ export class GameScene extends Phaser.Scene {
     this.nikiriBowl = this.bowls[1];
     this.nigiriObjects = [this.nigiri];
     this.plates = [
-      new Plate(this, width * 0.79, height * 0.73, {
+      new Plate(this, width * 0.58, height * 0.72, {
         size: 'medium',
         material: 'ceramic',
         quality: 2,
       }),
-      new Plate(this, width * 0.91, height * 0.73, {
+      new Plate(this, width * 0.78, height * 0.72, {
         size: 'small',
         material: 'slate',
         displayName: 'Sashimi Plate',
@@ -153,7 +142,7 @@ export class GameScene extends Phaser.Scene {
       this.noriSheet,
       this.sushiRoll,
     ];
-    this.knife = new Knife(this, width * 0.5, height * 0.72, { quality: 2 });
+    this.knife = new Knife(this, width * 0.85, height * 0.4, { quality: 2 });
     this.knife.displayName = 'Knife';
     this.knife.on('cutstroke', this.handleCutStroke, this);
 
@@ -165,6 +154,7 @@ export class GameScene extends Phaser.Scene {
     this.glazeKeyDown = false;
     this.glazeTouchDown = false;
     this.pendingIngredientTraitClick = null;
+    this.pendingIngredientTraitShowTimer = null;
     this.input.keyboard.on('keydown-SPACE', this.handleGlazeKeyDown, this);
     this.input.keyboard.on('keyup-SPACE', this.handleGlazeKeyUp, this);
     this.input.on('pointerdown', this.handleGlazeTouchPointerDown, this);
@@ -173,8 +163,16 @@ export class GameScene extends Phaser.Scene {
 
     this.ui = new GameUi(this);
     this.positionUi();
-    this.ui.inventoryBar.storeObjectInSlot(0, this.cuttableSalmon);
-    this.ui.inventoryBar.storeObjectInLargeSlot(0, 0, this.cuttableMaguro);
+    this.ui.inventoryBar.storeObjectInSlot(0, this.riceBall);
+    this.ui.inventoryBar.storeObjectInSlot(1, this.cuttableSalmon);
+    this.ui.inventoryBar.storeObjectInSlot(2, this.cuttableMaguro);
+    this.ui.inventoryBar.storeObjectInSlot(3, this.cuttableHamachi);
+    this.ui.inventoryBar.storeObjectInSlot(4, this.cuttableTai);
+    this.ui.inventoryBar.storeObjectInSlot(5, this.cuttableUnagi);
+    this.ui.inventoryBar.storeObjectInSlot(6, this.cuttableTamago);
+    this.ui.inventoryBar.storeObjectInSlot(7, this.noriSheet);
+    this.ui.inventoryBar.storeObjectInSlot(8, this.nigiri);
+    this.ui.inventoryBar.storeObjectInSlot(9, this.sushiRoll);
     this.scale.on('resize', this.positionUi, this);
     this.scale.on('resize', this.resizeBoardBackground, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);
@@ -262,7 +260,7 @@ export class GameScene extends Phaser.Scene {
 
   handleObjectDown(_pointer, gameObject) {
     if (!gameObject?.hasQuality || !this.ui) {
-      this.pendingIngredientTraitClick = null;
+      this.clearPendingIngredientTraitClick();
       return;
     }
 
@@ -272,6 +270,7 @@ export class GameScene extends Phaser.Scene {
       x: _pointer.x,
       y: _pointer.y,
       startedAt: this.time.now,
+      wasTraitVisibleForObject: this.ui.isIngredientTraitObject(gameObject),
     };
   }
 
@@ -282,8 +281,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.pendingIngredientTraitClick = null;
-
     if (
       !gameObject?.hasQuality
       || pendingClick.pointerId !== this.getPointerClickId(pointer)
@@ -291,15 +288,32 @@ export class GameScene extends Phaser.Scene {
       || this.getPointerDistanceFrom(pendingClick, pointer) > INGREDIENT_TRAIT_CLICK_MOVE_TOLERANCE
       || gameObject.isDragging
     ) {
+      this.clearPendingIngredientTraitClick();
       return;
     }
 
-    if (this.ui?.isIngredientTraitObject(gameObject)) {
+    if (gameObject.didConsumeRotationClick?.(pointer)) {
+      this.clearPendingIngredientTraitClick();
+      if (this.ui?.isIngredientTraitObject(gameObject)) {
+        this.ui.hideIngredientTraits();
+      }
+      return;
+    }
+
+    this.pendingIngredientTraitClick = null;
+
+    if (pendingClick.wasTraitVisibleForObject) {
+      this.clearPendingIngredientTraitClick();
       this.ui.hideIngredientTraits();
       return;
     }
 
-    this.ui?.showIngredientTraits(gameObject);
+    if (gameObject instanceof RotatableObject) {
+      this.scheduleIngredientTraitShow(pendingClick);
+      return;
+    }
+
+    this.showPendingIngredientTraits(pendingClick);
   }
 
   handleScenePointerDown(pointer, currentlyOver = []) {
@@ -307,17 +321,53 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.pendingIngredientTraitClick = null;
+    this.clearPendingIngredientTraitClick();
     this.ui.hideIngredientTraits();
   }
 
-  handleObjectDragStart() {
-    this.pendingIngredientTraitClick = null;
+  handleObjectDragStart(_pointer, gameObject) {
+    if (gameObject && !gameObject.isDragging) {
+      return;
+    }
+
+    this.clearPendingIngredientTraitClick();
     this.ui?.hideIngredientTraits();
   }
 
   clearPendingIngredientTraitClick() {
     this.pendingIngredientTraitClick = null;
+    this.clearPendingIngredientTraitShowTimer();
+  }
+
+  clearPendingIngredientTraitShowTimer() {
+    if (!this.pendingIngredientTraitShowTimer) {
+      return;
+    }
+
+    this.pendingIngredientTraitShowTimer.remove(false);
+    this.pendingIngredientTraitShowTimer = null;
+  }
+
+  scheduleIngredientTraitShow(pendingClick) {
+    this.clearPendingIngredientTraitShowTimer();
+
+    this.pendingIngredientTraitShowTimer = this.time.delayedCall(
+      pendingClick.gameObject.doubleClickInterval ?? 0,
+      () => {
+        this.pendingIngredientTraitShowTimer = null;
+        this.showPendingIngredientTraits(pendingClick);
+      },
+    );
+  }
+
+  showPendingIngredientTraits(pendingClick) {
+    const gameObject = pendingClick?.gameObject;
+
+    if (!gameObject?.scene || !gameObject.hasQuality || gameObject.isDragging) {
+      return;
+    }
+
+    this.ui?.showIngredientTraits(gameObject);
   }
 
   getPointerClickId(pointer) {

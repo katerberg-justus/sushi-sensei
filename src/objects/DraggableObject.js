@@ -330,7 +330,7 @@ export class DraggableObject extends SceneObject {
   setHoverBrightnessForPart(part, active) {
     const effect = this.hoverBrightnessEffects.get(part);
 
-    if (!effect) {
+    if (!effect || !effect.colorMatrix?._matrix) {
       return;
     }
 

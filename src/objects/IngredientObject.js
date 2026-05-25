@@ -1319,13 +1319,17 @@ export class IngredientObject extends RotatableObject {
       return false;
     }
 
-    return Boolean(
-      pointer.rightButtonDown?.()
-      || pointer.button === 2
-      || pointer.event?.button === 2
-      || pointer.buttons === 2
-      || pointer.event?.buttons === 2,
-    );
+    return this.isSpaceKeyDown();
+  }
+
+  isSpaceKeyDown() {
+    const keyboard = this.scene?.input?.keyboard;
+    if (!keyboard) {
+      return false;
+    }
+
+    const spaceKey = keyboard.addKey?.(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    return Boolean(spaceKey?.isDown);
   }
 
   isTouchPointer(pointer) {

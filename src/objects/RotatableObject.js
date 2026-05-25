@@ -12,8 +12,11 @@ export class RotatableObject extends DraggableObject {
     this.rotateClickDragTolerance = 6;
     this.clickDragTolerance = this.rotateClickDragTolerance;
     this.lastRotateClickTime = -Infinity;
+    this.lastRotateClickX = null;
+    this.lastRotateClickY = null;
     this.rotationTween = null;
     this.rotationOnlyPointerId = null;
+    this.rotationClickPointerId = null;
     this.rotationRejectTween = null;
     this.rotationRejectAmplitude = Phaser.Math.DegToRad(2);
     this.rotationRejectDuration = 45;
@@ -28,16 +31,59 @@ export class RotatableObject extends DraggableObject {
 
     const clickTime = pointer.downTime ?? this.scene.time.now;
 
-    if (clickTime - this.lastRotateClickTime <= this.doubleClickInterval) {
-      this.lastRotateClickTime = -Infinity;
+    if (this.isRotateDoubleClick(pointer, clickTime)) {
+      this.clearLastRotateClick();
       this.rotationOnlyPointerId = this.getDragPointerId(pointer);
+      this.rotationClickPointerId = this.getDragPointerId(pointer);
       this.pendingClickDragPointerId = null;
+      this.scene?.clearPendingIngredientTraitClick?.();
+      this.scene?.ui?.hideIngredientTraits?.();
       this.rotateBy(this.rotationStep);
       return;
     }
 
     this.lastRotateClickTime = clickTime;
+    this.lastRotateClickX = pointer.x;
+    this.lastRotateClickY = pointer.y;
     this.rotationOnlyPointerId = null;
+    this.rotationClickPointerId = null;
+  }
+
+  isRotateDoubleClick(pointer, clickTime) {
+    if (clickTime - this.lastRotateClickTime > this.doubleClickInterval) {
+      return false;
+    }
+
+    const x = pointer?.x;
+    const y = pointer?.y;
+
+    if (![x, y, this.lastRotateClickX, this.lastRotateClickY].every(Number.isFinite)) {
+      return true;
+    }
+
+    return Phaser.Math.Distance.Between(
+      this.lastRotateClickX,
+      this.lastRotateClickY,
+      x,
+      y,
+    ) <= this.rotateClickDragTolerance;
+  }
+
+  clearLastRotateClick() {
+    this.lastRotateClickTime = -Infinity;
+    this.lastRotateClickX = null;
+    this.lastRotateClickY = null;
+  }
+
+  didConsumeRotationClick(pointer) {
+    const pointerId = this.getDragPointerId(pointer);
+
+    if (pointerId === null || pointerId !== this.rotationClickPointerId) {
+      return false;
+    }
+
+    this.rotationClickPointerId = null;
+    return true;
   }
 
   isRotatePointer(pointer) {
