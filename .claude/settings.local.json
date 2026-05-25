@@ -4,7 +4,8 @@
       "PowerShell(Get-NetTCPConnection *)",
       "Bash(npx vite *)",
       "Bash(node --check /c/Users/justu/sushi-sensei/src/objects/SushiRoll.js)",
-      "Bash(wc *)"
+      "Bash(wc *)",
+      "Bash(node -e \"import\\('./src/objects/Bowl.js'\\).then\\(\\(\\) => console.log\\('OK'\\)\\).catch\\(e => { console.error\\(e.message\\); process.exit\\(1\\); }\\)\")"
     ]
   }
 }

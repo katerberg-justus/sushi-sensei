@@ -375,6 +375,7 @@ export class ContainerVessel extends IngredientObject {
 
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
+      hasIngredientTraits: options.hasIngredientTraits ?? false,
       visualVariation: false,
     });
 
@@ -442,7 +443,7 @@ export class ContainerVessel extends IngredientObject {
 
   get contentItems() {
     return (this.stackChildren ?? []).filter(
-      (child) => child?.isIngredient && child.stackCategory !== 'brush',
+      (child) => child?.isIngredient && !child.isTool,
     );
   }
 
@@ -505,7 +506,7 @@ export class ContainerVessel extends IngredientObject {
   }
 
   getStackPlacementOffset(child, drop = {}) {
-    if (child?.stackCategory === 'brush') {
+    if (child?.isTool) {
       const restY = (this.contentEllipse.y - this.textureHeight / 2) * this.pixelScale
         - (child.vesselDisplayHeight ?? child.displayHeight ?? 0) * 0.32;
 
@@ -571,10 +572,6 @@ export class ContainerVessel extends IngredientObject {
     this.setChildSunkInBowl(child, true);
     this.refreshBowlTexture();
     this.refreshCompositionShadow?.();
-
-    if (child?.stackCategory === 'brush' && this.sprite && this.exists(child)) {
-      this.moveBelow(child, this.sprite);
-    }
   }
 
   handleStackChildDetached(child) {
@@ -588,7 +585,7 @@ export class ContainerVessel extends IngredientObject {
       return;
     }
 
-    if (child.stackCategory === 'brush') {
+    if (child.isTool) {
       return;
     }
 
@@ -696,7 +693,10 @@ export class ContainerVessel extends IngredientObject {
 
     const styles = this.getContentStyles();
     const mixed = this.mixContentStyles(styles);
-    const surfaceY = this.contentRimY - Math.round(1 + fullness * 5);
+    const contentRise = this.fixedContents
+      ? Phaser.Math.Linear(1, 4, fullness)
+      : 1 + fullness * 5;
+    const surfaceY = this.contentRimY - Math.round(contentRise);
     const radiusX = Math.round((this.contentEllipse.rx - 6) * Phaser.Math.Linear(0.72, 1, fullness));
     const radiusY = Math.max(2, Math.round((this.contentEllipse.ry - 1) * Phaser.Math.Linear(0.7, 1.05, fullness)));
     const frontY = this.getFrontRimBottomY();
@@ -810,16 +810,21 @@ export class ContainerVessel extends IngredientObject {
 
   fillContentBasin(context, surfaceY, frontY, maxHalfWidth) {
     const ellipse = this.contentEllipse;
-    const openingRadiusY = ellipse.ry + 2;
     const topY = Math.min(surfaceY, frontY);
     const bottomY = Math.max(surfaceY, frontY);
+    const rimBottomRadiusY = Math.max(1, frontY - ellipse.y);
 
     for (let y = topY; y <= bottomY; y += 1) {
-      const openingHalfWidth = this.getEllipseHalfWidth(ellipse.y, ellipse.rx - 4, openingRadiusY, y);
-      const fillProgress = bottomY === topY ? 1 : (y - topY) / (bottomY - topY);
+      const rimY = Math.max(ellipse.y, y);
+      const lowerRimHalfWidth = this.getEllipseHalfWidth(
+        ellipse.y,
+        ellipse.rx - 4,
+        rimBottomRadiusY,
+        rimY,
+      );
       const halfWidth = Math.min(
         maxHalfWidth,
-        Math.max(1, Math.round(openingHalfWidth * Phaser.Math.Linear(0.82, 1, fillProgress))),
+        Math.max(1, lowerRimHalfWidth),
       );
 
       context.fillRect(ellipse.x - halfWidth, y, halfWidth * 2, 1);

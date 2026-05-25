@@ -9,8 +9,12 @@ const MAT_BASE_KEY = 'rolling-mat-pixel';
 const MAT_VARIANT_POOL = 4;
 const MAT_WIDTH = 76;
 const MAT_HEIGHT = 64;
+const MAT_HITBOX_WIDTH = 68;
+const MAT_HITBOX_HEIGHT = 55;
 const MAT_WEIGHT_GRAMS = 120;
 const MAT_PERSPECTIVE_SQUASH = 0.6;
+const ROLL_PROGRESS_BAR_HEIGHT = 4;
+const ROLL_PROGRESS_METER_INSET = 6;
 
 export class RollingMat extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -26,10 +30,14 @@ export class RollingMat extends IngredientObject {
 
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
+      hasIngredientTraits: false,
       visualVariation: false,
     });
 
-    this.setCenteredHitbox(displayWidth, displayHeight);
+    this.setCenteredHitbox(
+      MAT_HITBOX_WIDTH * PIXEL,
+      MAT_HITBOX_HEIGHT * PIXEL * MAT_PERSPECTIVE_SQUASH,
+    );
     this.ownWeightGrams = options.weightGrams ?? MAT_WEIGHT_GRAMS;
     this.displayName = 'Rolling Mat';
     this.variantIndex = variantIndex;
@@ -398,6 +406,30 @@ export class RollingMat extends IngredientObject {
     );
   }
 
+  getRollInteractionBounds() {
+    return new Phaser.Geom.Rectangle(
+      -MAT_HITBOX_WIDTH * PIXEL / 2,
+      -MAT_HITBOX_HEIGHT * PIXEL * MAT_PERSPECTIVE_SQUASH / 2,
+      MAT_HITBOX_WIDTH * PIXEL,
+      MAT_HITBOX_HEIGHT * PIXEL * MAT_PERSPECTIVE_SQUASH,
+    );
+  }
+
+  getRollProgressBarBounds() {
+    const bounds = this.getRollInteractionBounds();
+    const width = Math.max(8, bounds.width + ROLL_PROGRESS_METER_INSET * 2);
+    const height = Math.max(8, bounds.height + ROLL_PROGRESS_METER_INSET * 2);
+    const x = bounds.x - ROLL_PROGRESS_METER_INSET;
+    const y = bounds.y - ROLL_PROGRESS_METER_INSET;
+
+    return new Phaser.Geom.Rectangle(
+      x,
+      y + height - ROLL_PROGRESS_BAR_HEIGHT - 1,
+      width,
+      ROLL_PROGRESS_BAR_HEIGHT,
+    );
+  }
+
   showRollHoverHighlight() {
     if (!this.sprite) {
       return;
@@ -409,7 +441,7 @@ export class RollingMat extends IngredientObject {
       this.add(this.rollHoverHighlight);
     }
 
-    const bounds = this.getRollMatBounds();
+    const bounds = this.getRollInteractionBounds();
     const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
     const topY = bounds.y;
     const bottomY = bounds.y + bounds.height - sideDepth;
@@ -451,7 +483,7 @@ export class RollingMat extends IngredientObject {
     }
 
     const local = this.worldToLocalPoint(position);
-    const bounds = this.getRollMatBounds();
+    const bounds = this.getRollInteractionBounds();
 
     return local.x >= bounds.x
       && local.x <= bounds.x + bounds.width
@@ -496,6 +528,7 @@ export class RollingMat extends IngredientObject {
     }
 
     this.bringRollWrapOverlayToTop();
+    this.bringRollProgressMeterToTop();
 
     return started;
   }
@@ -506,7 +539,7 @@ export class RollingMat extends IngredientObject {
     }
 
     const local = this.worldToLocalPoint(position);
-    const bounds = this.getRollMatBounds();
+    const bounds = this.getRollInteractionBounds();
     const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
     const insideX = local.x >= bounds.x && local.x <= bounds.x + bounds.width;
 
@@ -575,7 +608,7 @@ export class RollingMat extends IngredientObject {
       return 56;
     }
 
-    const bounds = this.getRollMatBounds();
+    const bounds = this.getRollInteractionBounds();
     const sideDepth = Math.min(this.rollStartSideDepth, bounds.height * 0.32);
 
     return Math.max(42, bounds.height - sideDepth);
@@ -586,41 +619,22 @@ export class RollingMat extends IngredientObject {
       return;
     }
 
-    const bounds = this.getKneadMeterBounds();
+    const bounds = this.getRollProgressBarBounds();
     const progress = Phaser.Math.Clamp(this.kneadProgress, 0, 1);
-    const trackWidth = 8;
-    const trackHeight = Math.max(48, bounds.height - 12);
-    const x = bounds.x + bounds.width + 9;
-    const y = bounds.y + bounds.height / 2 - trackHeight / 2;
-    const fillHeight = trackHeight * progress;
-    const arrowInset = 8;
-    const nextDirection = this.getNextRollDirection();
+    const progressWidth = bounds.width * progress;
 
     this.kneadMeter.clear();
-    this.kneadMeter.fillStyle(0x2f2419, 0.22);
-    this.kneadMeter.fillRoundedRect(x, y, trackWidth, trackHeight, 3);
-    this.kneadMeter.lineStyle(2, 0x6b4a32, 0.45);
-    this.kneadMeter.strokeRoundedRect(x, y, trackWidth, trackHeight, 3);
-
-    if (fillHeight > 0) {
-      this.kneadMeter.fillStyle(0xfff2a8, 0.9);
-      this.kneadMeter.fillRoundedRect(x, y + trackHeight - fillHeight, trackWidth, fillHeight, 3);
-    }
-
-    const centerX = x + trackWidth / 2;
-
-    this.kneadMeter.lineStyle(2, 0xfff2a8, nextDirection === 'down' ? 0.9 : 0.45);
-    this.kneadMeter.lineBetween(centerX - 8, y + arrowInset, centerX - 8, y + trackHeight - arrowInset);
-    this.kneadMeter.lineBetween(centerX - 8, y + trackHeight - arrowInset, centerX - 11, y + trackHeight - arrowInset - 5);
-    this.kneadMeter.lineBetween(centerX - 8, y + trackHeight - arrowInset, centerX - 5, y + trackHeight - arrowInset - 5);
-    this.kneadMeter.lineStyle(2, 0xfff2a8, nextDirection === 'up' ? 0.9 : 0.45);
-    this.kneadMeter.lineBetween(centerX + 8, y + trackHeight - arrowInset, centerX + 8, y + arrowInset);
-    this.kneadMeter.lineBetween(centerX + 8, y + arrowInset, centerX + 5, y + arrowInset + 5);
-    this.kneadMeter.lineBetween(centerX + 8, y + arrowInset, centerX + 11, y + arrowInset + 5);
+    this.kneadMeter.fillStyle(0xfff4df, 0.82);
+    this.kneadMeter.fillRect(bounds.x, bounds.y, progressWidth, bounds.height);
+    this.bringRollProgressMeterToTop();
   }
 
-  getNextRollDirection() {
-    return this.rollStartSide === 'top' ? 'down' : 'up';
+  bringRollProgressMeterToTop() {
+    if (!this.kneadMeter) {
+      return;
+    }
+
+    this.bringToTop(this.kneadMeter);
   }
 
   setRollProgress(progress) {

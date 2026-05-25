@@ -14,11 +14,15 @@ const MANUAL_CUT_STROKE_DISTANCE = 120;
 const MANUAL_CUT_STROKE_DURATION = 88;
 
 export class Knife extends CuttingObject {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, options = {}) {
     Knife.createTexture(scene);
 
-    super(scene, x, y, 46, 160);
+    super(scene, x, y, 46, 160, {
+      ...options,
+      hasQuality: options.hasQuality ?? true,
+    });
 
+    this.isTool = true;
     this.restDepth = 35;
     this.dragDepth = 120;
     this.softness = 0.05;

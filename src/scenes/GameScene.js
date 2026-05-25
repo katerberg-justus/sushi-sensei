@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { BITMAP_FONT_PIXEL, COLORS, SCENE_KEYS } from '../game/constants.js';
+import { COLORS, SCENE_KEYS } from '../game/constants.js';
 import { Bowl } from '../objects/Bowl.js';
 import { Brush } from '../objects/Brush.js';
 import { CuttableFish } from '../objects/CuttableFish.js';
@@ -14,6 +14,10 @@ import { RollingMat } from '../objects/RollingMat.js';
 import { SushiRoll } from '../objects/SushiRoll.js';
 import { DraggableObject } from '../objects/DraggableObject.js';
 import { RotatableObject } from '../objects/RotatableObject.js';
+import { GameUi } from '../ui/GameUi.js';
+
+const INGREDIENT_TRAIT_CLICK_MAX_DURATION = 220;
+const INGREDIENT_TRAIT_CLICK_MOVE_TOLERANCE = 6;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -40,38 +44,87 @@ export class GameScene extends Phaser.Scene {
         this,
         width * 0.12 + column * 54 + inwardLean,
         height * 0.26 + row * 45,
+        {
+          quality: 2,
+          freshness: 'fresh',
+          flavorTags: ['Clean', 'Sweet'],
+        },
       );
 
       riceBall.displayName = 'Rice Ball';
       return riceBall;
     });
     [this.riceBall] = this.riceBalls;
-    this.cuttableSalmon = new CuttableSalmon(this, width * 0.32, height * 0.42);
-    this.cuttableMaguro = new CuttableFish(this, width * 0.45, height * 0.42, { fishType: 'maguro' });
-    this.cuttableHamachi = new CuttableFish(this, width * 0.58, height * 0.42, { fishType: 'hamachi' });
-    this.cuttableTai = new CuttableFish(this, width * 0.71, height * 0.42, { fishType: 'tai' });
-    this.cuttableUnagi = new CuttableFish(this, width * 0.84, height * 0.42, { fishType: 'unagi' });
-    this.cuttableTamago = new CuttableTamago(this, width * 0.45, height * 0.58);
+    this.cuttableSalmon = new CuttableSalmon(this, width * 0.32, height * 0.42, {
+      quality: 3,
+      freshness: 'pristine',
+      flavorTags: ['Umami', 'Fatty', 'Buttery'],
+    });
+    this.cuttableMaguro = new CuttableFish(this, width * 0.45, height * 0.42, {
+      fishType: 'maguro',
+      quality: 3,
+      freshness: 'fresh',
+      flavorTags: ['Umami', 'Clean', 'Oceanic'],
+    });
+    this.cuttableHamachi = new CuttableFish(this, width * 0.58, height * 0.42, {
+      fishType: 'hamachi',
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Buttery', 'Fatty', 'Delicate'],
+    });
+    this.cuttableTai = new CuttableFish(this, width * 0.71, height * 0.42, {
+      fishType: 'tai',
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Clean', 'Delicate', 'Oceanic'],
+    });
+    this.cuttableUnagi = new CuttableFish(this, width * 0.84, height * 0.42, {
+      fishType: 'unagi',
+      quality: 2,
+      freshness: 'good',
+      flavorTags: ['Smoky', 'Sweet', 'Caramelized'],
+    });
+    this.cuttableTamago = new CuttableTamago(this, width * 0.45, height * 0.58, {
+      quality: 2,
+      freshness: 'good',
+      flavorTags: ['Sweet', 'Umami', 'Delicate'],
+    });
     this.cuttableTamago.displayName = 'Tamago';
-    this.rollingMat = new RollingMat(this, width * 0.61, height * 0.7);
-    this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58);
-    this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, { fishType: 'salmon' });
-    this.sushiRoll = new SushiRoll(this, width * 0.68, height * 0.48, { fillingType: 'salmon' });
+    this.rollingMat = new RollingMat(this, width * 0.61, height * 0.7, { quality: 2 });
+    this.noriSheet = new NoriSheet(this, width * 0.6, height * 0.58, {
+      quality: 2,
+      freshness: 'good',
+      flavorTags: ['Briny', 'Oceanic', 'Toasty'],
+    });
+    this.nigiri = new Nigiri(this, width * 0.76, height * 0.58, {
+      fishType: 'salmon',
+      quality: 3,
+      freshness: 'pristine',
+      flavorTags: ['Umami', 'Fatty', 'Clean'],
+    });
+    this.sushiRoll = new SushiRoll(this, width * 0.68, height * 0.48, {
+      fillingType: 'salmon',
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Umami', 'Oceanic', 'Clean'],
+    });
     this.bowls = [
       new Bowl(this, width * 0.43, height * 0.65, {
         preset: 'smallBowl',
         displayName: 'Wasabi Bowl',
-        color: 'green',
+        color: 'black',
         acceptedStackCategories: [],
         contents: { style: 'wasabi', fullness: 0.72 },
+        quality: 2,
       }),
       new Bowl(this, width * 0.5, height * 0.64, {
         preset: 'smallWideBowl',
         displayName: 'Nikiri Sauce',
         color: 'black',
-        acceptedStackCategories: ['brush'],
+        acceptedStackCategories: ['tool'],
         maxStackedItems: 1,
         contents: { style: 'nikiri', fullness: 0.62 },
+        quality: 2,
       }),
     ];
     this.nikiriBowl = this.bowls[1];
@@ -80,12 +133,14 @@ export class GameScene extends Phaser.Scene {
       new Plate(this, width * 0.79, height * 0.73, {
         size: 'medium',
         material: 'ceramic',
+        quality: 2,
       }),
       new Plate(this, width * 0.91, height * 0.73, {
         size: 'small',
         material: 'slate',
         displayName: 'Sashimi Plate',
         maxFishWeightGrams: 12,
+        quality: 2,
       }),
     ];
     this.cuttableObjects = [
@@ -98,51 +153,59 @@ export class GameScene extends Phaser.Scene {
       this.noriSheet,
       this.sushiRoll,
     ];
-    this.knife = new Knife(this, width * 0.5, height * 0.72);
+    this.knife = new Knife(this, width * 0.5, height * 0.72, { quality: 2 });
     this.knife.displayName = 'Knife';
     this.knife.on('cutstroke', this.handleCutStroke, this);
 
-    this.brush = new Brush(this, this.nikiriBowl.x, this.nikiriBowl.y);
+    this.brush = new Brush(this, this.nikiriBowl.x, this.nikiriBowl.y - 11, { quality: 2 });
     this.brush.on('brushstroke', this.handleBrushStroke, this);
+    this.brush.on('drag', this.handleBrushDragMove, this);
+    this.brush.on('dragend', this.endBrushGlazeGesture, this);
     this.brush.attachToStackTarget(this.nikiriBowl);
+    this.glazeKeyDown = false;
+    this.glazeTouchDown = false;
+    this.pendingIngredientTraitClick = null;
+    this.input.keyboard.on('keydown-SPACE', this.handleGlazeKeyDown, this);
+    this.input.keyboard.on('keyup-SPACE', this.handleGlazeKeyUp, this);
+    this.input.on('pointerdown', this.handleGlazeTouchPointerDown, this);
+    this.input.on('pointerup', this.handleGlazeTouchPointerUp, this);
+    this.input.on('pointerupoutside', this.handleGlazeTouchPointerUp, this);
 
-    this.createNameSignboard();
-    this.positionNameSignboard();
-    this.createHoverActionIndicator();
-    this.positionHoverActionIndicator();
-    this.createDragDebugPanel();
-    this.positionDragDebugPanel();
-    this.createFpsCounter();
-    this.positionFpsCounter();
-    this.scale.on('resize', this.positionNameSignboard, this);
-    this.scale.on('resize', this.positionHoverActionIndicator, this);
-    this.scale.on('resize', this.positionDragDebugPanel, this);
-    this.scale.on('resize', this.positionFpsCounter, this);
+    this.ui = new GameUi(this);
+    this.positionUi();
+    this.ui.inventoryBar.storeObjectInSlot(0, this.cuttableSalmon);
+    this.ui.inventoryBar.storeObjectInLargeSlot(0, 0, this.cuttableMaguro);
+    this.scale.on('resize', this.positionUi, this);
     this.scale.on('resize', this.resizeBoardBackground, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);
+    this.input.on('gameobjectdown', this.handleObjectDown, this);
+    this.input.on('gameobjectup', this.handleObjectUp, this);
+    this.input.on('pointerdown', this.handleScenePointerDown, this);
+    this.input.on('dragstart', this.handleObjectDragStart, this);
+    this.input.on('pointerupoutside', this.clearPendingIngredientTraitClick, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off('resize', this.positionNameSignboard, this);
-      this.scale.off('resize', this.positionHoverActionIndicator, this);
-      this.scale.off('resize', this.positionDragDebugPanel, this);
-      this.scale.off('resize', this.positionFpsCounter, this);
+      this.scale.off('resize', this.positionUi, this);
       this.scale.off('resize', this.resizeBoardBackground, this);
       this.input.keyboard.off('keydown-R', this.resetScene, this);
+      this.input.keyboard.off('keydown-SPACE', this.handleGlazeKeyDown, this);
+      this.input.keyboard.off('keyup-SPACE', this.handleGlazeKeyUp, this);
+      this.input.off('pointerdown', this.handleGlazeTouchPointerDown, this);
+      this.input.off('pointerup', this.handleGlazeTouchPointerUp, this);
+      this.input.off('pointerupoutside', this.handleGlazeTouchPointerUp, this);
+      this.input.off('gameobjectdown', this.handleObjectDown, this);
+      this.input.off('gameobjectup', this.handleObjectUp, this);
+      this.input.off('pointerdown', this.handleScenePointerDown, this);
+      this.input.off('dragstart', this.handleObjectDragStart, this);
+      this.input.off('pointerupoutside', this.clearPendingIngredientTraitClick, this);
+      this.ui?.destroy();
+      this.ui = null;
     });
     this.input.on('gameobjectover', this.handleObjectOver, this);
     this.input.on('gameobjectout', this.handleObjectOut, this);
   }
 
   update(time) {
-    if (!this.fpsCounter || time < this.nextFpsUpdateAt) {
-      return;
-    }
-
-    const fps = Math.round(this.game.loop.actualFps || 0);
-    const rawDelta = this.game.loop.rawDelta || 0;
-
-    this.fpsCounter.setText(`${fps} FPS`);
-    this.frameDeltaCounter.setText(`${rawDelta.toFixed(1)} MS`);
-    this.nextFpsUpdateAt = time + 250;
+    this.ui?.update(time);
   }
 
   resetScene() {
@@ -159,237 +222,8 @@ export class GameScene extends Phaser.Scene {
     this.boardBackground.setDisplaySize(width, height);
   }
 
-  getVisibleGameArea() {
-    const sm = this.scale;
-    const gameWidth = sm.gameSize.width;
-    const gameHeight = sm.gameSize.height;
-    const parentWidth = sm.parentSize?.width || gameWidth;
-    const parentHeight = sm.parentSize?.height || gameHeight;
-    const zoom = Math.max(parentWidth / gameWidth, parentHeight / gameHeight) || 1;
-    const visibleWidth = Math.min(gameWidth, parentWidth / zoom);
-    const visibleHeight = Math.min(gameHeight, parentHeight / zoom);
-
-    return {
-      left: (gameWidth - visibleWidth) / 2,
-      top: (gameHeight - visibleHeight) / 2,
-      right: (gameWidth + visibleWidth) / 2,
-      bottom: (gameHeight + visibleHeight) / 2,
-      width: visibleWidth,
-      height: visibleHeight,
-    };
-  }
-
-  positionNameSignboard() {
-    if (!this.nameSignboard) {
-      return;
-    }
-
-    const visibleArea = this.getVisibleGameArea();
-    const margin = 12;
-
-    const restX = Math.round(visibleArea.left + visibleArea.width / 2);
-    const restY = Math.round(visibleArea.bottom - margin - this.nameSignboard.signboardHeight / 2);
-
-    this.nameSignboard.restX = restX;
-    this.nameSignboard.restY = restY;
-    this.nameSignboard.setX(restX);
-
-    if (!this.nameSignboard.visible) {
-      this.nameSignboard.setY(restY);
-    }
-  }
-
-  createNameSignboard() {
-    const labelHeight = 8;
-
-    const container = this.add.container(0, 0);
-    container.setDepth(500);
-    container.setVisible(false);
-    container.signboardHeight = labelHeight;
-
-    const text = this.add.bitmapText(
-      0,
-      0,
-      BITMAP_FONT_PIXEL,
-      '',
-      labelHeight,
-    );
-
-    text.setOrigin(0.5);
-    text.setTint(0xffffff);
-    container.add(text);
-
-    this.nameSignboard = container;
-    this.nameSignboardText = text;
-  }
-
-  createFpsCounter() {
-    this.fpsCounter = this.add.bitmapText(0, 0, BITMAP_FONT_PIXEL, '-- FPS', 8);
-    this.fpsCounter.setOrigin(1, 0);
-    this.fpsCounter.setTint(0xf8f4ef);
-    this.fpsCounter.setDepth(1000);
-
-    this.frameDeltaCounter = this.add.bitmapText(0, 0, BITMAP_FONT_PIXEL, '--.- MS', 8);
-    this.frameDeltaCounter.setOrigin(1, 0);
-    this.frameDeltaCounter.setTint(0xf8f4ef);
-    this.frameDeltaCounter.setDepth(1000);
-
-    this.nextFpsUpdateAt = 0;
-  }
-
-  createDragDebugPanel() {
-    this.dragDebugText = this.add.bitmapText(0, 0, BITMAP_FONT_PIXEL, 'DRAG DEBUG\nidle', 8);
-    this.dragDebugText.setOrigin(0, 0);
-    this.dragDebugText.setTint(0x173027);
-    this.dragDebugText.setDepth(1000);
-  }
-
-  createHoverActionIndicator() {
-    this.createHoverActionIconTextures();
-
-    const iconSize = 24;
-    const gap = 6;
-    const grabIcon = this.add.image(iconSize / 2, iconSize / 2, 'hover-grab-hand-icon');
-    const resetIcon = this.add.image(iconSize + gap + iconSize / 2, iconSize / 2, 'hover-reset-arrow-icon');
-    grabIcon.setOrigin(0.5);
-    resetIcon.setOrigin(0.5);
-    resetIcon.setVisible(false);
-
-    const container = this.add.container(0, 0, [grabIcon, resetIcon]);
-    container.setDepth(1000);
-    container.setVisible(false);
-    container.setAlpha(0);
-    container.iconSize = iconSize;
-    container.iconGap = gap;
-    container.indicatorWidth = iconSize;
-    container.indicatorHeight = iconSize;
-    container.icons = { grab: grabIcon, reset: resetIcon };
-
-    this.hoverActionIndicator = container;
-    this.hoverActionIndicatorObject = null;
-    this.hoverActionIndicatorModes = [];
-  }
-
-  createHoverActionIconTextures() {
-    this.createGrabHandIconTexture();
-    this.createResetArrowIconTexture();
-  }
-
-  createGrabHandIconTexture() {
-    const key = 'hover-grab-hand-icon';
-
-    if (this.textures.exists(key)) {
-      this.textures.remove(key);
-    }
-
-    const graphics = this.add.graphics();
-    const drawGrabHand = (offsetX, offsetY, color, alpha) => {
-      graphics.fillStyle(color, alpha);
-      graphics.fillRect(offsetX + 8, offsetY + 1, 3, 12);
-      graphics.fillRect(offsetX + 12, offsetY + 2, 3, 12);
-      graphics.fillRect(offsetX + 16, offsetY + 5, 3, 10);
-      graphics.fillRect(offsetX + 4, offsetY + 7, 3, 10);
-      graphics.fillRect(offsetX + 2, offsetY + 12, 5, 4);
-      graphics.fillRect(offsetX + 5, offsetY + 13, 16, 7);
-      graphics.fillRect(offsetX + 7, offsetY + 20, 12, 3);
-      graphics.fillRect(offsetX + 19, offsetY + 11, 3, 7);
-    };
-
-    drawGrabHand(1, 1, 0x10251e, 0.24);
-    drawGrabHand(0, 0, 0xffffff, 1);
-
-    graphics.generateTexture(key, 24, 24);
-    graphics.destroy();
-  }
-
-  createResetArrowIconTexture() {
-    const key = 'hover-reset-arrow-icon';
-
-    if (this.textures.exists(key)) {
-      this.textures.remove(key);
-    }
-
-    const graphics = this.add.graphics();
-    const drawResetArrow = (offsetX, offsetY, color, alpha) => {
-      graphics.fillStyle(color, alpha);
-      graphics.fillRect(offsetX + 10, offsetY + 3, 6, 3);
-      graphics.fillRect(offsetX + 15, offsetY + 4, 3, 3);
-      graphics.fillRect(offsetX + 17, offsetY + 6, 3, 3);
-      graphics.fillRect(offsetX + 19, offsetY + 9, 3, 6);
-      graphics.fillRect(offsetX + 17, offsetY + 15, 3, 3);
-      graphics.fillRect(offsetX + 15, offsetY + 17, 3, 3);
-      graphics.fillRect(offsetX + 8, offsetY + 18, 8, 3);
-      graphics.fillRect(offsetX + 5, offsetY + 16, 4, 3);
-      graphics.fillRect(offsetX + 3, offsetY + 13, 3, 4);
-
-      graphics.fillRect(offsetX + 3, offsetY + 3, 5, 3);
-      graphics.fillRect(offsetX + 3, offsetY + 6, 3, 3);
-      graphics.fillRect(offsetX + 3, offsetY + 9, 7, 3);
-    };
-
-    drawResetArrow(1, 1, 0x10251e, 0.24);
-    drawResetArrow(0, 0, 0xffffff, 1);
-
-    graphics.generateTexture(key, 24, 24);
-    graphics.destroy();
-  }
-
-  positionHoverActionIndicator() {
-    if (!this.hoverActionIndicator) {
-      return;
-    }
-
-    const visibleArea = this.getVisibleGameArea();
-    const margin = 10;
-
-    this.hoverActionIndicator.setPosition(
-      Math.round(visibleArea.left + margin),
-      Math.round(visibleArea.bottom - margin - this.hoverActionIndicator.indicatorHeight),
-    );
-  }
-
   setHoverActionIndicator(modes, gameObject = null) {
-    const indicator = this.hoverActionIndicator;
-
-    if (!indicator) {
-      return;
-    }
-
-    if (!modes?.length) {
-      this.hoverActionIndicatorObject = null;
-      this.hoverActionIndicatorModes = [];
-      indicator.setVisible(false);
-      indicator.setAlpha(0);
-      return;
-    }
-
-    this.hoverActionIndicatorObject = gameObject;
-    this.hoverActionIndicatorModes = modes;
-    indicator.indicatorWidth = modes.length * indicator.iconSize
-      + (modes.length - 1) * indicator.iconGap;
-
-    const iconEntries = {
-      grab: indicator.icons.grab,
-      reset: indicator.icons.reset,
-    };
-
-    Object.values(iconEntries).forEach((icon) => icon.setVisible(false));
-    modes.forEach((mode, index) => {
-      const icon = iconEntries[mode];
-
-      if (!icon) {
-        return;
-      }
-
-      icon.setPosition(
-        indicator.iconSize / 2 + index * (indicator.iconSize + indicator.iconGap),
-        indicator.iconSize / 2,
-      );
-      icon.setVisible(true);
-    });
-
-    indicator.setVisible(true);
-    indicator.setAlpha(1);
+    this.ui?.setHoverActions(modes, gameObject);
   }
 
   getHoverActionModes(gameObject) {
@@ -406,39 +240,12 @@ export class GameScene extends Phaser.Scene {
     return modes;
   }
 
-  positionDragDebugPanel() {
-    if (!this.dragDebugText) {
-      return;
-    }
-
-    const visibleArea = this.getVisibleGameArea();
-
-    this.dragDebugText.setPosition(
-      Math.round(visibleArea.left + 10),
-      Math.round(visibleArea.top + 10),
-    );
+  positionUi() {
+    this.ui?.position();
   }
 
   setDragDebugInfo(lines = []) {
-    if (!this.dragDebugText) {
-      return;
-    }
-
-    this.dragDebugText.setText(['DRAG DEBUG', ...lines].slice(0, 8).join('\n'));
-  }
-
-  positionFpsCounter() {
-    if (!this.fpsCounter || !this.frameDeltaCounter) {
-      return;
-    }
-
-    const visibleArea = this.getVisibleGameArea();
-    const margin = 10;
-    const x = Math.round(visibleArea.right - margin);
-    const y = Math.round(visibleArea.top + margin);
-
-    this.fpsCounter.setPosition(x, y);
-    this.frameDeltaCounter.setPosition(x, y + 12);
+    this.ui?.setDragDebugInfo(lines);
   }
 
   handleObjectOver(_pointer, gameObject) {
@@ -446,21 +253,94 @@ export class GameScene extends Phaser.Scene {
 
     const name = gameObject?.displayName;
 
-    if (!name || !gameObject.isIngredient || !this.nameSignboard) {
+    if (!name || !gameObject.isIngredient || !this.ui) {
       return;
     }
 
-    this.nameSignboardObject = gameObject;
-    this.nameSignboardText.setText(this.getIngredientSignboardText(gameObject));
-    this.showNameSignboard();
+    this.ui.showIngredientName(gameObject, this.getIngredientSignboardText(gameObject));
+  }
+
+  handleObjectDown(_pointer, gameObject) {
+    if (!gameObject?.hasQuality || !this.ui) {
+      this.pendingIngredientTraitClick = null;
+      return;
+    }
+
+    this.pendingIngredientTraitClick = {
+      gameObject,
+      pointerId: this.getPointerClickId(_pointer),
+      x: _pointer.x,
+      y: _pointer.y,
+      startedAt: this.time.now,
+    };
+  }
+
+  handleObjectUp(pointer, gameObject) {
+    const pendingClick = this.pendingIngredientTraitClick;
+
+    if (!pendingClick || pendingClick.gameObject !== gameObject) {
+      return;
+    }
+
+    this.pendingIngredientTraitClick = null;
+
+    if (
+      !gameObject?.hasQuality
+      || pendingClick.pointerId !== this.getPointerClickId(pointer)
+      || this.time.now - pendingClick.startedAt > INGREDIENT_TRAIT_CLICK_MAX_DURATION
+      || this.getPointerDistanceFrom(pendingClick, pointer) > INGREDIENT_TRAIT_CLICK_MOVE_TOLERANCE
+      || gameObject.isDragging
+    ) {
+      return;
+    }
+
+    if (this.ui?.isIngredientTraitObject(gameObject)) {
+      this.ui.hideIngredientTraits();
+      return;
+    }
+
+    this.ui?.showIngredientTraits(gameObject);
+  }
+
+  handleScenePointerDown(pointer, currentlyOver = []) {
+    if (!this.ui || currentlyOver.some((gameObject) => gameObject?.hasQuality)) {
+      return;
+    }
+
+    this.pendingIngredientTraitClick = null;
+    this.ui.hideIngredientTraits();
+  }
+
+  handleObjectDragStart() {
+    this.pendingIngredientTraitClick = null;
+    this.ui?.hideIngredientTraits();
+  }
+
+  clearPendingIngredientTraitClick() {
+    this.pendingIngredientTraitClick = null;
+  }
+
+  getPointerClickId(pointer) {
+    return pointer?.id ?? pointer?.pointerId ?? null;
+  }
+
+  getPointerDistanceFrom(start, pointer) {
+    const x = pointer?.x;
+    const y = pointer?.y;
+
+    if (![start?.x, start?.y, x, y].every(Number.isFinite)) {
+      return 0;
+    }
+
+    return Phaser.Math.Distance.Between(start.x, start.y, x, y);
   }
 
   handleObjectOut(_pointer, gameObject) {
-    if (gameObject && this.hoverActionIndicatorObject === gameObject) {
+    if (gameObject && this.ui?.isHoverActionObject(gameObject)) {
       this.setHoverActionIndicator(null);
     }
 
-    if (!this.nameSignboard) {
+    if (!this.ui) {
       return;
     }
 
@@ -468,12 +348,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (gameObject && this.nameSignboardObject !== gameObject) {
+    if (gameObject && !this.ui.isIngredientNameObject(gameObject)) {
       return;
     }
 
-    this.nameSignboardObject = null;
-    this.hideNameSignboard();
+    this.ui.hideIngredientName();
   }
 
   getIngredientSignboardText(gameObject) {
@@ -517,61 +396,132 @@ export class GameScene extends Phaser.Scene {
     return [...names, ...childNames];
   }
 
-  showNameSignboard() {
-    const board = this.nameSignboard;
-
-    if (!board || board.isShowing) {
+  handleGlazeKeyDown(event) {
+    if (event?.repeat) {
       return;
     }
 
-    if (this.nameSignboardTween) {
-      this.nameSignboardTween.stop();
+    this.glazeKeyDown = true;
+    this.beginBrushGlazeGesture();
+  }
+
+  handleGlazeKeyUp() {
+    this.glazeKeyDown = false;
+
+    if (!this.isGlazeGestureActive()) {
+      this.endBrushGlazeGesture();
+    }
+  }
+
+  handleGlazeTouchPointerDown(pointer) {
+    if (!this.isTouchPointer(pointer) || !this.brush?.isDragging) {
+      return;
     }
 
-    const restY = board.restY ?? board.y;
-    const slideOffset = 14;
+    if (this.getActiveTouchPointers().length < 2 && pointer.event?.isPrimary !== false) {
+      return;
+    }
 
-    board.isShowing = true;
-    board.setVisible(true);
-    board.setAlpha(0);
-    board.setY(restY + slideOffset);
+    this.glazeTouchDown = true;
+    this.beginBrushGlazeGesture();
+  }
 
-    this.nameSignboardTween = this.tweens.add({
-      targets: board,
-      y: restY,
-      alpha: 1,
-      duration: 220,
-      ease: 'Cubic.Out',
+  handleGlazeTouchPointerUp(pointer) {
+    if (!this.isTouchPointer(pointer)) {
+      return;
+    }
+
+    if (this.getActiveTouchPointers().length <= 1) {
+      this.glazeTouchDown = false;
+
+      if (!this.isGlazeGestureActive()) {
+        this.endBrushGlazeGesture();
+      }
+    }
+  }
+
+  isGlazeGestureActive() {
+    return Boolean(this.glazeKeyDown || this.glazeTouchDown);
+  }
+
+  isTouchPointer(pointer) {
+    return pointer?.event?.pointerType === 'touch'
+      || pointer?.pointerType === 'touch'
+      || pointer?.wasTouch === true;
+  }
+
+  getActiveTouchPointers() {
+    const managerPointers = this.input?.manager?.pointers;
+    const pluginPointers = this.input?.pointers;
+    const pointers = Array.isArray(managerPointers) ? managerPointers : pluginPointers;
+
+    if (!Array.isArray(pointers)) {
+      return [];
+    }
+
+    return pointers.filter((p) => p?.isDown && this.isTouchPointer(p));
+  }
+
+  beginBrushGlazeGesture() {
+    if (!this.brush?.isDragging || !this.brush.isDipped) {
+      return;
+    }
+
+    const brushRect = this.brush.getWorldHitboxRect();
+
+    (this.nigiriObjects ?? []).forEach((nigiri) => {
+      if (!nigiri || nigiri.isGlazed) {
+        return;
+      }
+
+      nigiri.beginGlazeStroke(brushRect);
     });
   }
 
-  hideNameSignboard() {
-    const board = this.nameSignboard;
+  endBrushGlazeGesture() {
+    (this.nigiriObjects ?? []).forEach((nigiri) => nigiri?.endGlazeStroke?.());
+  }
 
-    if (!board || !board.isShowing) {
+  handleBrushDragMove() {
+    if (!this.isGlazeGestureActive() || !this.brush?.isDipped) {
       return;
     }
 
-    if (this.nameSignboardTween) {
-      this.nameSignboardTween.stop();
-    }
+    const brushRect = this.brush.getWorldHitboxRect();
+    let glazedAny = false;
 
-    const restY = board.restY ?? board.y;
-    const slideOffset = 14;
+    (this.nigiriObjects ?? []).forEach((nigiri) => {
+      if (!nigiri || nigiri.isGlazed) {
+        return;
+      }
 
-    board.isShowing = false;
+      const intersects = Phaser.Geom.Intersects.RectangleToRectangle(
+        brushRect,
+        nigiri.getGlazeTargetWorldRect(),
+      );
 
-    this.nameSignboardTween = this.tweens.add({
-      targets: board,
-      y: restY + slideOffset,
-      alpha: 0,
-      duration: 160,
-      ease: 'Cubic.In',
-      onComplete: () => {
-        board.setVisible(false);
-        board.setY(restY);
-      },
+      if (!intersects) {
+        if (nigiri.glazeStroke) {
+          nigiri.endGlazeStroke();
+        }
+        return;
+      }
+
+      if (nigiri.glazeStroke) {
+        nigiri.extendGlazeStroke(brushRect);
+      } else {
+        nigiri.beginGlazeStroke(brushRect);
+      }
+
+      if (nigiri.isGlazed) {
+        glazedAny = true;
+      }
     });
+
+    if (glazedAny) {
+      this.brush.setDipped(false);
+      this.endBrushGlazeGesture();
+    }
   }
 
   handleBrushStroke(stroke) {

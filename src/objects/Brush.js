@@ -3,14 +3,15 @@ import { IngredientObject } from './IngredientObject.js';
 
 const BRUSH_KEY = 'brush-pixel';
 const BRUSH_SHADOW_KEY = 'brush-shadow-pixel';
-const PIXEL = 2.4;
-const BRUSH_TEXTURE_WIDTH = 8;
-const BRUSH_TEXTURE_HEIGHT = 26;
+const PIXEL = 2.2;
+const BRUSH_TEXTURE_WIDTH = 7;
+const BRUSH_TEXTURE_HEIGHT = 22;
 const BRUSH_TIP_LOCAL_X = 0;
-const BRUSH_TIP_LOCAL_Y = (BRUSH_TEXTURE_HEIGHT / 2 - 1) * PIXEL;
-const HANDLE_HOLD_WIDTH = 8 * PIXEL;
-const HANDLE_HOLD_HEIGHT = 14 * PIXEL;
-const HANDLE_HOLD_OFFSET_Y = -6 * PIXEL;
+const BRUSH_TIP_LOCAL_Y = 8 * PIXEL;
+const HANDLE_HOLD_WIDTH = 11 * PIXEL;
+const HANDLE_HOLD_HEIGHT = 12 * PIXEL;
+const HANDLE_HOLD_OFFSET_Y = -5 * PIXEL;
+const DIPPED_CROP_ROWS = 14;
 
 export class Brush extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -21,17 +22,19 @@ export class Brush extends IngredientObject {
 
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
+      hasIngredientTraits: options.hasIngredientTraits ?? false,
       visualVariation: false,
     });
 
     this.isRotatable = false;
     this.isBrush = true;
+    this.isTool = true;
     this.displayName = options.displayName ?? 'Nikiri Brush';
-    this.stackCategory = 'brush';
+    this.stackCategory = 'tool';
     this.acceptedStackCategories = [];
     this.maxStackedItems = 0;
     this.ownWeightGrams = options.weightGrams ?? 18;
-    this.restDepth = 22;
+    this.restDepth = 40;
     this.softness = 0.35;
     this.restShadowOffset = 4;
     this.dragShadowOffset = 10;
@@ -54,6 +57,30 @@ export class Brush extends IngredientObject {
     this.setCenteredHitbox(HANDLE_HOLD_WIDTH, HANDLE_HOLD_HEIGHT, 0, HANDLE_HOLD_OFFSET_Y);
     this.refreshCompositionShadow?.();
     this.applyRestingDepth();
+
+    this.isDipped = false;
+  }
+
+  setDipped(active) {
+    const next = Boolean(active);
+
+    if (this.isDipped === next) {
+      return;
+    }
+
+    this.isDipped = next;
+
+    if (next) {
+      this.sprite?.setCrop(0, 0, BRUSH_TEXTURE_WIDTH, DIPPED_CROP_ROWS);
+      this.shadow?.setVisible(false);
+      return;
+    }
+
+    if (this.sprite) {
+      this.sprite.setCrop(0, 0, BRUSH_TEXTURE_WIDTH, BRUSH_TEXTURE_HEIGHT);
+      this.sprite.isCropped = false;
+    }
+    this.shadow?.setVisible(true);
   }
 
   handleDragStart(pointer) {
@@ -61,6 +88,17 @@ export class Brush extends IngredientObject {
       return false;
     }
 
+    this.setDipped(false);
+    this.lastBrushPoint = this.getBrushPoint();
+    return true;
+  }
+
+  beginManualDrag(pointer) {
+    if (!super.beginManualDrag(pointer)) {
+      return false;
+    }
+
+    this.setDipped(false);
     this.lastBrushPoint = this.getBrushPoint();
     return true;
   }
@@ -123,38 +161,32 @@ export class Brush extends IngredientObject {
     context.clearRect(0, 0, width, height);
 
     context.fillStyle = '#6e3f24';
-    context.fillRect(2, 1, 4, 12);
+    context.fillRect(2, 1, 3, 11);
     context.fillStyle = '#a16b43';
-    context.fillRect(3, 2, 1, 9);
-    context.fillStyle = '#88532f';
-    context.fillRect(4, 2, 1, 10);
+    context.fillRect(2, 1, 1, 10);
     context.fillStyle = '#4e2c1a';
-    context.fillRect(5, 2, 1, 10);
+    context.fillRect(4, 1, 1, 11);
 
     context.fillStyle = '#7a8086';
-    context.fillRect(1, 13, 6, 3);
+    context.fillRect(1, 12, 5, 2);
     context.fillStyle = '#cdd3d6';
-    context.fillRect(1, 13, 6, 1);
+    context.fillRect(1, 12, 5, 1);
     context.fillStyle = '#4d5256';
-    context.fillRect(1, 15, 6, 1);
+    context.fillRect(1, 13, 5, 1);
 
     context.fillStyle = '#8a4f26';
-    context.fillRect(1, 16, 6, 2);
+    context.fillRect(1, 14, 5, 6);
     context.fillStyle = '#a8693d';
-    context.fillRect(2, 18, 4, 3);
-    context.fillStyle = '#7a4520';
-    context.fillRect(2, 21, 4, 2);
-    context.fillStyle = '#4e2812';
-    context.fillRect(3, 23, 2, 2);
+    context.fillRect(2, 14, 1, 6);
+    context.fillRect(4, 14, 1, 6);
 
     context.fillStyle = '#3d1d0e';
-    context.fillRect(1, 18, 1, 3);
-    context.fillRect(6, 18, 1, 3);
-    context.fillRect(3, 20, 1, 4);
-    context.fillRect(4, 21, 1, 3);
+    context.fillRect(1, 14, 1, 6);
+    context.fillRect(3, 14, 1, 6);
+    context.fillRect(5, 14, 1, 6);
 
     context.fillStyle = '#d39060';
-    context.fillRect(2, 17, 1, 1);
+    context.fillRect(2, 14, 1, 1);
 
     texture.refresh();
   }
@@ -169,10 +201,9 @@ export class Brush extends IngredientObject {
     context.clearRect(0, 0, width, height);
 
     context.fillStyle = '#ffffff';
-    context.fillRect(2, 2, 4, 11);
-    context.fillRect(1, 13, 6, 4);
-    context.fillRect(1, 17, 6, 7);
-    context.fillRect(3, 24, 2, 1);
+    context.fillRect(2, 2, 3, 10);
+    context.fillRect(1, 12, 5, 2);
+    context.fillRect(1, 14, 5, 6);
 
     texture.refresh();
   }

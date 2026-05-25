@@ -68,6 +68,11 @@ export class Nigiri extends IngredientObject {
     this.addDraggablePart(this.glazeSprite);
 
     this.isGlazed = false;
+    this.glazeStroke = null;
+    this.glazeStrokeProgress = 0;
+    this.glazeMeter = null;
+    this.glazeRequiredCoverage = 0.9;
+    this.glazeStartZone = 0.2;
 
     this.refreshCompositionShadow();
     this.applyRestingDepth();
@@ -81,6 +86,136 @@ export class Nigiri extends IngredientObject {
     this.isGlazed = active;
     this.glazeSprite?.setVisible(active);
     return true;
+  }
+
+  getGlazeTargetWorldRect() {
+    const rect = this.getWorldHitboxRect();
+    return new Phaser.Geom.Rectangle(rect.x, rect.y, rect.width, rect.height / 2);
+  }
+
+  beginGlazeStroke(brushRect) {
+    if (this.isGlazed) {
+      return;
+    }
+
+    const target = this.getGlazeTargetWorldRect();
+
+    if (!brushRect || !Phaser.Geom.Intersects.RectangleToRectangle(brushRect, target)) {
+      this.glazeStroke = null;
+      this.glazeStrokeProgress = 0;
+      this.hideGlazeMeter();
+      return;
+    }
+
+    const brushCenterX = brushRect.x + brushRect.width / 2;
+    const startedAtLeft = brushCenterX <= target.x + target.width * this.glazeStartZone;
+
+    this.glazeStroke = {
+      startedAtLeft,
+      minX: brushCenterX,
+      maxX: brushCenterX,
+      lastX: brushCenterX,
+      width: target.width,
+      leftEdge: target.x,
+    };
+    this.glazeStrokeProgress = 0;
+    this.showGlazeMeter();
+    this.updateGlazeMeter();
+  }
+
+  extendGlazeStroke(brushRect) {
+    if (this.isGlazed || !this.glazeStroke) {
+      return;
+    }
+
+    const target = this.getGlazeTargetWorldRect();
+
+    if (!brushRect || !Phaser.Geom.Intersects.RectangleToRectangle(brushRect, target)) {
+      return;
+    }
+
+    const brushCenterX = brushRect.x + brushRect.width / 2;
+    const stroke = this.glazeStroke;
+
+    if (brushCenterX < stroke.lastX - 1) {
+      this.endGlazeStroke();
+      return;
+    }
+
+    stroke.lastX = brushCenterX;
+    stroke.minX = Math.min(stroke.minX, brushCenterX);
+    stroke.maxX = Math.max(stroke.maxX, brushCenterX);
+
+    const coverage = stroke.width > 0
+      ? (stroke.maxX - stroke.minX) / stroke.width
+      : 0;
+
+    this.glazeStrokeProgress = stroke.startedAtLeft
+      ? Phaser.Math.Clamp(coverage, 0, 1)
+      : 0;
+    this.updateGlazeMeter();
+
+    if (stroke.startedAtLeft && coverage >= this.glazeRequiredCoverage) {
+      this.setGlazed(true);
+      this.endGlazeStroke();
+    }
+  }
+
+  endGlazeStroke() {
+    this.glazeStroke = null;
+    this.glazeStrokeProgress = 0;
+    this.hideGlazeMeter();
+  }
+
+  showGlazeMeter() {
+    if (this.glazeMeter) {
+      return;
+    }
+
+    this.glazeMeter = this.scene.add.graphics();
+    this.glazeMeter.excludeFromCompositionShadow = true;
+    this.add(this.glazeMeter);
+  }
+
+  hideGlazeMeter() {
+    if (!this.glazeMeter) {
+      return;
+    }
+
+    this.glazeMeter.destroy();
+    this.glazeMeter = null;
+  }
+
+  updateGlazeMeter() {
+    if (!this.glazeMeter) {
+      return;
+    }
+
+    const progress = Phaser.Math.Clamp(this.glazeStrokeProgress, 0, 1);
+    const trackWidth = Math.max(40, this.hitbox.width - 12);
+    const trackHeight = 8;
+    const x = this.hitbox.x + (this.hitbox.width - trackWidth) / 2;
+    const y = this.hitbox.y - trackHeight - 6;
+    const fillWidth = trackWidth * progress;
+
+    this.glazeMeter.clear();
+    this.glazeMeter.fillStyle(0x2f2419, 0.22);
+    this.glazeMeter.fillRoundedRect(x, y, trackWidth, trackHeight, 3);
+    this.glazeMeter.lineStyle(2, 0x6b4a32, 0.45);
+    this.glazeMeter.strokeRoundedRect(x, y, trackWidth, trackHeight, 3);
+
+    if (fillWidth > 0) {
+      this.glazeMeter.fillStyle(0xfff2a8, 0.9);
+      this.glazeMeter.fillRoundedRect(x, y, fillWidth, trackHeight, 3);
+    }
+
+    const arrowY = y + trackHeight + 6;
+    const arrowStartX = x + 2;
+    const arrowEndX = x + trackWidth - 2;
+    this.glazeMeter.lineStyle(2, 0xfff2a8, 0.9);
+    this.glazeMeter.lineBetween(arrowStartX, arrowY, arrowEndX, arrowY);
+    this.glazeMeter.lineBetween(arrowEndX, arrowY, arrowEndX - 5, arrowY - 3);
+    this.glazeMeter.lineBetween(arrowEndX, arrowY, arrowEndX - 5, arrowY + 3);
   }
 
   getFishWorldRect() {

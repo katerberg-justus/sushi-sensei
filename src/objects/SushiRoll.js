@@ -13,7 +13,7 @@ const ROLL_DISC_DEPTH_PERSPECTIVE = 0.72;
 const FLIPPABLE_MAX_WEIGHT_GRAMS = 20;
 const FLIPPED_DISC_HEIGHT_SCALE = 0.86;
 const FLIP_DURATION = 180;
-const HORIZONTAL_CORNER_RADIUS = 2;
+const HORIZONTAL_CORNER_RADIUS = 4;
 const HORIZONTAL_RICE_END_THICKNESS = 1;
 
 const FILLING_STYLES = {
@@ -153,7 +153,7 @@ function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL
     const axisCapDepth = rollDiameter * ROLL_DISC_DEPTH_PERSPECTIVE * sinT;
     const w = Math.max(2, Math.round(axisBodyLength * cosT + rollDiameter * sinT));
     const h = Math.max(2, Math.round(axisBodyLength * sinT + rollDiameter * cosT + axisCapDepth));
-    const key = `sushi-roll-${fillingType}-${frameKeySuffix}-q18-${i}`;
+    const key = `sushi-roll-${fillingType}-${frameKeySuffix}-q19-${i}`;
 
     if (!scene.textures.exists(key)) {
       const texture = scene.textures.createCanvas(key, w, h);
@@ -466,6 +466,7 @@ export class SushiRoll extends IngredientObject {
     const pieceWidth = visualPiece.cropWidth;
     const pieceHeight = visualPiece.cropHeight;
     const object = new SushiRoll(this.scene, position.x, position.y, {
+      ...this.getIngredientTraitOptions?.(),
       fillingType: this.fillingType,
       cropWidth: pieceWidth,
       cropHeight: pieceHeight,

@@ -159,6 +159,7 @@ export class Plate extends IngredientObject {
 
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
+      hasIngredientTraits: false,
       visualVariation: false,
     });
 
@@ -417,7 +418,7 @@ export class Plate extends IngredientObject {
 
     context.fillStyle = toHexColor(palette.rim);
     this.fillPixelEllipse(context, ellipse.x, ellipse.y + 1, ellipse.rx + 3, ellipse.ry + 2);
-    context.fillRect(ellipse.x - 2, ellipse.y - ellipse.ry - 1, 5, 1);
+    context.fillRect(ellipse.x - 4, ellipse.y - ellipse.ry - 1, 9, 1);
 
     context.fillStyle = toHexColor(palette.rimLight);
     this.strokePixelEllipse(context, ellipse.x, ellipse.y, ellipse.rx + 2, ellipse.ry + 3, 0.72, 1.1);

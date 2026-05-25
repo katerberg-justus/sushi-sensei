@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { SceneObject } from './SceneObject.js';
 import { getCachedFullImageData, sliceCachedImageData } from './ProceduralTexture.js';
+import { getVisibleGameArea } from '../ui/viewport.js';
 
 let shadowTextureId = 0;
 
@@ -8,6 +9,17 @@ const draggableRegistry = new Set();
 let activeDragOwner = null;
 
 const FLAT_DEPTH_CAP = 9.99;
+const MAX_DRAG_OUT_OF_SCREEN_RATIO = 0.25;
+
+function normalizeObjectQuality(quality) {
+  const numericQuality = Number(quality);
+
+  if (!Number.isFinite(numericQuality)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.min(3, Math.round(numericQuality)));
+}
 
 function computeFlatDepth(object) {
   const footprint = object.getFootprint?.();
@@ -107,10 +119,14 @@ export function releaseSharedTexture(scene, key) {
 }
 
 export class DraggableObject extends SceneObject {
-  constructor(scene, x, y, width, height) {
+  constructor(scene, x, y, width, height, options = {}) {
     super(scene, x, y);
 
     draggableRegistry.add(this);
+    this.hasQuality = options.hasQuality ?? false;
+    this._quality = this.hasQuality
+      ? normalizeObjectQuality(options.quality ?? options.qualityStars ?? 1)
+      : null;
     this.lastValidX = x;
     this.lastValidY = y;
     this.snapBackTween = null;
@@ -142,6 +158,7 @@ export class DraggableObject extends SceneObject {
     this.dragAnchorY = y;
     this.dragFollowSmoothing = 0.48;
     this.dragSnapDistance = 0.75;
+    this.maxDragOutOfScreenRatio = MAX_DRAG_OUT_OF_SCREEN_RATIO;
     this.dragUpdateHandler = null;
     this.dragShadowOffset = 0;
     this.restShadowOffset = 0;
@@ -186,6 +203,33 @@ export class DraggableObject extends SceneObject {
     this.on('pointerout', this.handlePointerOut, this);
 
     this.applyRestingDepth();
+  }
+
+  static normalizeQuality(quality) {
+    return normalizeObjectQuality(quality);
+  }
+
+  get quality() {
+    return this.hasQuality ? (this._quality ?? 1) : null;
+  }
+
+  set quality(quality) {
+    if (!this.hasQuality) {
+      this._quality = null;
+      return;
+    }
+
+    this._quality = normalizeObjectQuality(quality);
+  }
+
+  createInventoryIcon(scene) {
+    const textureKey = this.textureKey ?? this.sprite?.texture?.key ?? this.texture?.key;
+
+    if (!textureKey || textureKey === '__DEFAULT' || textureKey === '__MISSING') {
+      return null;
+    }
+
+    return scene.add.image(0, 0, textureKey);
   }
 
   setCenteredHitbox(width, height, offsetX = 0, offsetY = 0) {
@@ -1318,6 +1362,10 @@ export class DraggableObject extends SceneObject {
       return false;
     }
 
+    if (!this.isWithinDragScreenBounds(shadowRect)) {
+      return false;
+    }
+
     for (const other of draggableRegistry) {
       if (other === this || !other.scene) {
         continue;
@@ -1347,6 +1395,96 @@ export class DraggableObject extends SceneObject {
     }
 
     return true;
+  }
+
+  getDragScreenBounds() {
+    if (this.scene?.scale) {
+      const visibleArea = getVisibleGameArea(this.scene.scale);
+
+      if (
+        Number.isFinite(visibleArea.left)
+        && Number.isFinite(visibleArea.top)
+        && Number.isFinite(visibleArea.width)
+        && Number.isFinite(visibleArea.height)
+      ) {
+        return new Phaser.Geom.Rectangle(
+          visibleArea.left,
+          visibleArea.top,
+          visibleArea.width,
+          visibleArea.height,
+        );
+      }
+    }
+
+    const worldView = this.scene?.cameras?.main?.worldView;
+
+    if (isFiniteRect(worldView)) {
+      return new Phaser.Geom.Rectangle(
+        worldView.x,
+        worldView.y,
+        worldView.width,
+        worldView.height,
+      );
+    }
+
+    return null;
+  }
+
+  isWithinDragScreenBounds(rect) {
+    const screenBounds = this.getDragScreenBounds();
+
+    if (!isFiniteRect(rect) || !isFiniteRect(screenBounds)) {
+      return true;
+    }
+
+    const maxOutsideRatio = Phaser.Math.Clamp(
+      this.maxDragOutOfScreenRatio ?? MAX_DRAG_OUT_OF_SCREEN_RATIO,
+      0,
+      1,
+    );
+    const horizontalAllowance = rect.width * maxOutsideRatio;
+    const verticalAllowance = rect.height * maxOutsideRatio;
+
+    return rect.x >= screenBounds.x - horizontalAllowance
+      && rect.x + rect.width <= screenBounds.x + screenBounds.width + horizontalAllowance
+      && rect.y >= screenBounds.y - verticalAllowance
+      && rect.y + rect.height <= screenBounds.y + screenBounds.height + verticalAllowance;
+  }
+
+  clampDragPositionToScreen(x, y) {
+    const placementRect = this.getPlacementRectAt(x, y);
+    const screenBounds = this.getDragScreenBounds();
+
+    if (!isFinitePoint(x, y) || !isFiniteRect(placementRect) || !isFiniteRect(screenBounds)) {
+      return { x, y };
+    }
+
+    const maxOutsideRatio = Phaser.Math.Clamp(
+      this.maxDragOutOfScreenRatio ?? MAX_DRAG_OUT_OF_SCREEN_RATIO,
+      0,
+      1,
+    );
+    const horizontalAllowance = placementRect.width * maxOutsideRatio;
+    const verticalAllowance = placementRect.height * maxOutsideRatio;
+    const minRectX = screenBounds.x - horizontalAllowance;
+    const maxRectX = screenBounds.x + screenBounds.width + horizontalAllowance - placementRect.width;
+    const minRectY = screenBounds.y - verticalAllowance;
+    const maxRectY = screenBounds.y + screenBounds.height + verticalAllowance - placementRect.height;
+    const offsetX = placementRect.x - x;
+    const offsetY = placementRect.y - y;
+    const minX = minRectX - offsetX;
+    const maxX = maxRectX - offsetX;
+    const minY = minRectY - offsetY;
+    const maxY = maxRectY - offsetY;
+
+    return {
+      x: minX <= maxX
+        ? Phaser.Math.Clamp(x, minX, maxX)
+        : (minX + maxX) / 2,
+      y: minY <= maxY
+        ? Phaser.Math.Clamp(y, minY, maxY)
+        : (minY + maxY) / 2,
+    };
   }
 
   shouldSuppressDragStart(pointer) {
@@ -1460,7 +1598,9 @@ export class DraggableObject extends SceneObject {
     }
 
     this.previousDragCursor = canvas.style.cursor;
+    this.previousDefaultCursor = this.scene?.input?.manager?.defaultCursor ?? '';
     canvas.style.cursor = 'grabbing';
+    this.scene?.input?.setDefaultCursor?.('grabbing');
   }
 
   clearGrabbingCursor() {
@@ -1468,11 +1608,14 @@ export class DraggableObject extends SceneObject {
 
     if (!canvas?.style || this.previousDragCursor === null) {
       this.previousDragCursor = null;
+      this.previousDefaultCursor = null;
       return;
     }
 
     canvas.style.cursor = this.previousDragCursor;
+    this.scene?.input?.setDefaultCursor?.(this.previousDefaultCursor ?? '');
     this.previousDragCursor = null;
+    this.previousDefaultCursor = null;
   }
 
   handleDragStart(pointer) {
@@ -1545,12 +1688,14 @@ export class DraggableObject extends SceneObject {
       return false;
     }
 
-    this.dragAnchorX = dragX;
-    this.dragAnchorY = dragY;
+    const constrainedPosition = this.clampDragPositionToScreen(dragX, dragY);
 
-    if (this.canOccupyPosition(dragX, dragY)) {
-      this.lastValidX = dragX;
-      this.lastValidY = dragY;
+    this.dragAnchorX = constrainedPosition.x;
+    this.dragAnchorY = constrainedPosition.y;
+
+    if (this.canOccupyPosition(constrainedPosition.x, constrainedPosition.y)) {
+      this.lastValidX = constrainedPosition.x;
+      this.lastValidY = constrainedPosition.y;
     }
 
     this.updateDragPosition();
@@ -1694,12 +1839,14 @@ export class DraggableObject extends SceneObject {
         return;
       }
 
-      this.dragAnchorX = x;
-      this.dragAnchorY = y;
+      const constrainedPosition = this.clampDragPositionToScreen(x, y);
 
-      if (this.canOccupyPosition(x, y)) {
-        this.lastValidX = x;
-        this.lastValidY = y;
+      this.dragAnchorX = constrainedPosition.x;
+      this.dragAnchorY = constrainedPosition.y;
+
+      if (this.canOccupyPosition(constrainedPosition.x, constrainedPosition.y)) {
+        this.lastValidX = constrainedPosition.x;
+        this.lastValidY = constrainedPosition.y;
       }
 
       this.updateDragPosition();

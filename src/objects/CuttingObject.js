@@ -3,7 +3,7 @@ import { RotatableObject } from './RotatableObject.js';
 
 export class CuttingObject extends RotatableObject {
   constructor(scene, x, y, width, height, options = {}) {
-    super(scene, x, y, width, height);
+    super(scene, x, y, width, height, options);
 
     this.canCut = true;
     this.cutTipOffset = new Phaser.Math.Vector2(

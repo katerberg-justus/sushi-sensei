@@ -50,16 +50,16 @@ export const CUTTABLE_FISH_STYLES = {
   unagi: {
     displayName: 'Unagi',
     baseKey: 'cuttable-unagi-pixel',
-    base: 0x8b4d2c,
-    shadow: 0x56311f,
-    highlight: 0xb96a38,
-    fat: 0xd89154,
-    glint: 0xf0ba72,
-    glaze: 0x4c2418,
-    grill: 0x6b3321,
+    base: 0x875036,
+    shadow: 0x66412e,
+    highlight: 0xa96441,
+    fat: 0xba7650,
+    glaze: 0x5a2f22,
+    grill: 0x704331,
     width: 54,
     height: 30,
     weightGrams: 62,
+    shapeNoise: { chipChance: 0, bumpChance: 0.012 },
   },
 };
 
@@ -219,7 +219,6 @@ export class CuttableFish extends IngredientObject {
 
   static paintUnagiTexture(context, rng, fishStyle) {
     const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
-    const chance = (probability) => rng() < probability;
 
     context.fillStyle = toHexColor(fishStyle.shadow);
     context.fillRect(8, 21, 38, 5);
@@ -260,12 +259,6 @@ export class CuttableFish extends IngredientObject {
       }
     });
 
-    context.fillStyle = toHexColor(fishStyle.glint);
-    for (let i = 0; i < 7; i += 1) {
-      if (chance(0.7)) {
-        context.fillRect(9 + Math.floor(rng() * 35), 8 + Math.floor(rng() * 14), 2, 1);
-      }
-    }
   }
 
   static paintFatThread(context, x, y, segments, height = 1) {

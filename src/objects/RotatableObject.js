@@ -2,8 +2,8 @@ import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { DraggableObject } from './DraggableObject.js';
 
 export class RotatableObject extends DraggableObject {
-  constructor(scene, x, y, width, height) {
-    super(scene, x, y, width, height);
+  constructor(scene, x, y, width, height, options = {}) {
+    super(scene, x, y, width, height, options);
 
     this.isRotatable = true;
     this.rotationStep = Phaser.Math.DegToRad(90);

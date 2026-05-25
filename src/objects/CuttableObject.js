@@ -317,6 +317,7 @@ export class CuttableObject extends SceneObject {
     if (this.addDraggablePart && this.constructor !== CuttableObject) {
       const visualVariation = this.getIngredientVisualVariation?.();
       const options = {
+        ...this.getIngredientTraitOptions?.(),
         cropX: piece.cropX,
         cropY: piece.cropY,
         cropWidth: piece.cropWidth,

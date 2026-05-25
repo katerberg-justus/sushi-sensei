@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
+import { DraggableObject, holdSharedTexture, releaseSharedTexture, releaseActiveDrag } from './DraggableObject.js';
 import { RotatableObject } from './RotatableObject.js';
-import { holdSharedTexture, releaseSharedTexture, releaseActiveDrag } from './DraggableObject.js';
 
 let computedShadeTextureId = 0;
 const DEFAULT_STACK_OFFSET_Y = -4;
@@ -9,13 +9,56 @@ const DEFAULT_VISUAL_VARIATION = {
   stretchRange: 0.036,
   scaleNoiseRange: 0.01,
 };
+const INGREDIENT_FRESHNESS_LEVELS = Object.freeze([
+  'pristine',
+  'fresh',
+  'good',
+  'aging',
+  'spoiled',
+]);
+const INGREDIENT_FLAVOR_TAGS = Object.freeze([
+  'Umami',
+  'Briny',
+  'Smoky',
+  'Buttery',
+  'Clean',
+  'Citrusy',
+  'Cooling',
+  'Fatty',
+  'Creamy',
+  'Spicy',
+  'Tangy',
+  'Sweet',
+  'Caramelized',
+  'Toasty',
+  'Nutty',
+  'Oceanic',
+  'Delicate',
+  'Vinegary',
+  'Fermented',
+  'Peppery',
+]);
+const INGREDIENT_FLAVOR_TAG_BY_LOWERCASE = new Map(
+  INGREDIENT_FLAVOR_TAGS.map((tag) => [tag.toLowerCase(), tag]),
+);
 
 export class IngredientObject extends RotatableObject {
   constructor(scene, x, y, width, height, options = {}) {
-    super(scene, x, y, width, height);
+    super(scene, x, y, width, height, {
+      ...options,
+      hasQuality: options.hasQuality ?? true,
+    });
 
     this.isIngredient = true;
+    this.isTool = false;
+    this.hasIngredientTraits = options.hasIngredientTraits ?? true;
     this._ownWeightGrams = IngredientObject.normalizeWeightGrams(options.weightGrams ?? 0);
+    this._freshness = this.hasIngredientTraits
+      ? IngredientObject.normalizeFreshness(options.freshness ?? 'fresh')
+      : null;
+    this._flavorTags = this.hasIngredientTraits
+      ? IngredientObject.normalizeFlavorTags(options.flavorTags)
+      : [];
     this.softness = 0.9;
     this.restShadowOffset = 0;
     this.dragShadowOffset = 0;
@@ -96,6 +139,127 @@ export class IngredientObject extends RotatableObject {
     }
 
     return Math.max(0, Math.round(numericWeight * 10) / 10);
+  }
+
+  static get freshnessLevels() {
+    return INGREDIENT_FRESHNESS_LEVELS;
+  }
+
+  static get flavorTagOptions() {
+    return INGREDIENT_FLAVOR_TAGS;
+  }
+
+  static normalizeQuality(quality) {
+    return DraggableObject.normalizeQuality(quality);
+  }
+
+  static normalizeFreshness(freshness) {
+    if (typeof freshness !== 'string') {
+      return 'fresh';
+    }
+
+    const normalizedFreshness = freshness.trim().toLowerCase();
+
+    return INGREDIENT_FRESHNESS_LEVELS.includes(normalizedFreshness)
+      ? normalizedFreshness
+      : 'fresh';
+  }
+
+  static normalizeFlavorTag(flavorTag) {
+    if (typeof flavorTag !== 'string') {
+      return null;
+    }
+
+    return INGREDIENT_FLAVOR_TAG_BY_LOWERCASE.get(flavorTag.trim().toLowerCase()) ?? null;
+  }
+
+  static normalizeFlavorTags(flavorTags) {
+    if (!Array.isArray(flavorTags)) {
+      return [];
+    }
+
+    const normalizedTags = [];
+
+    flavorTags.forEach((flavorTag) => {
+      const normalizedTag = IngredientObject.normalizeFlavorTag(flavorTag);
+
+      if (normalizedTag && !normalizedTags.includes(normalizedTag)) {
+        normalizedTags.push(normalizedTag);
+      }
+    });
+
+    return normalizedTags;
+  }
+
+  get freshness() {
+    return this.hasIngredientTraits ? (this._freshness ?? 'fresh') : null;
+  }
+
+  set freshness(freshness) {
+    if (!this.hasIngredientTraits) {
+      this._freshness = null;
+      return;
+    }
+
+    this._freshness = IngredientObject.normalizeFreshness(freshness);
+  }
+
+  get flavorTags() {
+    return this.hasIngredientTraits ? [...(this._flavorTags ?? [])] : [];
+  }
+
+  set flavorTags(flavorTags) {
+    if (!this.hasIngredientTraits) {
+      this._flavorTags = [];
+      return;
+    }
+
+    this._flavorTags = IngredientObject.normalizeFlavorTags(flavorTags);
+  }
+
+  hasFlavorTag(flavorTag) {
+    const normalizedTag = IngredientObject.normalizeFlavorTag(flavorTag);
+
+    return Boolean(normalizedTag) && (this._flavorTags ?? []).includes(normalizedTag);
+  }
+
+  addFlavorTag(flavorTag) {
+    if (!this.hasIngredientTraits) {
+      return this;
+    }
+
+    const normalizedTag = IngredientObject.normalizeFlavorTag(flavorTag);
+
+    if (normalizedTag && !this.hasFlavorTag(normalizedTag)) {
+      this._flavorTags.push(normalizedTag);
+    }
+
+    return this;
+  }
+
+  removeFlavorTag(flavorTag) {
+    const normalizedTag = IngredientObject.normalizeFlavorTag(flavorTag);
+
+    if (!normalizedTag) {
+      return this;
+    }
+
+    this._flavorTags = (this._flavorTags ?? []).filter((tag) => tag !== normalizedTag);
+
+    return this;
+  }
+
+  getIngredientTraitOptions() {
+    if (!this.hasIngredientTraits) {
+      return { hasIngredientTraits: false };
+    }
+
+    return {
+      hasIngredientTraits: true,
+      quality: this.quality,
+      freshness: this.freshness,
+      flavorTags: this.flavorTags,
+    };
   }
 
   get ownWeightGrams() {
@@ -1866,8 +2030,7 @@ export class IngredientObject extends RotatableObject {
 
   handleStackLongPressDown(pointer) {
     if (
-      this.stackLocked
-      || this.isKneading
+      this.isKneading
       || this.isSpreading
       || this.isKneadStartPointer(pointer)
       || this.isSpreadStartPointer(pointer)
@@ -1943,12 +2106,32 @@ export class IngredientObject extends RotatableObject {
         return nestedChild;
       }
 
-      if (!child?.stackLocked && child?.detachFromStackParent) {
+      if (this.canDetachStackChild(child) && child?.detachFromStackParent) {
         return child;
       }
     }
 
     return null;
+  }
+
+  canDetachStackChild(child) {
+    if (!child) {
+      return false;
+    }
+
+    if (child.isTool) {
+      return true;
+    }
+
+    if (this.stackLocked) {
+      return false;
+    }
+
+    if (child.stackLocked) {
+      return false;
+    }
+
+    return true;
   }
 
   abortInProgressDrag() {
@@ -2162,7 +2345,7 @@ export class IngredientObject extends RotatableObject {
       return false;
     }
 
-    if (parent.stackLocked) {
+    if (parent.canDetachStackChild && !parent.canDetachStackChild(this)) {
       return false;
     }
 
