@@ -1,4 +1,5 @@
 import { CuttableObject } from './CuttableObject.js';
+import { FishFlipBehavior, setupFishFlip } from './FishFlipBehavior.js';
 import { IngredientObject } from './IngredientObject.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
@@ -52,6 +53,7 @@ export class CuttableTamago extends IngredientObject {
       }, options);
     }
 
+    setupFishFlip(this, options);
     this.refreshCompositionShadow();
   }
 
@@ -122,10 +124,21 @@ export class CuttableTamago extends IngredientObject {
       }
     }
   }
+
+  destroy(fromScene) {
+    this.stopFishFlipTween?.();
+    super.destroy(fromScene);
+  }
 }
 
 Object.getOwnPropertyNames(CuttableObject.prototype).forEach((name) => {
   if (name !== 'constructor') {
     CuttableTamago.prototype[name] = CuttableObject.prototype[name];
+  }
+});
+
+Object.entries(FishFlipBehavior).forEach(([name, method]) => {
+  if (name !== 'destroy') {
+    CuttableTamago.prototype[name] = method;
   }
 });

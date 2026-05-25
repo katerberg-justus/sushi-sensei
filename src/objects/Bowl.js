@@ -2,6 +2,7 @@ import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { IngredientObject } from './IngredientObject.js';
 import { toHexColor } from './ProceduralTexture.js';
+import { WasabiDab } from './WasabiDab.js';
 
 const PIXEL = 2.25;
 const BOWL_TEXTURE_WIDTH = 60;
@@ -27,6 +28,8 @@ const DEFAULT_FOOT = {
 const DEFAULT_BODY_BOTTOM_Y = 31;
 const DEFAULT_BODY_TAPER = 11;
 const DEFAULT_LOWER_BAND_RADIUS_X = 21;
+const DISPENSE_HOLD_DURATION = 260;
+const DISPENSE_MOVE_TOLERANCE = 7;
 
 let bowlTextureId = 0;
 
@@ -390,6 +393,16 @@ export class ContainerVessel extends IngredientObject {
     this.contentRimOverflow = profile.contentRimOverflow;
     this.maxContentWeightGrams = options.maxContentWeightGrams ?? profile.maxContentWeightGrams;
     this.fixedContents = normalizeFixedContents(options.contents ?? options.content);
+    this.dispensedIngredientStyle = options.dispensedIngredientStyle
+      ?? options.dispenses
+      ?? (this.fixedContents?.style === 'wasabi' ? 'wasabi' : null);
+    this.dispenseHoldDuration = options.dispenseHoldDuration ?? DISPENSE_HOLD_DURATION;
+    this.dispenseMoveTolerance = options.dispenseMoveTolerance ?? DISPENSE_MOVE_TOLERANCE;
+    this.dispenseHoldTimer = null;
+    this.dispensePointerMoveHandler = null;
+    this.dispensePointerUpHandler = null;
+    this.dispensePointerId = null;
+    this.dispenseOrigin = null;
     this.displayName = options.displayName ?? profile.displayName;
     this.isRotatable = false;
     this.stackCategory = 'bowl';
@@ -431,6 +444,8 @@ export class ContainerVessel extends IngredientObject {
     this.addDraggablePart(this.sprite);
     this.refreshCompositionShadow();
     this.applyRestingDepth();
+
+    this.on('pointerdown', this.handleDispensePointerDown, this);
   }
 
   static get palettes() {
@@ -457,6 +472,106 @@ export class ContainerVessel extends IngredientObject {
     const fixed = this.fixedContents?.fullness ?? 0;
 
     return clamp(Math.max(byWeight, byCount, fixed), 0, 1);
+  }
+
+  handleDispensePointerDown(pointer) {
+    if (!this.canDispenseIngredient() || !this.isPrimaryDragPointer(pointer)) {
+      return;
+    }
+
+    this.cancelDispenseHold();
+    this.dispensePointerId = this.getDragPointerId(pointer);
+    this.dispenseOrigin = { x: pointer.x, y: pointer.y };
+    this.suppressedDragPointerId = this.dispensePointerId;
+
+    this.dispensePointerMoveHandler = (movePointer) => {
+      if (!this.dispenseOrigin || this.getDragPointerId(movePointer) !== this.dispensePointerId) {
+        return;
+      }
+
+      const dx = movePointer.x - this.dispenseOrigin.x;
+      const dy = movePointer.y - this.dispenseOrigin.y;
+
+      if (Math.hypot(dx, dy) > this.dispenseMoveTolerance) {
+        this.cancelDispenseHold();
+      }
+    };
+    this.dispensePointerUpHandler = (upPointer) => {
+      if (this.getDragPointerId(upPointer) === this.dispensePointerId) {
+        this.cancelDispenseHold();
+      }
+    };
+
+    this.scene.input.on('pointermove', this.dispensePointerMoveHandler);
+    this.scene.input.on('pointerup', this.dispensePointerUpHandler);
+    this.scene.input.on('pointerupoutside', this.dispensePointerUpHandler);
+
+    this.dispenseHoldTimer = this.scene.time.delayedCall(this.dispenseHoldDuration, () => {
+      this.dispenseHoldTimer = null;
+      this.dispenseIngredient(pointer);
+    });
+  }
+
+  canDispenseIngredient() {
+    return this.dispensedIngredientStyle === 'wasabi';
+  }
+
+  dispenseIngredient(pointer) {
+    if (!this.canDispenseIngredient()) {
+      this.cancelDispenseHold();
+      return null;
+    }
+
+    const spawnPoint = this.getDispenseSpawnPoint(pointer);
+    const dab = new WasabiDab(this.scene, spawnPoint.x, spawnPoint.y, {
+      quality: this.quality ?? 2,
+      freshness: 'fresh',
+      flavorTags: ['Spicy', 'Cooling'],
+    });
+
+    this.clearDispenseInputHandlers();
+    this.dispenseOrigin = null;
+    this.dispensePointerId = null;
+    this.suppressedDragPointerId = null;
+    dab.beginManualDrag?.(pointer);
+
+    return dab;
+  }
+
+  getDispenseSpawnPoint(pointer) {
+    if (Number.isFinite(pointer?.x) && Number.isFinite(pointer?.y)) {
+      return { x: pointer.x, y: pointer.y };
+    }
+
+    const localY = (this.contentEllipse.y - this.textureHeight / 2) * this.pixelScale
+      + (this.stackOffsetY ?? 0);
+
+    return this.localToWorldPoint?.({ x: 0, y: localY }) ?? { x: this.x, y: this.y };
+  }
+
+  cancelDispenseHold() {
+    if (this.dispenseHoldTimer) {
+      this.dispenseHoldTimer.remove(false);
+      this.dispenseHoldTimer = null;
+    }
+
+    this.clearDispenseInputHandlers();
+    this.dispenseOrigin = null;
+    this.dispensePointerId = null;
+    this.suppressedDragPointerId = null;
+  }
+
+  clearDispenseInputHandlers() {
+    if (this.dispensePointerMoveHandler) {
+      this.scene.input.off('pointermove', this.dispensePointerMoveHandler);
+      this.dispensePointerMoveHandler = null;
+    }
+
+    if (this.dispensePointerUpHandler) {
+      this.scene.input.off('pointerup', this.dispensePointerUpHandler);
+      this.scene.input.off('pointerupoutside', this.dispensePointerUpHandler);
+      this.dispensePointerUpHandler = null;
+    }
   }
 
   acceptsStackPlacement(other, placement = {}) {
@@ -1009,6 +1124,7 @@ export class ContainerVessel extends IngredientObject {
     const textureKey = this.textureKey;
     const scene = this.scene;
 
+    this.cancelDispenseHold();
     super.destroy(fromScene);
 
     if (textureKey && scene?.textures?.exists(textureKey)) {

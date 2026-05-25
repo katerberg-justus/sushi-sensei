@@ -1,4 +1,5 @@
 import { DebugOverlay } from './DebugOverlay.js';
+import { CurrencyDisplay } from './CurrencyDisplay.js';
 import { HoverActionIndicator } from './HoverActionIndicator.js';
 import { IngredientNameSignboard } from './IngredientNameSignboard.js';
 import { IngredientTraitOverlay } from './IngredientTraitOverlay.js';
@@ -16,6 +17,7 @@ export class GameUi {
     this.ingredientTraits = new IngredientTraitOverlay(scene);
     this.hoverActions = new HoverActionIndicator(scene);
     this.inventoryBar = new InventoryBar(scene);
+    this.currencyDisplay = new CurrencyDisplay(scene, scene.currency);
     this.debugOverlay = new DebugOverlay(scene);
   }
 
@@ -26,6 +28,7 @@ export class GameUi {
     this.ingredientTraits.position(visibleArea);
     this.hoverActions.position(visibleArea);
     this.inventoryBar.position(visibleArea);
+    this.currencyDisplay.position(visibleArea);
     this.debugOverlay.position(visibleArea);
   }
 
@@ -86,11 +89,16 @@ export class GameUi {
     this.inventoryBar.setSlotItems(items);
   }
 
+  setCurrency(amount = 0) {
+    this.currencyDisplay.setAmount(amount);
+  }
+
   destroy() {
     this.nameSignboard.destroy();
     this.ingredientTraits.destroy();
     this.hoverActions.destroy();
     this.inventoryBar.destroy();
+    this.currencyDisplay.destroy();
     this.debugOverlay.destroy();
   }
 }

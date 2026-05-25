@@ -193,11 +193,16 @@ export class RiceBall extends IngredientObject {
     }
 
     const fishType = topping.fishType ?? 'salmon';
+    const toppingTags = typeof topping.gatherStackFlavorTags === 'function'
+      ? topping.gatherStackFlavorTags()
+      : (topping.flavorTags ?? []);
+    const flavorTags = IngredientObject.unionFlavorTags(this.flavorTags, toppingTags);
     const nigiri = new Nigiri(this.scene, this.x, this.y, {
       fishType,
       fishSubtype: topping.fishSubtype ?? null,
       weightGrams: this.weightGrams,
       variant: topping.variantIndex ?? this.variantIndex,
+      flavorTags,
     });
 
     nigiri.setObjectRotation(this.rotation ?? 0);

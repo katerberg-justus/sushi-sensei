@@ -343,6 +343,10 @@ export class CuttableObject extends SceneObject {
         options.fishSubtype = this.fishSubtype;
       }
 
+      if (this.canFlipFish) {
+        options.isFishBottomUp = this.isFishBottomUp;
+      }
+
       if (this.getCuttableReplacementOptions) {
         Object.assign(options, this.getCuttableReplacementOptions(piece));
       }
@@ -394,6 +398,7 @@ export class CuttableObject extends SceneObject {
     this.setAnchorToPieceVisibleCenter(this.pieces[0]);
     this.pieces[0].image = this.createPieceImage(this.pieces[0]);
     this.registerCuttablePart(this.pieces[0].image);
+    this.applyFishSurfaceState?.(this.isFishBottomUp);
     this.refreshCuttableGeometry();
 
     if (this.dragAnchorX !== undefined) {

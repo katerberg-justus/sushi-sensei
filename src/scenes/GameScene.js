@@ -36,6 +36,7 @@ export class GameScene extends Phaser.Scene {
 
     this.input.mouse?.disableContextMenu();
     this.input.setPollAlways();
+    this.currency = 0;
     this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.input.keyboard?.addCapture?.('SPACE');
     this.cameras.main.setBackgroundColor(COLORS.boardSideB);
@@ -123,6 +124,7 @@ export class GameScene extends Phaser.Scene {
         quality: 2,
       }),
     ];
+    this.wasabiBowl = this.bowls[0];
     this.nikiriBowl = this.bowls[1];
     this.nigiriObjects = [this.nigiri];
     this.plates = [
@@ -261,6 +263,10 @@ export class GameScene extends Phaser.Scene {
       modes.push('reset');
     }
 
+    if (gameObject?.canFlipFish) {
+      modes.push('flip');
+    }
+
     return modes;
   }
 
@@ -270,6 +276,11 @@ export class GameScene extends Phaser.Scene {
 
   setDragDebugInfo(lines = []) {
     this.ui?.setDragDebugInfo(lines);
+  }
+
+  setCurrency(amount = 0) {
+    this.currency = Number.isFinite(amount) ? Math.max(0, Math.floor(amount)) : 0;
+    this.ui?.setCurrency(this.currency);
   }
 
   handleObjectOver(_pointer, gameObject) {
@@ -319,6 +330,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (gameObject.didConsumeRotationClick?.(pointer)) {
+      this.clearPendingIngredientTraitClick();
+      if (this.ui?.isIngredientTraitObject(gameObject)) {
+        this.ui.hideIngredientTraits();
+      }
+      return;
+    }
+
+    if (gameObject.didConsumeFishFlipClick?.(pointer)) {
       this.clearPendingIngredientTraitClick();
       if (this.ui?.isIngredientTraitObject(gameObject)) {
         this.ui.hideIngredientTraits();

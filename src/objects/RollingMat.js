@@ -869,6 +869,9 @@ export class RollingMat extends IngredientObject {
         : null
     );
     const { fillingType, fillingSubtype } = this.resolveRollFilling(nori);
+    const rollFlavorTags = nori && typeof nori.gatherStackFlavorTags === 'function'
+      ? nori.gatherStackFlavorTags()
+      : IngredientObject.unionFlavorTags(nori?.flavorTags ?? []);
     const rollWorldX = this.x;
     const rollWorldY = this.y;
     const rollRotation = this.rotation ?? 0;
@@ -893,6 +896,7 @@ export class RollingMat extends IngredientObject {
       const sushiRoll = new SushiRoll(this.scene, rollWorldX, rollWorldY, {
         fillingType,
         fillingSubtype,
+        flavorTags: rollFlavorTags,
       });
 
       sushiRoll.setObjectRotation(rollRotation);

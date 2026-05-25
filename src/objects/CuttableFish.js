@@ -1,5 +1,6 @@
 import { COLORS } from '../game/constants.js';
 import { CuttableObject } from './CuttableObject.js';
+import { FishFlipBehavior, setupFishFlip } from './FishFlipBehavior.js';
 import { IngredientObject } from './IngredientObject.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
@@ -211,6 +212,7 @@ export class CuttableFish extends IngredientObject {
       }, options);
     }
 
+    setupFishFlip(this, options);
     this.refreshCompositionShadow();
   }
 
@@ -261,7 +263,7 @@ export class CuttableFish extends IngredientObject {
 
     context.fillStyle = toHexColor(fishStyle.shadow);
     context.fillRect(8, 20, 42, 4);
-    context.fillRect(13, 24, 32, 2);
+    context.fillRect(13, 24, 32, 1);
     context.fillRect(4, 12, 4, 6);
     context.fillRect(50, 11, 4, 7);
 
@@ -342,7 +344,7 @@ export class CuttableFish extends IngredientObject {
     const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
 
     context.fillStyle = toHexColor(fishStyle.shadow);
-    context.fillRect(8, 21, 38, 5);
+    context.fillRect(8, 21, 38, 4);
     context.fillRect(5, 14, 45, 9);
     context.fillRect(7, 8, 40, 8);
     context.fillRect(11, 5, 31, 4);
@@ -387,10 +389,21 @@ export class CuttableFish extends IngredientObject {
       context.fillRect(x + index * 4, y + index, width, height);
     });
   }
+
+  destroy(fromScene) {
+    this.stopFishFlipTween?.();
+    super.destroy(fromScene);
+  }
 }
 
 Object.getOwnPropertyNames(CuttableObject.prototype).forEach((name) => {
   if (name !== 'constructor') {
     CuttableFish.prototype[name] = CuttableObject.prototype[name];
+  }
+});
+
+Object.entries(FishFlipBehavior).forEach(([name, method]) => {
+  if (name !== 'destroy') {
+    CuttableFish.prototype[name] = method;
   }
 });

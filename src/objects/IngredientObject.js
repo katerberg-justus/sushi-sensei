@@ -56,9 +56,10 @@ export class IngredientObject extends RotatableObject {
     this._freshness = this.hasIngredientTraits
       ? IngredientObject.normalizeFreshness(options.freshness ?? 'fresh')
       : null;
-    this._flavorTags = this.hasIngredientTraits
+    this._intrinsicFlavorTags = this.hasIngredientTraits
       ? IngredientObject.normalizeFlavorTags(options.flavorTags)
       : [];
+    this._flavorTags = [...this._intrinsicFlavorTags];
     this.softness = 0.9;
     this.restShadowOffset = 0;
     this.dragShadowOffset = 0;
@@ -191,6 +192,67 @@ export class IngredientObject extends RotatableObject {
     return normalizedTags;
   }
 
+  static unionFlavorTags(...tagArrays) {
+    const merged = [];
+
+    tagArrays.forEach((tags) => {
+      (Array.isArray(tags) ? tags : []).forEach((tag) => {
+        const normalizedTag = IngredientObject.normalizeFlavorTag(tag);
+
+        if (normalizedTag && !merged.includes(normalizedTag)) {
+          merged.push(normalizedTag);
+        }
+      });
+    });
+
+    return merged;
+  }
+
+  gatherStackFlavorTags() {
+    const tags = [...this.flavorTags];
+
+    (this.stackChildren ?? []).forEach((child) => {
+      if (typeof child?.gatherStackFlavorTags !== 'function') {
+        return;
+      }
+
+      child.gatherStackFlavorTags().forEach((tag) => {
+        const normalizedTag = IngredientObject.normalizeFlavorTag(tag);
+
+        if (normalizedTag && !tags.includes(normalizedTag)) {
+          tags.push(normalizedTag);
+        }
+      });
+    });
+
+    return tags;
+  }
+
+  recomputeFlavorTags() {
+    if (!this.hasIngredientTraits) {
+      this._flavorTags = [];
+      return this;
+    }
+
+    const sources = [this._intrinsicFlavorTags ?? []];
+
+    (this.stackChildren ?? []).forEach((child) => {
+      if (typeof child?.gatherStackFlavorTags === 'function') {
+        sources.push(child.gatherStackFlavorTags());
+      } else if (Array.isArray(child?.flavorTags)) {
+        sources.push(child.flavorTags);
+      }
+    });
+
+    this._flavorTags = IngredientObject.unionFlavorTags(...sources);
+
+    if (typeof this.stackParent?.recomputeFlavorTags === 'function') {
+      this.stackParent.recomputeFlavorTags();
+    }
+
+    return this;
+  }
+
   get freshness() {
     return this.hasIngredientTraits ? (this._freshness ?? 'fresh') : null;
   }
@@ -210,11 +272,17 @@ export class IngredientObject extends RotatableObject {
 
   set flavorTags(flavorTags) {
     if (!this.hasIngredientTraits) {
+      this._intrinsicFlavorTags = [];
       this._flavorTags = [];
       return;
     }
 
-    this._flavorTags = IngredientObject.normalizeFlavorTags(flavorTags);
+    this._intrinsicFlavorTags = IngredientObject.normalizeFlavorTags(flavorTags);
+    this.recomputeFlavorTags();
+  }
+
+  get intrinsicFlavorTags() {
+    return this.hasIngredientTraits ? [...(this._intrinsicFlavorTags ?? [])] : [];
   }
 
   hasFlavorTag(flavorTag) {
@@ -230,8 +298,9 @@ export class IngredientObject extends RotatableObject {
 
     const normalizedTag = IngredientObject.normalizeFlavorTag(flavorTag);
 
-    if (normalizedTag && !this.hasFlavorTag(normalizedTag)) {
-      this._flavorTags.push(normalizedTag);
+    if (normalizedTag && !(this._intrinsicFlavorTags ?? []).includes(normalizedTag)) {
+      this._intrinsicFlavorTags = [...(this._intrinsicFlavorTags ?? []), normalizedTag];
+      this.recomputeFlavorTags();
     }
 
     return this;
@@ -244,7 +313,8 @@ export class IngredientObject extends RotatableObject {
       return this;
     }
 
-    this._flavorTags = (this._flavorTags ?? []).filter((tag) => tag !== normalizedTag);
+    this._intrinsicFlavorTags = (this._intrinsicFlavorTags ?? []).filter((tag) => tag !== normalizedTag);
+    this.recomputeFlavorTags();
 
     return this;
   }
@@ -818,19 +888,40 @@ export class IngredientObject extends RotatableObject {
         const darkAlpha = darkProgress * this.computedShadeDarkAlpha;
 
         if (lightAlpha > darkAlpha && lightAlpha > 0.015) {
+          const target = this.getComputedShadeTextureRect(sourceData, blockX, blockY, block.width, block.height);
+
           context.fillStyle = `rgba(255,255,255,${lightAlpha.toFixed(3)})`;
-          context.fillRect(cropX + blockX, cropY + blockY, block.width, block.height);
+          context.fillRect(target.x, target.y, target.width, target.height);
           continue;
         }
 
         if (darkAlpha > 0.015) {
           const shadeColor = this.getDarkenedComputedShadeColor(block.color);
+          const target = this.getComputedShadeTextureRect(sourceData, blockX, blockY, block.width, block.height);
 
           context.fillStyle = `rgba(${shadeColor.r},${shadeColor.g},${shadeColor.b},${darkAlpha.toFixed(3)})`;
-          context.fillRect(cropX + blockX, cropY + blockY, block.width, block.height);
+          context.fillRect(target.x, target.y, target.width, target.height);
         }
       }
     }
+  }
+
+  getComputedShadeTextureRect(sourceData, blockX, blockY, width, height) {
+    const {
+      part,
+      cropX,
+      cropY,
+      sourceWidth,
+      sourceHeight,
+    } = sourceData;
+    const x = part?.flipX
+      ? cropX + sourceWidth - blockX - width
+      : cropX + blockX;
+    const y = part?.flipY
+      ? cropY + sourceHeight - blockY - height
+      : cropY + blockY;
+
+    return { x, y, width, height };
   }
 
   getComputedShadeBlock(sourceData, blockX, blockY, blockSize) {
@@ -957,8 +1048,14 @@ export class IngredientObject extends RotatableObject {
     const partCos = transforms?.partCos ?? Math.cos(partRotation);
     const objectSin = transforms?.objectSin ?? Math.sin(objectRotation);
     const objectCos = transforms?.objectCos ?? Math.cos(objectRotation);
-    const localTextureX = cropX + x + 0.5 - frameWidth * originX;
-    const localTextureY = cropY + y + 0.5 - frameHeight * originY;
+    const textureX = part?.flipX
+      ? cropX + sourceData.sourceWidth - x - 0.5
+      : cropX + x + 0.5;
+    const textureY = part?.flipY
+      ? cropY + sourceData.sourceHeight - y - 0.5
+      : cropY + y + 0.5;
+    const localTextureX = textureX - frameWidth * originX;
+    const localTextureY = textureY - frameHeight * originY;
     const localPartX = localTextureX * scaleX;
     const localPartY = localTextureY * scaleY;
     const objectX = (part?.x ?? 0) + localPartX * partCos - localPartY * partSin;
@@ -978,6 +1075,8 @@ export class IngredientObject extends RotatableObject {
     shade.setPosition(part.x, part.y);
     shade.setScale(part.scaleX ?? 1, part.scaleY ?? 1);
     shade.setRotation(part.rotation ?? 0);
+    shade.setFlipX?.(false);
+    shade.setFlipY?.(false);
 
     this.draggablePartBasePositions?.set(shade, {
       x: basePosition.x,
@@ -2283,6 +2382,7 @@ export class IngredientObject extends RotatableObject {
 
     this.stackParent = target;
     target.stackChildren.push(this);
+    target.recomputeFlavorTags?.();
     target.handleStackChildAttached?.(this, { x: offsetX, y: offsetY });
 
     if (this.stackParent === target) {
@@ -2375,6 +2475,7 @@ export class IngredientObject extends RotatableObject {
     const index = parent.stackChildren.indexOf(this);
     if (index !== -1) {
       parent.stackChildren.splice(index, 1);
+      parent.recomputeFlavorTags?.();
       parent.handleStackChildDetached?.(this);
     }
 
@@ -2414,6 +2515,7 @@ export class IngredientObject extends RotatableObject {
 
       if (index !== -1) {
         parent.stackChildren.splice(index, 1);
+        parent.recomputeFlavorTags?.();
       }
 
       this.stackParent = null;

@@ -5,6 +5,7 @@ const ICON_GAP = 6;
 const ICON_KEYS = {
   grab: 'hover-grab-hand-icon',
   reset: 'hover-reset-arrow-icon',
+  flip: 'hover-flip-fish-icon',
 };
 
 export class HoverActionIndicator {
@@ -18,12 +19,15 @@ export class HoverActionIndicator {
 
     const grabIcon = scene.add.image(ICON_SIZE / 2, ICON_SIZE / 2, ICON_KEYS.grab);
     const resetIcon = scene.add.image(ICON_SIZE + ICON_GAP + ICON_SIZE / 2, ICON_SIZE / 2, ICON_KEYS.reset);
+    const flipIcon = scene.add.image((ICON_SIZE + ICON_GAP) * 2 + ICON_SIZE / 2, ICON_SIZE / 2, ICON_KEYS.flip);
 
     grabIcon.setOrigin(0.5);
     resetIcon.setOrigin(0.5);
+    flipIcon.setOrigin(0.5);
     resetIcon.setVisible(false);
+    flipIcon.setVisible(false);
 
-    this.container = scene.add.container(0, 0, [grabIcon, resetIcon]);
+    this.container = scene.add.container(0, 0, [grabIcon, resetIcon, flipIcon]);
     this.container.setDepth(UI_DEPTHS.overlay);
     this.container.setVisible(false);
     this.container.setAlpha(0);
@@ -32,7 +36,7 @@ export class HoverActionIndicator {
     this.iconGap = ICON_GAP;
     this.width = ICON_SIZE;
     this.height = ICON_SIZE;
-    this.icons = { grab: grabIcon, reset: resetIcon };
+    this.icons = { grab: grabIcon, reset: resetIcon, flip: flipIcon };
   }
 
   position(visibleArea) {
@@ -139,6 +143,7 @@ export class HoverActionIndicator {
   createTextures() {
     this.createGrabHandTexture();
     this.createResetArrowTexture();
+    this.createFlipFishTexture();
   }
 
   createGrabHandTexture() {
@@ -198,5 +203,36 @@ export class HoverActionIndicator {
     graphics.generateTexture(key, ICON_SIZE, ICON_SIZE);
     graphics.destroy();
   }
-}
 
+  createFlipFishTexture() {
+    const key = ICON_KEYS.flip;
+
+    if (this.scene.textures.exists(key)) {
+      this.scene.textures.remove(key);
+    }
+
+    const graphics = this.scene.add.graphics();
+    const drawFlipFish = (offsetX, offsetY, color, alpha) => {
+      graphics.fillStyle(color, alpha);
+      graphics.fillRect(offsetX + 6, offsetY + 9, 12, 5);
+      graphics.fillRect(offsetX + 8, offsetY + 7, 8, 2);
+      graphics.fillRect(offsetX + 8, offsetY + 14, 8, 2);
+      graphics.fillRect(offsetX + 18, offsetY + 10, 3, 3);
+      graphics.fillRect(offsetX + 3, offsetY + 10, 3, 3);
+      graphics.fillRect(offsetX + 11, offsetY + 4, 6, 2);
+      graphics.fillRect(offsetX + 16, offsetY + 5, 2, 2);
+      graphics.fillRect(offsetX + 18, offsetY + 6, 2, 4);
+      graphics.fillRect(offsetX + 13, offsetY + 3, 2, 4);
+      graphics.fillRect(offsetX + 6, offsetY + 18, 6, 2);
+      graphics.fillRect(offsetX + 5, offsetY + 16, 2, 2);
+      graphics.fillRect(offsetX + 4, offsetY + 14, 2, 3);
+      graphics.fillRect(offsetX + 10, offsetY + 17, 2, 4);
+    };
+
+    drawFlipFish(1, 1, 0x10251e, 0.24);
+    drawFlipFish(0, 0, 0xffffff, 1);
+
+    graphics.generateTexture(key, ICON_SIZE, ICON_SIZE);
+    graphics.destroy();
+  }
+}
