@@ -5,7 +5,14 @@ import { Brush } from '../objects/Brush.js';
 import { CuttableFish } from '../objects/CuttableFish.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
+import { Deba } from '../objects/Deba.js';
+import { Fuguhiki } from '../objects/Fuguhiki.js';
+import { Kiritsuke } from '../objects/Kiritsuke.js';
 import { Knife } from '../objects/Knife.js';
+import { Nakiri } from '../objects/Nakiri.js';
+import { Takohiki } from '../objects/Takohiki.js';
+import { Usuba } from '../objects/Usuba.js';
+import { Yanagiba } from '../objects/Yanagiba.js';
 import { Nigiri } from '../objects/Nigiri.js';
 import { NoriSheet } from '../objects/NoriSheet.js';
 import { Plate } from '../objects/Plate.js';
@@ -142,9 +149,25 @@ export class GameScene extends Phaser.Scene {
       this.noriSheet,
       this.sushiRoll,
     ];
-    this.knife = new Knife(this, width * 0.85, height * 0.4, { quality: 2 });
-    this.knife.displayName = 'Knife';
-    this.knife.on('cutstroke', this.handleCutStroke, this);
+
+    this.knives = [
+      { Class: Knife, name: 'Knife', spawn: true },
+      { Class: Yanagiba, name: 'Yanagiba' },
+      { Class: Deba, name: 'Deba' },
+      { Class: Usuba, name: 'Usuba' },
+      { Class: Nakiri, name: 'Nakiri' },
+      { Class: Takohiki, name: 'Takohiki' },
+      { Class: Fuguhiki, name: 'Fuguhiki' },
+      { Class: Kiritsuke, name: 'Kiritsuke' },
+    ].map(({ Class, name, spawn }) => {
+      const x = spawn ? width * 0.85 : -1000;
+      const y = spawn ? height * 0.40 : -1000;
+      const blade = new Class(this, x, y, { quality: 2 });
+      blade.displayName = name;
+      blade.on('cutstroke', this.handleCutStroke, this);
+      return blade;
+    });
+    this.knife = this.knives[0];
 
     this.brush = new Brush(this, this.nikiriBowl.x, this.nikiriBowl.y - 11, { quality: 2 });
     this.brush.on('brushstroke', this.handleBrushStroke, this);
@@ -173,6 +196,9 @@ export class GameScene extends Phaser.Scene {
     this.ui.inventoryBar.storeObjectInSlot(7, this.noriSheet);
     this.ui.inventoryBar.storeObjectInSlot(8, this.nigiri);
     this.ui.inventoryBar.storeObjectInSlot(9, this.sushiRoll);
+    this.knives.slice(1).forEach((blade, index) => {
+      this.ui.inventoryBar.storeObjectInLargeSlot(0, index, blade);
+    });
     this.scale.on('resize', this.positionUi, this);
     this.scale.on('resize', this.resizeBoardBackground, this);
     this.input.keyboard.on('keydown-R', this.resetScene, this);

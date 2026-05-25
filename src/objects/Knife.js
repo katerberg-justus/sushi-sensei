@@ -1,26 +1,32 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { CuttingObject } from './CuttingObject.js';
 
-const KNIFE_KEY = 'knife-pixel';
-const KNIFE_SHADOW_KEY = 'knife-shadow-pixel';
-const PIXEL = 2.5;
-const KNIFE_ROTATION = Phaser.Math.DegToRad(90);
-const KNIFE_TIP_LOCAL_X = -7.5;
-const KNIFE_TIP_LOCAL_Y = -75;
-const HANDLE_HOLD_WIDTH = 26;
-const HANDLE_HOLD_HEIGHT = 48;
-const HANDLE_HOLD_OFFSET_Y = 56;
 const MANUAL_CUT_STROKE_DISTANCE = 120;
 const MANUAL_CUT_STROKE_DURATION = 88;
 
 export class Knife extends CuttingObject {
-  constructor(scene, x, y, options = {}) {
-    Knife.createTexture(scene);
+  static TEXTURE_KEY = 'knife-pixel';
+  static SHADOW_TEXTURE_KEY = 'knife-shadow-pixel';
+  static PIXEL_SCALE = 2.5;
+  static BLADE_ROTATION = Phaser.Math.DegToRad(90);
+  static TIP_LOCAL_X = -7.5;
+  static TIP_LOCAL_Y = -75;
+  static HANDLE_HOLD_WIDTH = 26;
+  static HANDLE_HOLD_HEIGHT = 48;
+  static HANDLE_HOLD_OFFSET_Y = 56;
+  static BODY_WIDTH = 46;
+  static BODY_HEIGHT = 160;
 
-    super(scene, x, y, 46, 160, {
+  constructor(scene, x, y, options = {}) {
+    const Cls = new.target ?? Knife;
+    Cls.createTexture(scene);
+
+    super(scene, x, y, Cls.BODY_WIDTH, Cls.BODY_HEIGHT, {
       ...options,
       hasQuality: options.hasQuality ?? true,
     });
+
+    const PIXEL = Cls.PIXEL_SCALE;
 
     this.isTool = true;
     this.restDepth = 35;
@@ -32,16 +38,16 @@ export class Knife extends CuttingObject {
     this.manualCutStrokeOffset = 0;
     this.manualCutStrokeTween = null;
 
-    const shadowEdge = scene.add.image(0, 0, KNIFE_SHADOW_KEY);
+    const shadowEdge = scene.add.image(0, 0, Cls.SHADOW_TEXTURE_KEY);
     shadowEdge.setScale(PIXEL * this.shadowEdgeScaleX, PIXEL * this.shadowEdgeScaleY);
     shadowEdge.setOrigin(0.5);
-    shadowEdge.setRotation(KNIFE_ROTATION);
+    shadowEdge.setRotation(Cls.BLADE_ROTATION);
     shadowEdge.setTint(0x9a8064);
 
-    const shadowCore = scene.add.image(0, 0, KNIFE_SHADOW_KEY);
+    const shadowCore = scene.add.image(0, 0, Cls.SHADOW_TEXTURE_KEY);
     shadowCore.setScale(PIXEL * this.shadowCoreScaleX, PIXEL * this.shadowCoreScaleY);
     shadowCore.setOrigin(0.5);
-    shadowCore.setRotation(KNIFE_ROTATION);
+    shadowCore.setRotation(Cls.BLADE_ROTATION);
     shadowCore.setTint(0x6f5d48);
 
     const shadow = scene.add.container(0, this.restShadowOffset, [shadowEdge, shadowCore]);
@@ -56,13 +62,13 @@ export class Knife extends CuttingObject {
     shadow.setPixelBlurProgress(0);
     this.setPixelShadow(shadow);
 
-    this.sprite = scene.add.image(0, 0, KNIFE_KEY);
+    this.sprite = scene.add.image(0, 0, Cls.TEXTURE_KEY);
     this.sprite.setScale(PIXEL);
     this.sprite.setOrigin(0.5);
-    this.sprite.setRotation(KNIFE_ROTATION);
+    this.sprite.setRotation(Cls.BLADE_ROTATION);
     this.addDraggablePart(this.sprite);
-    this.setCutTipOffset(KNIFE_TIP_LOCAL_X, KNIFE_TIP_LOCAL_Y);
-    this.setHoldArea(HANDLE_HOLD_WIDTH, HANDLE_HOLD_HEIGHT, 0, HANDLE_HOLD_OFFSET_Y);
+    this.setCutTipOffset(Cls.TIP_LOCAL_X, Cls.TIP_LOCAL_Y);
+    this.setHoldArea(Cls.HANDLE_HOLD_WIDTH, Cls.HANDLE_HOLD_HEIGHT, 0, Cls.HANDLE_HOLD_OFFSET_Y);
     this.applyRestingDepth();
 
     this.manualCutPointerDownHandler = (pointer) => {
@@ -88,7 +94,7 @@ export class Knife extends CuttingObject {
   }
 
   getBladeWorldVector() {
-    const bladeLocalRotation = this.sprite?.rotation ?? KNIFE_ROTATION;
+    const bladeLocalRotation = this.sprite?.rotation ?? this.constructor.BLADE_ROTATION;
 
     return this.localVectorToWorld(new Phaser.Math.Vector2(
       Math.cos(bladeLocalRotation),
@@ -97,7 +103,7 @@ export class Knife extends CuttingObject {
   }
 
   getBladeLocalVector() {
-    const bladeLocalRotation = this.sprite?.rotation ?? KNIFE_ROTATION;
+    const bladeLocalRotation = this.sprite?.rotation ?? this.constructor.BLADE_ROTATION;
 
     return new Phaser.Math.Vector2(
       Math.cos(bladeLocalRotation),
@@ -265,19 +271,19 @@ export class Knife extends CuttingObject {
   }
 
   static createTexture(scene) {
-    if (!scene.textures.exists(KNIFE_KEY)) {
-      Knife.createKnifeTexture(scene);
+    if (!scene.textures.exists(this.TEXTURE_KEY)) {
+      this.createBladeTexture(scene);
     }
 
-    if (!scene.textures.exists(KNIFE_SHADOW_KEY)) {
-      Knife.createShadowTexture(scene);
+    if (!scene.textures.exists(this.SHADOW_TEXTURE_KEY)) {
+      this.createShadowTexture(scene);
     }
   }
 
-  static createKnifeTexture(scene) {
+  static createBladeTexture(scene) {
     const width = 64;
     const height = 18;
-    const texture = scene.textures.createCanvas(KNIFE_KEY, width, height);
+    const texture = scene.textures.createCanvas(this.TEXTURE_KEY, width, height);
     const context = texture.getContext();
 
     context.imageSmoothingEnabled = false;
@@ -338,7 +344,7 @@ export class Knife extends CuttingObject {
   static createShadowTexture(scene) {
     const width = 64;
     const height = 18;
-    const texture = scene.textures.createCanvas(KNIFE_SHADOW_KEY, width, height);
+    const texture = scene.textures.createCanvas(this.SHADOW_TEXTURE_KEY, width, height);
     const context = texture.getContext();
 
     context.imageSmoothingEnabled = false;

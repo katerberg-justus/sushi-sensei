@@ -40,7 +40,12 @@ const OVERLAY_CLOSE_HIT_PADDING = 2;
 const INVENTORY_DRAG_THRESHOLD = 4;
 const RECIPE_COLUMNS = 3;
 const RECIPE_CELL_GAP = 0;
-const RECIPE_PAGE_LABELS = ['NIGIRI', 'HOSOMAKI', 'FUTOMAKI', 'URAMAKI'];
+const RECIPE_CELL_HEIGHT = 84;
+const RECIPE_SCROLLBAR_WIDTH = 14;
+const RECIPE_SCROLLBAR_GAP = 5;
+const RECIPE_SCROLL_WHEEL_STEP = 24;
+const RECIPE_GRID_ICON_SCALE = 0.75;
+const RECIPE_PAGE_LABELS = ['NIGIRI', 'HOSOMAKI', 'FUTOMAKI', 'URAMAKI', 'TEMAKI', 'ONIGIRI'];
 const OVERLAY_TAB_LABELS = ['INVENTORY', 'RECIPES'];
 
 const DEFAULT_ICON_COLOR = 0xc99a6b;
@@ -121,6 +126,8 @@ export class InventoryBar {
     this.recipePageZones = [];
     this.recipePreviewEntry = null;
     this.recipePages = [];
+    this.recipeScrollOffsets = Array.from({ length: RECIPE_PAGE_LABELS.length }, () => 0);
+    this.recipeScrollbarDrag = null;
     this.inventoryDrag = null;
     this.pendingInventoryDrag = null;
     this.pendingInventoryDragMoveHandler = null;
@@ -141,10 +148,12 @@ export class InventoryBar {
     this.dragEndHandler = (pointer, gameObject) => this.handleSceneDragEnd(pointer, gameObject);
     this.dragHandler = (pointer, gameObject) => this.handleSceneDrag(pointer, gameObject);
     this.pointerDownHandler = (pointer) => this.handleScenePointerDown(pointer);
+    this.wheelHandler = (pointer, gameObjects, deltaX, deltaY) => this.handleSceneWheel(pointer, gameObjects, deltaX, deltaY);
     this.escapeHandler = () => this.closeOverlay();
     scene.input.on('dragend', this.dragEndHandler);
     scene.input.on('drag', this.dragHandler);
     scene.input.on('pointerdown', this.pointerDownHandler);
+    scene.input.on('wheel', this.wheelHandler);
     scene.input.keyboard?.on('keydown-ESC', this.escapeHandler);
   }
 
@@ -162,6 +171,13 @@ export class InventoryBar {
     this.inventoryDragGraphics = this.scene.add.graphics();
     this.inventoryDragGraphics.setDepth(UI_DEPTHS.overlay + 4);
     this.inventoryDragGraphics.setVisible(false);
+
+    this.recipeMaskGraphics = this.scene.add.graphics();
+    this.recipeMaskGraphics.setDepth(UI_DEPTHS.overlay + 2);
+    this.recipeMaskGraphics.setVisible(true);
+    this.recipeMaskGraphics.setAlpha(0);
+    this.recipeMaskGraphics.restAlpha = 0;
+    this.recipeGridMask = this.recipeMaskGraphics.createGeometryMask();
 
     this.recipePages = this.createRecipePages();
 
@@ -249,6 +265,13 @@ export class InventoryBar {
     this.overlayCloseZone.on('pointerover', () => this.setOverlayCloseHover(true));
     this.overlayCloseZone.on('pointerout', () => this.setOverlayCloseHover(false));
 
+    this.recipeScrollbarZone = this.scene.add.zone(0, 0, 1, 1);
+    this.recipeScrollbarZone.setOrigin(0, 0);
+    this.recipeScrollbarZone.setDepth(UI_DEPTHS.overlay + 3);
+    this.recipeScrollbarZone.setInteractive({ cursor: 'pointer' });
+    this.recipeScrollbarZone.setVisible(false);
+    this.recipeScrollbarZone.on('pointerdown', (pointer) => this.handleRecipeScrollbarPointerDown(pointer));
+
     for (let index = 0; index < INVENTORY_PAGE_COUNT; index += 1) {
       const zone = this.scene.add.zone(0, 0, 1, 1);
 
@@ -328,7 +351,45 @@ export class InventoryBar {
           }),
         ],
       },
+      {
+        key: 'temaki',
+        label: RECIPE_PAGE_LABELS[4],
+        entries: [
+          this.createRollRecipeEntry('temaki-salmon', 'Salmon Temaki', {
+            rollStyle: 'temaki',
+            cropWidth: 50,
+            cropHeight: 18,
+          }),
+        ],
+      },
+      {
+        key: 'onigiri',
+        label: RECIPE_PAGE_LABELS[5],
+        entries: [
+          this.createOnigiriRecipeEntry('onigiri-plain', 'Plain Onigiri'),
+        ],
+      },
     ];
+  }
+
+  createOnigiriRecipeEntry(id, name) {
+    const dishObject = new RiceBall(this.scene, 0, 0, {
+      hasIngredientTraits: false,
+      hasQuality: false,
+    });
+
+    dishObject.displayName = name;
+
+    return this.prepareRecipeEntry({
+      id,
+      name,
+      unlocked: false,
+      dishObject,
+      ingredients: [
+        { type: 'rice', label: 'Rice' },
+        { type: 'nori', label: 'Nori' },
+      ],
+    });
   }
 
   createNigiriRecipeEntries() {
@@ -414,6 +475,7 @@ export class InventoryBar {
   prepareRecipeEntry(entry) {
     const dishObject = entry.dishObject;
     const iconObject = dishObject?.createInventoryIcon?.(this.scene) ?? null;
+    const previewIconObject = dishObject?.createInventoryIcon?.(this.scene) ?? null;
 
     if (dishObject?.scene) {
       dishObject.setVisible(false);
@@ -429,10 +491,18 @@ export class InventoryBar {
       iconObject.setVisible(false);
     }
 
+    if (previewIconObject) {
+      previewIconObject.setOrigin(0.5);
+      previewIconObject.setDepth(UI_DEPTHS.overlay + 3);
+      previewIconObject.setScrollFactor?.(0);
+      previewIconObject.setVisible(false);
+    }
+
     return {
       ...entry,
       ingredients: (entry.ingredients ?? []).map((ingredient) => this.prepareRecipeIngredient(ingredient)),
       iconObject,
+      previewIconObject,
     };
   }
 
@@ -593,12 +663,15 @@ export class InventoryBar {
     this.recipePageTexts.forEach((text) => text.setVisible(isVisible && this.currentOverlayMode === 'recipes'));
     this.recipePageZones.forEach((zone) => zone.setVisible(isVisible && this.currentOverlayMode === 'recipes'));
     this.recipeEntryZones.forEach((zone) => zone.setVisible(isVisible && this.currentOverlayMode === 'recipes'));
+    this.recipeScrollbarZone.setVisible(isVisible && this.currentOverlayMode === 'recipes');
 
     if (!isVisible) {
       this.overlayBackdropZone.setVisible(false);
       this.hidePreviewEntry();
       this.hideRecipePreviewEntry();
       this.syncRecipeIconVisibility();
+      this.endRecipeScrollbarDrag();
+      this.recipeMaskGraphics.clear();
       this.previewTraits.hideImmediate();
     }
   }
@@ -617,6 +690,8 @@ export class InventoryBar {
       this.previewEmptyLabelShadow,
       this.previewEmptyLabel,
       this.overlayCloseZone,
+      this.recipeScrollbarZone,
+      this.recipeMaskGraphics,
       ...this.overlayPageTexts,
       ...this.overlayPageZones,
       ...this.overlaySlotZones,
@@ -626,13 +701,15 @@ export class InventoryBar {
       this.previewTraits.container,
       ...(this.previewEntry?.object ? [this.previewEntry.object] : []),
       ...(this.recipePreviewEntry?.dishObject ? [this.recipePreviewEntry.dishObject] : []),
+      ...(this.recipePreviewEntry?.previewIconObject ? [this.recipePreviewEntry.previewIconObject] : []),
       ...this.getOverlayVisibleIconObjects(),
       ...this.getOverlayVisibleRecipeObjects(),
+      ...this.getVisibleRecipeIngredientIconObjects(),
     ];
   }
 
   getOverlayVisibleIconObjects() {
-    if (!this.isInventoryPageUnlocked(this.currentOverlayPage)) {
+    if (this.currentOverlayMode !== 'inventory' || !this.isInventoryPageUnlocked(this.currentOverlayPage)) {
       return [];
     }
 
@@ -664,6 +741,18 @@ export class InventoryBar {
     });
 
     return objects;
+  }
+
+  getVisibleRecipeIngredientIconObjects() {
+    const entry = this.recipePreviewEntry;
+
+    if (this.currentOverlayMode !== 'recipes' || !entry) {
+      return [];
+    }
+
+    return (entry.ingredients ?? [])
+      .map((ingredient) => ingredient.iconObject)
+      .filter((iconObject) => iconObject?.scene && iconObject.visible);
   }
 
   applyOverlayAnimationTransform() {
@@ -803,6 +892,8 @@ export class InventoryBar {
     this.overlayFocusSlotIndex = null;
     this.overlayDragHoverSlotIndex = null;
     this.recipeHoverIndex = null;
+    this.clampCurrentRecipeScrollOffset();
+    this.endRecipeScrollbarDrag();
     this.clearPendingInventoryDrag();
     this.endInventoryDrag(false);
     this.hidePreviewEntry();
@@ -824,6 +915,7 @@ export class InventoryBar {
     this.currentRecipePageIndex = nextPage;
     this.recipeHoverIndex = null;
     this.recipeFocusIndex = 0;
+    this.clampCurrentRecipeScrollOffset();
     this.hideRecipePreviewEntry();
     this.syncRecipeIconVisibility();
     this.drawOverlay();
@@ -865,35 +957,26 @@ export class InventoryBar {
       - OVERLAY_PAGE_BUTTON_HEIGHT
       - OVERLAY_SECTION_LABEL_HEIGHT
       - 18;
-    const rowCount = isRecipeMode
-      ? Math.max(1, Math.ceil(recipeEntries.length / RECIPE_COLUMNS))
-      : INVENTORY_ROWS;
-    const slotSize = isRecipeMode
-      ? 0
-      : Math.floor(Phaser.Math.Clamp(
-        Math.min(
-          (availableGridWidth - OVERLAY_SLOT_GAP * (INVENTORY_COLUMNS - 1)) / INVENTORY_COLUMNS,
-          (availableGridHeight - OVERLAY_SLOT_GAP * (rowCount - 1)) / rowCount,
-        ),
-        OVERLAY_MIN_SLOT_SIZE,
-        OVERLAY_MAX_SLOT_SIZE,
-      ));
+    const slotSize = Math.floor(Phaser.Math.Clamp(
+      Math.min(
+        (availableGridWidth - OVERLAY_SLOT_GAP * (INVENTORY_COLUMNS - 1)) / INVENTORY_COLUMNS,
+        (availableGridHeight - OVERLAY_SLOT_GAP * (INVENTORY_ROWS - 1)) / INVENTORY_ROWS,
+      ),
+      OVERLAY_MIN_SLOT_SIZE,
+      OVERLAY_MAX_SLOT_SIZE,
+    ));
+    const gridWidth = slotSize * INVENTORY_COLUMNS + OVERLAY_SLOT_GAP * (INVENTORY_COLUMNS - 1);
+    const gridHeight = slotSize * INVENTORY_ROWS + OVERLAY_SLOT_GAP * (INVENTORY_ROWS - 1);
+    const recipeViewportWidth = isRecipeMode
+      ? Math.max(1, gridWidth - RECIPE_SCROLLBAR_WIDTH - RECIPE_SCROLLBAR_GAP)
+      : 0;
     const recipeCellWidth = isRecipeMode
-      ? Math.floor(availableGridWidth / RECIPE_COLUMNS)
+      ? Math.floor(recipeViewportWidth / RECIPE_COLUMNS)
       : 0;
-    const recipeCellHeight = isRecipeMode
-      ? Math.floor(Phaser.Math.Clamp(
-        (availableGridHeight - RECIPE_CELL_GAP * (rowCount - 1)) / rowCount,
-        24,
-        54,
-      ))
+    const recipeCellHeight = isRecipeMode ? RECIPE_CELL_HEIGHT : 0;
+    const recipeRowCount = isRecipeMode
+      ? Math.max(1, Math.ceil(recipeEntries.length / RECIPE_COLUMNS))
       : 0;
-    const gridWidth = isRecipeMode
-      ? recipeCellWidth * RECIPE_COLUMNS + RECIPE_CELL_GAP * (RECIPE_COLUMNS - 1)
-      : slotSize * INVENTORY_COLUMNS + OVERLAY_SLOT_GAP * (INVENTORY_COLUMNS - 1);
-    const gridHeight = isRecipeMode
-      ? recipeCellHeight * rowCount + RECIPE_CELL_GAP * (rowCount - 1)
-      : slotSize * rowCount + OVERLAY_SLOT_GAP * (rowCount - 1);
     const panelWidth = gridWidth
       + OVERLAY_PADDING * 2
       + OVERLAY_PREVIEW_GAP
@@ -932,9 +1015,12 @@ export class InventoryBar {
       previewWidth,
       previewHeight,
       slotSize,
-      rowCount,
+      rowCount: INVENTORY_ROWS,
       recipeCellWidth,
       recipeCellHeight,
+      recipeViewportWidth,
+      recipeViewportHeight: gridHeight,
+      recipeRowCount,
     };
 
     this.setOverlayZoneRestPosition(this.overlayBackdropZone, panelX, panelY);
@@ -956,12 +1042,12 @@ export class InventoryBar {
 
     if (isRecipeMode) {
       this.positionRecipeSectionLabels(gridX, labelY);
-      this.drawRecipeGrid(gridX, gridY, recipeCellWidth, recipeCellHeight, rowCount);
+      this.drawRecipeGrid(gridX, gridY, recipeViewportWidth, gridHeight, recipeCellWidth, recipeCellHeight, recipeRowCount);
       this.drawRecipePreviewContent(previewX, previewY, previewWidth, previewHeight);
       this.drawRecipePageButtons(pageButtonX, pageButtonY, pageButtonWidth);
     } else {
       this.positionOverlaySectionLabels(gridX, labelY, gridWidth);
-      this.drawOverlaySlots(gridX, gridY, slotSize, rowCount, isPageUnlocked);
+      this.drawOverlaySlots(gridX, gridY, slotSize, INVENTORY_ROWS, isPageUnlocked);
       this.drawOverlayPreviewContent(previewX, previewY, previewWidth, previewHeight);
       if (!isPageUnlocked) {
         this.drawLockedPageOverlay(gridX, gridY, gridWidth, gridHeight);
@@ -1279,44 +1365,133 @@ export class InventoryBar {
     this.setOverlayRestPosition(this.overlayDryLabel, gridX, labelY);
   }
 
-  drawRecipeGrid(gridX, gridY, cellWidth, cellHeight, rowCount) {
+  drawRecipeGrid(gridX, gridY, viewportWidth, viewportHeight, cellWidth, cellHeight, rowCount) {
     const page = this.getCurrentRecipePage();
     const entries = page?.entries ?? [];
+    const contentHeight = rowCount * cellHeight + Math.max(0, rowCount - 1) * RECIPE_CELL_GAP;
+    const maxScroll = this.getRecipeMaxScrollOffset();
+    const scrollOffset = this.clampCurrentRecipeScrollOffset();
+    const viewportBottom = gridY + viewportHeight;
+    const scrollBarX = gridX + viewportWidth + RECIPE_SCROLLBAR_GAP;
 
     this.ensureRecipeEntryZones(entries.length);
+    this.updateRecipeGridMask(gridX, gridY, viewportWidth, viewportHeight);
 
     entries.forEach((entry, index) => {
       const column = index % RECIPE_COLUMNS;
       const row = Math.floor(index / RECIPE_COLUMNS);
       const cellX = gridX + column * (cellWidth + RECIPE_CELL_GAP);
-      const cellY = gridY + row * (cellHeight + RECIPE_CELL_GAP);
+      const cellY = gridY + row * (cellHeight + RECIPE_CELL_GAP) - scrollOffset;
       const isActive = this.recipeHoverIndex === index || this.recipeFocusIndex === index;
-      const iconSize = Math.max(12, Math.min(cellWidth - 10, cellHeight - 6));
+      const iconSize = Math.max(18, Math.min(cellWidth - 18, cellHeight - 12) * RECIPE_GRID_ICON_SCALE);
       const centerX = Math.round(cellX + cellWidth / 2);
       const centerY = Math.round(cellY + cellHeight / 2);
+      const isVisible = cellY < viewportBottom && cellY + cellHeight > gridY;
+
+      if (!isVisible) {
+        if (entry.iconObject?.scene) {
+          entry.iconObject.clearMask?.();
+          entry.iconObject.setVisible(false);
+        }
+        this.recipeEntryZones[index]?.setVisible(false);
+        return;
+      }
 
       if (isActive) {
+        const highlightY = Math.max(cellY, gridY);
+        const highlightBottom = Math.min(cellY + cellHeight, viewportBottom);
+
         this.overlayGraphics.fillStyle(COLORS.highlight, entry.unlocked ? 0.32 : 0.18);
-        this.overlayGraphics.fillRect(cellX, cellY, cellWidth, cellHeight);
+        this.overlayGraphics.fillRect(cellX, highlightY, cellWidth, Math.max(0, highlightBottom - highlightY));
       }
 
       if (entry.iconObject?.scene) {
         entry.iconObject.setVisible(true);
         entry.iconObject.setDepth(UI_DEPTHS.overlay + 3);
-        entry.iconObject.restAlpha = entry.unlocked ? 1 : 0.42;
+        entry.iconObject.restAlpha = 1;
+        entry.iconObject.setMask(this.recipeGridMask);
         this.setRecipeObjectSilhouette(entry.iconObject, !entry.unlocked);
+        this.drawRecipeGridIconShade(entry.iconObject, centerX, centerY, iconSize, !entry.unlocked, gridY, viewportBottom);
         this.positionIcon(entry.iconObject, centerX, centerY, iconSize);
         entry.iconObject.restY = Math.round(centerY);
       }
 
-      this.positionRecipeEntryZone(index, cellX, cellY, cellWidth, cellHeight);
+      this.positionRecipeEntryZone(index, cellX, cellY, cellWidth, cellHeight, gridY, viewportBottom);
     });
 
     for (let index = entries.length; index < this.recipeEntryZones.length; index += 1) {
       this.recipeEntryZones[index].setVisible(false);
     }
 
+    this.drawRecipeScrollbar(scrollBarX, gridY, viewportHeight, contentHeight, scrollOffset, maxScroll);
     this.overlayBounds.recipeRowCount = rowCount;
+    this.overlayBounds.recipeContentHeight = contentHeight;
+    this.overlayBounds.recipeViewportHeight = viewportHeight;
+  }
+
+  updateRecipeGridMask(x, y, width, height) {
+    this.recipeMaskGraphics.clear();
+    this.recipeMaskGraphics.fillStyle(0xffffff, 1);
+    this.recipeMaskGraphics.fillRect(x, y, width, height);
+    this.recipeMaskGraphics.restY = 0;
+    this.recipeMaskGraphics.restAlpha = 0;
+    this.recipeMaskGraphics.setAlpha(0);
+  }
+
+  drawRecipeGridIconShade(iconObject, centerX, centerY, iconSize, isMuted, viewportTop, viewportBottom) {
+    if (isMuted) {
+      return;
+    }
+
+    const naturalWidth = iconObject.width ?? iconObject.displayWidth ?? iconSize;
+    const naturalHeight = iconObject.height ?? iconObject.displayHeight ?? iconSize;
+    const visibleBounds = this.getIconVisibleBounds(iconObject, naturalWidth, naturalHeight);
+    const fitWidth = visibleBounds ? visibleBounds.right - visibleBounds.left : naturalWidth;
+    const fitHeight = visibleBounds ? visibleBounds.bottom - visibleBounds.top : naturalHeight;
+    const scale = Math.min(iconSize / fitWidth, iconSize / fitHeight);
+    const shadeWidth = Math.max(12, Math.round(fitWidth * scale * 0.72));
+    const shadeHeight = Math.max(4, Math.round(fitHeight * scale * 0.16));
+    const shadeY = Math.round(centerY + fitHeight * scale * 0.36);
+
+    if (shadeY - shadeHeight / 2 < viewportTop || shadeY + shadeHeight / 2 > viewportBottom) {
+      return;
+    }
+
+    this.overlayGraphics.fillStyle(COLORS.shadow, 0.14);
+    this.overlayGraphics.fillEllipse(centerX, shadeY, shadeWidth, shadeHeight);
+  }
+
+  drawRecipeScrollbar(x, y, height, contentHeight, scrollOffset, maxScroll) {
+    this.overlayGraphics.fillStyle(COLORS.shadow, 0.16);
+    this.overlayGraphics.fillRect(x, y, RECIPE_SCROLLBAR_WIDTH, height);
+    this.overlayGraphics.fillStyle(COLORS.panelInset, 0.72);
+    this.overlayGraphics.fillRect(x + 2, y + 2, RECIPE_SCROLLBAR_WIDTH - 4, height - 4);
+
+    const thumbHeight = maxScroll > 0
+      ? Math.max(28, Math.floor((height / contentHeight) * height))
+      : height - 4;
+    const thumbTravel = Math.max(0, height - 4 - thumbHeight);
+    const thumbY = y + 2 + (maxScroll > 0 ? Math.round((scrollOffset / maxScroll) * thumbTravel) : 0);
+
+    this.overlayGraphics.fillStyle(COLORS.outer, 1);
+    this.overlayGraphics.fillRect(x + 2, thumbY, RECIPE_SCROLLBAR_WIDTH - 4, thumbHeight);
+    this.overlayGraphics.fillStyle(COLORS.highlight, 0.28);
+    this.overlayGraphics.fillRect(x + 4, thumbY + 3, RECIPE_SCROLLBAR_WIDTH - 8, Math.max(2, thumbHeight - 6));
+
+    this.overlayBounds.recipeScrollbar = {
+      x,
+      y,
+      height,
+      contentHeight,
+      maxScroll,
+      thumbY,
+      thumbHeight,
+      thumbTravel,
+    };
+    this.setOverlayZoneRestPosition(this.recipeScrollbarZone, x, y);
+    this.recipeScrollbarZone.setSize(RECIPE_SCROLLBAR_WIDTH, height);
+    this.recipeScrollbarZone.input.hitArea.setTo(0, 0, RECIPE_SCROLLBAR_WIDTH, height);
+    this.recipeScrollbarZone.setVisible(this.currentOverlayMode === 'recipes' && this.isOverlayOpen);
   }
 
   ensureRecipeEntryZones(count) {
@@ -1334,16 +1509,25 @@ export class InventoryBar {
     }
   }
 
-  positionRecipeEntryZone(index, x, y, width, height) {
+  positionRecipeEntryZone(index, x, y, width, height, viewportTop = y, viewportBottom = y + height) {
     const zone = this.recipeEntryZones[index];
 
     if (!zone) {
       return;
     }
 
-    this.setOverlayZoneRestPosition(zone, x, y);
-    zone.setSize(width, height);
-    zone.input.hitArea.setTo(0, 0, width, height);
+    const clippedY = Math.max(y, viewportTop);
+    const clippedBottom = Math.min(y + height, viewportBottom);
+    const clippedHeight = Math.max(0, clippedBottom - clippedY);
+
+    if (clippedHeight <= 0) {
+      zone.setVisible(false);
+      return;
+    }
+
+    this.setOverlayZoneRestPosition(zone, x, clippedY);
+    zone.setSize(width, clippedHeight);
+    zone.input.hitArea.setTo(0, 0, width, clippedHeight);
     zone.input.cursor = 'pointer';
     zone.setVisible(this.currentOverlayMode === 'recipes' && this.isOverlayOpen);
   }
@@ -1363,6 +1547,167 @@ export class InventoryBar {
 
     this.recipeHoverIndex = index;
     this.drawOverlay();
+  }
+
+  handleSceneWheel(pointer, _gameObjects, _deltaX, deltaY) {
+    if (
+      !this.isOverlayOpen
+      || this.currentOverlayMode !== 'recipes'
+      || !this.isPointInsideRecipeGrid(pointer.x, pointer.y)
+    ) {
+      return;
+    }
+
+    const scrollDelta = Phaser.Math.Clamp(
+      deltaY * 0.35,
+      -RECIPE_SCROLL_WHEEL_STEP,
+      RECIPE_SCROLL_WHEEL_STEP,
+    );
+
+    if (scrollDelta === 0) {
+      return;
+    }
+
+    this.setCurrentRecipeScrollOffset(
+      this.getCurrentRecipeScrollOffset() + scrollDelta,
+    );
+  }
+
+  handleRecipeScrollbarPointerDown(pointer) {
+    if (!this.isOverlayOpen || this.currentOverlayMode !== 'recipes') {
+      return;
+    }
+
+    const scrollbar = this.overlayBounds?.recipeScrollbar;
+
+    if (!scrollbar || scrollbar.maxScroll <= 0) {
+      return;
+    }
+
+    const pointerY = pointer.y;
+    const isInsideThumb = pointerY >= scrollbar.thumbY
+      && pointerY <= scrollbar.thumbY + scrollbar.thumbHeight;
+
+    if (!isInsideThumb) {
+      const targetThumbY = pointerY - scrollbar.thumbHeight / 2;
+      const ratio = scrollbar.thumbTravel > 0
+        ? Phaser.Math.Clamp((targetThumbY - scrollbar.y - 2) / scrollbar.thumbTravel, 0, 1)
+        : 0;
+
+      this.setCurrentRecipeScrollOffset(ratio * scrollbar.maxScroll);
+    }
+
+    this.beginRecipeScrollbarDrag(pointer);
+  }
+
+  beginRecipeScrollbarDrag(pointer) {
+    const scrollbar = this.overlayBounds?.recipeScrollbar;
+
+    if (!scrollbar || scrollbar.maxScroll <= 0) {
+      return;
+    }
+
+    this.endRecipeScrollbarDrag();
+    this.recipeScrollbarDrag = {
+      pointerId: pointer.id,
+      startY: pointer.y,
+      startOffset: this.getCurrentRecipeScrollOffset(),
+      thumbTravel: scrollbar.thumbTravel,
+      maxScroll: scrollbar.maxScroll,
+    };
+
+    this.recipeScrollbarMoveHandler = (movePointer) => this.handleRecipeScrollbarDragMove(movePointer);
+    this.recipeScrollbarUpHandler = () => this.endRecipeScrollbarDrag();
+    this.scene.input.on('pointermove', this.recipeScrollbarMoveHandler);
+    this.scene.input.once('pointerup', this.recipeScrollbarUpHandler);
+    this.scene.input.once('pointerupoutside', this.recipeScrollbarUpHandler);
+  }
+
+  handleRecipeScrollbarDragMove(pointer) {
+    if (!this.recipeScrollbarDrag || pointer.id !== this.recipeScrollbarDrag.pointerId) {
+      return;
+    }
+
+    const {
+      startY,
+      startOffset,
+      thumbTravel,
+      maxScroll,
+    } = this.recipeScrollbarDrag;
+    const offsetDelta = thumbTravel > 0
+      ? ((pointer.y - startY) / thumbTravel) * maxScroll
+      : 0;
+
+    this.setCurrentRecipeScrollOffset(startOffset + offsetDelta);
+  }
+
+  endRecipeScrollbarDrag() {
+    if (this.recipeScrollbarMoveHandler) {
+      this.scene.input.off('pointermove', this.recipeScrollbarMoveHandler);
+      this.recipeScrollbarMoveHandler = null;
+    }
+
+    if (this.recipeScrollbarUpHandler) {
+      this.scene.input.off('pointerup', this.recipeScrollbarUpHandler);
+      this.scene.input.off('pointerupoutside', this.recipeScrollbarUpHandler);
+      this.recipeScrollbarUpHandler = null;
+    }
+
+    this.recipeScrollbarDrag = null;
+  }
+
+  isPointInsideRecipeGrid(x, y) {
+    if (!this.overlayBounds) {
+      return false;
+    }
+
+    const {
+      gridX,
+      gridY,
+      gridWidth,
+      gridHeight,
+    } = this.overlayBounds;
+
+    return x >= gridX
+      && x <= gridX + gridWidth
+      && y >= gridY
+      && y <= gridY + gridHeight;
+  }
+
+  getCurrentRecipeScrollOffset() {
+    return this.recipeScrollOffsets[this.currentRecipePageIndex] ?? 0;
+  }
+
+  setCurrentRecipeScrollOffset(offset) {
+    const clampedOffset = Phaser.Math.Clamp(offset, 0, this.getRecipeMaxScrollOffset());
+
+    if (this.getCurrentRecipeScrollOffset() === clampedOffset) {
+      return;
+    }
+
+    this.recipeScrollOffsets[this.currentRecipePageIndex] = clampedOffset;
+    this.recipeHoverIndex = null;
+    this.drawOverlay();
+  }
+
+  clampCurrentRecipeScrollOffset() {
+    const clampedOffset = Phaser.Math.Clamp(
+      this.getCurrentRecipeScrollOffset(),
+      0,
+      this.getRecipeMaxScrollOffset(),
+    );
+
+    this.recipeScrollOffsets[this.currentRecipePageIndex] = clampedOffset;
+    return clampedOffset;
+  }
+
+  getRecipeMaxScrollOffset() {
+    const rowCount = this.overlayBounds?.recipeRowCount
+      ?? Math.max(1, Math.ceil((this.getCurrentRecipePage()?.entries?.length ?? 0) / RECIPE_COLUMNS));
+    const viewportHeight = this.overlayBounds?.recipeViewportHeight ?? this.overlayBounds?.gridHeight ?? 0;
+    const contentHeight = rowCount * RECIPE_CELL_HEIGHT + Math.max(0, rowCount - 1) * RECIPE_CELL_GAP;
+
+    return Math.max(0, contentHeight - viewportHeight);
   }
 
   handleRecipeEntryPointerDown(index) {
@@ -1404,39 +1749,86 @@ export class InventoryBar {
     const centerX = Math.round(previewX + previewWidth / 2);
     const objectCenterY = Math.round(previewY + previewHeight * 0.34);
 
-    this.showRecipePreviewEntry(entry, centerX, objectCenterY);
+    this.showRecipePreviewEntry(entry, centerX, objectCenterY, previewWidth, previewHeight);
     this.drawRecipeIngredientStrip(entry, previewX, previewY, previewWidth, previewHeight);
   }
 
-  showRecipePreviewEntry(entry, centerX, centerY) {
+  showRecipePreviewEntry(entry, centerX, centerY, previewWidth, previewHeight) {
     if (this.recipePreviewEntry && this.recipePreviewEntry !== entry) {
       this.hideRecipePreviewEntry();
     }
 
     const object = entry.dishObject;
 
-    if (!object?.scene) {
+    if (!object?.scene && !entry.previewIconObject?.scene) {
       this.recipePreviewEntry = null;
       return;
     }
 
     this.recipePreviewEntry = entry;
-    object.setVisible(true);
-    object.disableInteractive?.();
-    object.setDepth(UI_DEPTHS.overlay + 3);
-    object.setPosition(centerX, centerY);
-    object.restY = centerY;
-    object.restAlpha = entry.unlocked ? 1 : 0.46;
-    this.setRecipeObjectSilhouette(object, !entry.unlocked);
-  }
 
-  hideRecipePreviewEntry() {
-    const object = this.recipePreviewEntry?.dishObject;
+    if (entry.unlocked) {
+      entry.previewIconObject?.setVisible(false);
+      object.setVisible(true);
+      object.disableInteractive?.();
+      object.setDepth(UI_DEPTHS.overlay + 3);
+      object.setPosition(centerX, centerY);
+      object.restY = centerY;
+      object.restAlpha = 1;
+      this.setRecipeObjectSilhouette(object, false);
+      return;
+    }
 
     if (object?.scene) {
       this.setRecipeObjectSilhouette(object, false);
       object.setVisible(false);
     }
+
+    const previewIconObject = entry.previewIconObject;
+
+    if (!previewIconObject?.scene) {
+      return;
+    }
+
+    const objectWidth = object?.displayWidth ?? previewIconObject.width ?? 48;
+    const objectHeight = object?.displayHeight ?? previewIconObject.height ?? 48;
+    const maxSize = Math.max(
+      28,
+      Math.min(Math.max(objectWidth, objectHeight), previewWidth * 0.72, previewHeight * 0.34),
+    );
+
+    previewIconObject.setVisible(true);
+    previewIconObject.setDepth(UI_DEPTHS.overlay + 3);
+    previewIconObject.restAlpha = 1;
+    previewIconObject.clearMask?.();
+    this.setRecipeObjectSilhouette(previewIconObject, true);
+    this.positionIcon(previewIconObject, centerX, centerY, maxSize);
+    previewIconObject.restY = Math.round(centerY);
+  }
+
+  hideRecipePreviewEntry() {
+    const entry = this.recipePreviewEntry;
+    const object = entry?.dishObject;
+
+    if (object?.scene) {
+      this.setRecipeObjectSilhouette(object, false);
+      object.clearMask?.();
+      object.setVisible(false);
+    }
+
+    if (entry?.previewIconObject?.scene) {
+      this.setRecipeObjectSilhouette(entry.previewIconObject, false);
+      entry.previewIconObject.clearMask?.();
+      entry.previewIconObject.setVisible(false);
+    }
+
+    (entry?.ingredients ?? []).forEach((ingredient) => {
+      if (ingredient.iconObject?.scene) {
+        this.setRecipeObjectSilhouette(ingredient.iconObject, false);
+        ingredient.iconObject.clearMask?.();
+        ingredient.iconObject.setVisible(false);
+      }
+    });
 
     this.recipePreviewEntry = null;
   }
@@ -1461,53 +1853,22 @@ export class InventoryBar {
     );
 
     ingredients.forEach((ingredient, index) => {
-      const x = startX + index * (iconSize + iconGap);
+      const iconObject = ingredient.iconObject;
 
-      this.drawIngredientRequirementIcon(x, iconY, iconSize, ingredient, !entry.unlocked);
+      if (!iconObject?.scene) {
+        return;
+      }
+
+      const centerX = Math.round(startX + index * (iconSize + iconGap) + iconSize / 2);
+      const centerY = Math.round(iconY + iconSize / 2);
+
+      iconObject.setVisible(true);
+      iconObject.setDepth(UI_DEPTHS.overlay + 4);
+      iconObject.restAlpha = 1;
+      this.setRecipeObjectSilhouette(iconObject, !entry.unlocked);
+      this.positionIcon(iconObject, centerX, centerY, iconSize);
+      iconObject.restY = centerY;
     });
-  }
-
-  drawIngredientRequirementIcon(x, y, size, ingredient, isMuted) {
-    const alpha = isMuted ? 0.42 : 1;
-    const muted = COLORS.lock;
-    const centerX = x + size / 2;
-    const centerY = y + size / 2;
-
-    if (ingredient.type === 'rice') {
-      this.overlayGraphics.fillStyle(COLORS.shadow, 0.1 * alpha);
-      this.overlayGraphics.fillEllipse(centerX + 1, centerY + 2, size * 0.78, size * 0.52);
-      this.overlayGraphics.fillStyle(isMuted ? muted : 0xd7cdb8, alpha);
-      this.overlayGraphics.fillEllipse(centerX, centerY, size * 0.82, size * 0.56);
-      this.overlayGraphics.fillStyle(isMuted ? muted : 0xfffbef, alpha);
-      this.overlayGraphics.fillEllipse(centerX - 1, centerY - 1, size * 0.62, size * 0.38);
-      return;
-    }
-
-    if (ingredient.type === 'nori') {
-      this.overlayGraphics.fillStyle(isMuted ? muted : 0x102821, alpha);
-      this.overlayGraphics.fillRect(x + 5, y + 4, size - 10, size - 8);
-      this.overlayGraphics.fillStyle(isMuted ? muted : 0x214b3d, alpha * 0.72);
-      this.overlayGraphics.fillRect(x + 7, y + 7, size - 14, 2);
-      this.overlayGraphics.fillRect(x + 7, y + size - 10, size - 14, 2);
-      return;
-    }
-
-    const fishStyle = ingredient.fishStyle ?? CUTTABLE_FISH_STYLES.salmon;
-    const base = isMuted ? muted : fishStyle.base;
-    const highlight = isMuted ? muted : (fishStyle.highlight ?? fishStyle.base);
-    const fat = isMuted ? muted : (fishStyle.fat ?? highlight);
-
-    this.overlayGraphics.fillStyle(COLORS.shadow, 0.1 * alpha);
-    this.overlayGraphics.fillRect(x + 4, y + 14, size - 7, 5);
-    this.overlayGraphics.fillStyle(base, alpha);
-    this.overlayGraphics.fillRect(x + 3, y + 9, size - 6, 9);
-    this.overlayGraphics.fillRect(x + 6, y + 6, size - 12, 5);
-    this.overlayGraphics.fillStyle(highlight, alpha * 0.82);
-    this.overlayGraphics.fillRect(x + 7, y + 8, Math.max(5, size - 17), 1);
-    this.overlayGraphics.fillRect(x + 6, y + 12, Math.max(6, size - 14), 1);
-    this.overlayGraphics.fillStyle(fat, alpha * 0.72);
-    this.overlayGraphics.fillRect(x + 9, y + 10, Math.max(3, size - 20), 1);
-    this.overlayGraphics.fillRect(x + 12, y + 14, Math.max(3, size - 20), 1);
   }
 
   setRecipeObjectSilhouette(object, isSilhouette) {
@@ -1518,9 +1879,9 @@ export class InventoryBar {
 
       if (isSilhouette) {
         if (target.setTintFill) {
-          target.setTintFill(COLORS.lock);
+          target.setTintFill(COLORS.outer);
         } else {
-          target.setTint?.(COLORS.lock);
+          target.setTint?.(COLORS.outer);
         }
       } else {
         target.clearTint?.();
@@ -1924,7 +2285,11 @@ export class InventoryBar {
   getInventoryDropTargetAt(x, y) {
     const overlaySlotIndex = this.getOverlaySlotIndexAt(x, y);
 
-    if (overlaySlotIndex !== null && this.isInventoryPageUnlocked(this.currentOverlayPage)) {
+    if (
+      this.currentOverlayMode === 'inventory'
+      && overlaySlotIndex !== null
+      && this.isInventoryPageUnlocked(this.currentOverlayPage)
+    ) {
       return {
         type: 'large',
         pageIndex: this.currentOverlayPage,
@@ -2054,7 +2419,11 @@ export class InventoryBar {
     const hotbarEntries = new Set(this.slotItems.filter(Boolean));
     const overlayVisibleEntries = new Set();
 
-    if (this.isOverlayOpen && this.isInventoryPageUnlocked(this.currentOverlayPage)) {
+    if (
+      this.isOverlayOpen
+      && this.currentOverlayMode === 'inventory'
+      && this.isInventoryPageUnlocked(this.currentOverlayPage)
+    ) {
       for (let index = 0; index < INVENTORY_SLOTS_PER_PAGE; index += 1) {
         const entry = this.getLargeSlotItem(this.currentOverlayPage, index);
 
@@ -2086,12 +2455,29 @@ export class InventoryBar {
     this.recipePages.forEach((page) => {
       page.entries.forEach((entry) => {
         if (entry.iconObject?.scene) {
+          if (!visibleEntries.has(entry)) {
+            entry.iconObject.clearMask?.();
+          }
           entry.iconObject.setVisible(visibleEntries.has(entry));
         }
 
         if (entry.dishObject?.scene && entry !== this.recipePreviewEntry) {
           entry.dishObject.setVisible(false);
         }
+
+        if (entry.previewIconObject?.scene && entry !== this.recipePreviewEntry) {
+          this.setRecipeObjectSilhouette(entry.previewIconObject, false);
+          entry.previewIconObject.clearMask?.();
+          entry.previewIconObject.setVisible(false);
+        }
+
+        (entry.ingredients ?? []).forEach((ingredient) => {
+          if (ingredient.iconObject?.scene && entry !== this.recipePreviewEntry) {
+            this.setRecipeObjectSilhouette(ingredient.iconObject, false);
+            ingredient.iconObject.clearMask?.();
+            ingredient.iconObject.setVisible(false);
+          }
+        });
       });
     });
   }
@@ -2711,9 +3097,11 @@ export class InventoryBar {
 
   destroy() {
     this.stopOverlayTween();
+    this.endRecipeScrollbarDrag();
     this.scene.input.off('dragend', this.dragEndHandler);
     this.scene.input.off('drag', this.dragHandler);
     this.scene.input.off('pointerdown', this.pointerDownHandler);
+    this.scene.input.off('wheel', this.wheelHandler);
     this.scene.input.keyboard?.off('keydown-ESC', this.escapeHandler);
     this.slotItems.forEach((entry) => {
       this.destroyIcon(entry?.iconObject);
@@ -2735,6 +3123,7 @@ export class InventoryBar {
     this.recipePageZones = [];
     this.recipeEntryZones.forEach((zone) => zone.destroy());
     this.recipeEntryZones = [];
+    this.recipeScrollbarZone.destroy();
     this.overlayPageTexts.forEach((text) => text.destroy());
     this.overlayPageTexts = [];
     this.overlayTabTexts.forEach((text) => text.destroy());
@@ -2744,12 +3133,18 @@ export class InventoryBar {
     this.recipePages.forEach((page) => {
       page.entries.forEach((entry) => {
         this.destroyIcon(entry?.iconObject);
+        this.destroyIcon(entry?.previewIconObject);
+        (entry?.ingredients ?? []).forEach((ingredient) => {
+          this.destroyIcon(ingredient?.iconObject);
+          ingredient?.sourceObject?.destroy?.();
+        });
         entry?.dishObject?.destroy?.();
       });
     });
     this.recipePages = [];
     this.overlayBackdropZone.destroy();
     this.overlayGraphics.destroy();
+    this.recipeMaskGraphics.destroy();
     this.inventoryDragGraphics.destroy();
     this.previewTraits.destroy();
     this.slotTraits.destroy();
