@@ -1,6 +1,7 @@
 import { CuttableObject } from './CuttableObject.js';
 import { FishFlipBehavior, setupFishFlip } from './FishFlipBehavior.js';
 import { IngredientObject } from './IngredientObject.js';
+import { JAPANESE_NAMES } from './JapaneseNames.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 2.25;
@@ -27,7 +28,10 @@ export class CuttableTamago extends IngredientObject {
     const displayWidth = cropWidth * PIXEL;
     const displayHeight = cropHeight * PIXEL;
 
-    super(scene, x, y, displayWidth, displayHeight, options);
+    super(scene, x, y, displayWidth, displayHeight, {
+      ...options,
+      japaneseName: options.japaneseName ?? JAPANESE_NAMES.tamago,
+    });
     this.setCenteredHitbox(displayWidth, displayHeight);
     this.ownWeightGrams = options.weightGrams
       ?? CuttableTamago.getPieceWeightGrams(cropWidth, cropHeight);
@@ -37,6 +41,7 @@ export class CuttableTamago extends IngredientObject {
     this.stackCategory = 'fish';
     this.fishType = 'tamago';
     this.fishDisplayName = 'Tamago';
+    this.fishJapaneseName = JAPANESE_NAMES.tamago;
     this.acceptedStackCategories = ['wasabi'];
     this.maxStackedItems = 1;
     this.stackOffsetX = 0;

@@ -1,6 +1,7 @@
 import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
 import { CuttableObject } from './CuttableObject.js';
 import { IngredientObject } from './IngredientObject.js';
+import { composeJapaneseName, JAPANESE_NAMES } from './JapaneseNames.js';
 import { toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 2;
@@ -17,17 +18,18 @@ const HORIZONTAL_CORNER_RADIUS = 4;
 const HORIZONTAL_RICE_END_THICKNESS = 1;
 
 const FILLING_STYLES = {
-  salmon: { displayName: 'Salmon', subtypes: CUTTABLE_FISH_STYLES.salmon.subtypes, base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
-  maguro: { displayName: 'Maguro', subtypes: CUTTABLE_FISH_STYLES.maguro.subtypes, base: CUTTABLE_FISH_STYLES.maguro.base, highlight: CUTTABLE_FISH_STYLES.maguro.highlight, fat: CUTTABLE_FISH_STYLES.maguro.fat },
-  hamachi: { displayName: 'Hamachi', subtypes: CUTTABLE_FISH_STYLES.hamachi.subtypes, base: CUTTABLE_FISH_STYLES.hamachi.base, highlight: CUTTABLE_FISH_STYLES.hamachi.highlight, fat: CUTTABLE_FISH_STYLES.hamachi.fat },
-  tai: { displayName: 'Tai', subtypes: CUTTABLE_FISH_STYLES.tai.subtypes, base: CUTTABLE_FISH_STYLES.tai.base, highlight: CUTTABLE_FISH_STYLES.tai.highlight, fat: CUTTABLE_FISH_STYLES.tai.fat },
-  hirame: { displayName: 'Hirame', subtypes: CUTTABLE_FISH_STYLES.hirame.subtypes, base: CUTTABLE_FISH_STYLES.hirame.base, highlight: CUTTABLE_FISH_STYLES.hirame.highlight, fat: CUTTABLE_FISH_STYLES.hirame.fat },
-  suzuki: { displayName: 'Suzuki', subtypes: CUTTABLE_FISH_STYLES.suzuki.subtypes, base: CUTTABLE_FISH_STYLES.suzuki.base, highlight: CUTTABLE_FISH_STYLES.suzuki.highlight, fat: CUTTABLE_FISH_STYLES.suzuki.fat },
-  saba: { displayName: 'Saba', subtypes: CUTTABLE_FISH_STYLES.saba.subtypes, base: CUTTABLE_FISH_STYLES.saba.base, highlight: CUTTABLE_FISH_STYLES.saba.highlight, fat: CUTTABLE_FISH_STYLES.saba.fat },
-  aji: { displayName: 'Aji', subtypes: CUTTABLE_FISH_STYLES.aji.subtypes, base: CUTTABLE_FISH_STYLES.aji.base, highlight: CUTTABLE_FISH_STYLES.aji.highlight, fat: CUTTABLE_FISH_STYLES.aji.fat },
-  iwashi: { displayName: 'Iwashi', subtypes: CUTTABLE_FISH_STYLES.iwashi.subtypes, base: CUTTABLE_FISH_STYLES.iwashi.base, highlight: CUTTABLE_FISH_STYLES.iwashi.highlight, fat: CUTTABLE_FISH_STYLES.iwashi.fat },
-  unagi: { displayName: 'Unagi', subtypes: CUTTABLE_FISH_STYLES.unagi.subtypes, base: CUTTABLE_FISH_STYLES.unagi.base, highlight: CUTTABLE_FISH_STYLES.unagi.highlight, fat: CUTTABLE_FISH_STYLES.unagi.fat },
-  tamago: { displayName: 'Tamago', base: 0xf1c35b, highlight: 0xf6d56d, fat: 0xfadf85 },
+  salmon: { displayName: 'Salmon', japaneseName: CUTTABLE_FISH_STYLES.salmon.japaneseName, subtypes: CUTTABLE_FISH_STYLES.salmon.subtypes, base: CUTTABLE_FISH_STYLES.salmon.base, highlight: CUTTABLE_FISH_STYLES.salmon.highlight, fat: CUTTABLE_FISH_STYLES.salmon.fat },
+  maguro: { displayName: 'Maguro', japaneseName: CUTTABLE_FISH_STYLES.maguro.japaneseName, subtypes: CUTTABLE_FISH_STYLES.maguro.subtypes, base: CUTTABLE_FISH_STYLES.maguro.base, highlight: CUTTABLE_FISH_STYLES.maguro.highlight, fat: CUTTABLE_FISH_STYLES.maguro.fat },
+  hamachi: { displayName: 'Hamachi', japaneseName: CUTTABLE_FISH_STYLES.hamachi.japaneseName, subtypes: CUTTABLE_FISH_STYLES.hamachi.subtypes, base: CUTTABLE_FISH_STYLES.hamachi.base, highlight: CUTTABLE_FISH_STYLES.hamachi.highlight, fat: CUTTABLE_FISH_STYLES.hamachi.fat },
+  tai: { displayName: 'Tai', japaneseName: CUTTABLE_FISH_STYLES.tai.japaneseName, subtypes: CUTTABLE_FISH_STYLES.tai.subtypes, base: CUTTABLE_FISH_STYLES.tai.base, highlight: CUTTABLE_FISH_STYLES.tai.highlight, fat: CUTTABLE_FISH_STYLES.tai.fat },
+  hirame: { displayName: 'Hirame', japaneseName: CUTTABLE_FISH_STYLES.hirame.japaneseName, subtypes: CUTTABLE_FISH_STYLES.hirame.subtypes, base: CUTTABLE_FISH_STYLES.hirame.base, highlight: CUTTABLE_FISH_STYLES.hirame.highlight, fat: CUTTABLE_FISH_STYLES.hirame.fat },
+  suzuki: { displayName: 'Suzuki', japaneseName: CUTTABLE_FISH_STYLES.suzuki.japaneseName, subtypes: CUTTABLE_FISH_STYLES.suzuki.subtypes, base: CUTTABLE_FISH_STYLES.suzuki.base, highlight: CUTTABLE_FISH_STYLES.suzuki.highlight, fat: CUTTABLE_FISH_STYLES.suzuki.fat },
+  saba: { displayName: 'Saba', japaneseName: CUTTABLE_FISH_STYLES.saba.japaneseName, subtypes: CUTTABLE_FISH_STYLES.saba.subtypes, base: CUTTABLE_FISH_STYLES.saba.base, highlight: CUTTABLE_FISH_STYLES.saba.highlight, fat: CUTTABLE_FISH_STYLES.saba.fat },
+  aji: { displayName: 'Aji', japaneseName: CUTTABLE_FISH_STYLES.aji.japaneseName, subtypes: CUTTABLE_FISH_STYLES.aji.subtypes, base: CUTTABLE_FISH_STYLES.aji.base, highlight: CUTTABLE_FISH_STYLES.aji.highlight, fat: CUTTABLE_FISH_STYLES.aji.fat },
+  iwashi: { displayName: 'Iwashi', japaneseName: CUTTABLE_FISH_STYLES.iwashi.japaneseName, subtypes: CUTTABLE_FISH_STYLES.iwashi.subtypes, base: CUTTABLE_FISH_STYLES.iwashi.base, highlight: CUTTABLE_FISH_STYLES.iwashi.highlight, fat: CUTTABLE_FISH_STYLES.iwashi.fat },
+  unagi: { displayName: 'Unagi', japaneseName: CUTTABLE_FISH_STYLES.unagi.japaneseName, subtypes: CUTTABLE_FISH_STYLES.unagi.subtypes, base: CUTTABLE_FISH_STYLES.unagi.base, highlight: CUTTABLE_FISH_STYLES.unagi.highlight, fat: CUTTABLE_FISH_STYLES.unagi.fat },
+  tamago: { displayName: 'Tamago', japaneseName: JAPANESE_NAMES.tamago, base: 0xf1c35b, highlight: 0xf6d56d, fat: 0xfadf85 },
+  cucumber: { displayName: 'Cucumber', japaneseName: JAPANESE_NAMES.cucumber, base: 0x53a848, highlight: 0x8fcd5f, fat: 0xb8dc79 },
 };
 
 const NORI_DARK = 0x102821;
@@ -265,6 +267,7 @@ export class SushiRoll extends IngredientObject {
     const fillingSubtypeStyle = SushiRoll.getFillingSubtypeStyle(fillingStyle, options.fillingSubtype);
     const fillingSubtype = fillingSubtypeStyle?.key ?? null;
     const fillingDisplayName = fillingSubtypeStyle?.displayName ?? fillingStyle.displayName;
+    const fillingJapaneseName = fillingSubtypeStyle?.japaneseName ?? fillingStyle.japaneseName ?? null;
     const cropX = options.cropX ?? 0;
     const cropY = options.cropY ?? 0;
     const cropWidth = options.cropWidth ?? ROLL_LENGTH;
@@ -274,13 +277,18 @@ export class SushiRoll extends IngredientObject {
     const displayWidth = cropWidth * PIXEL;
     const displayHeight = cropHeight * PIXEL;
 
-    super(scene, x, y, displayWidth, displayHeight, options);
+    super(scene, x, y, displayWidth, displayHeight, {
+      ...options,
+      japaneseName: options.japaneseName ?? composeJapaneseName(fillingJapaneseName, JAPANESE_NAMES.maki),
+    });
     this.setCenteredHitbox(displayWidth, displayHeight);
     this.ownWeightGrams = options.weightGrams ?? ROLL_WEIGHT_GRAMS;
     this.displayName = `${fillingDisplayName} Maki`;
     this.rollStyle = 'maki';
     this.fillingType = fillingType;
     this.fillingSubtype = fillingSubtype;
+    this.fillingJapaneseName = fillingStyle.japaneseName ?? null;
+    this.fillingSubtypeJapaneseName = fillingSubtypeStyle?.japaneseName ?? null;
     this.restDepth = 24;
     this.softness = 0.9;
     this.stackCategory = 'roll';
@@ -522,6 +530,9 @@ export class SushiRoll extends IngredientObject {
 
     if (this.displayName) {
       object.displayName = this.displayName;
+    }
+    if (this.japaneseName) {
+      object.setJapaneseName?.(this.japaneseName);
     }
 
     this.copyCuttableRotationTo(object);

@@ -85,6 +85,32 @@ function finiteOr(value, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function isObjectVisibleInScene(object) {
+  if (!object?.visible) {
+    return false;
+  }
+
+  let parent = object.parentContainer;
+
+  while (parent) {
+    if (parent.visible === false) {
+      return false;
+    }
+    parent = parent.parentContainer;
+  }
+
+  let stackParent = object.stackParent;
+
+  while (stackParent) {
+    if (stackParent.visible === false) {
+      return false;
+    }
+    stackParent = stackParent.stackParent;
+  }
+
+  return true;
+}
+
 export function holdSharedTexture(key) {
   if (!key) {
     return;
@@ -1367,7 +1393,7 @@ export class DraggableObject extends SceneObject {
     }
 
     for (const other of draggableRegistry) {
-      if (other === this || !other.scene) {
+      if (other === this || !other.scene || !isObjectVisibleInScene(other)) {
         continue;
       }
 
@@ -1641,6 +1667,15 @@ export class DraggableObject extends SceneObject {
 
     if (this.stackParent && this.detachFromStackParent) {
       this.detachFromStackParent();
+
+      if (this.input) {
+        this.input.dragStartX = this.x;
+        this.input.dragStartY = this.y;
+        this.input.dragStartXGlobal = pointer.worldX;
+        this.input.dragStartYGlobal = pointer.worldY;
+        this.input.dragX = pointer.worldX - this.x;
+        this.input.dragY = pointer.worldY - this.y;
+      }
     }
 
     if (!claimActiveDrag(this)) {
@@ -1915,7 +1950,7 @@ export class DraggableObject extends SceneObject {
     let bestDepth = -Infinity;
 
     for (const other of draggableRegistry) {
-      if (other === this || !other.scene || other.isDragging) {
+      if (other === this || !other.scene || other.isDragging || !isObjectVisibleInScene(other)) {
         continue;
       }
 
@@ -1966,7 +2001,7 @@ export class DraggableObject extends SceneObject {
     const hits = [];
 
     for (const other of draggableRegistry) {
-      if (other === this || !other.scene || other.isDragging) {
+      if (other === this || !other.scene || other.isDragging || !isObjectVisibleInScene(other)) {
         continue;
       }
 

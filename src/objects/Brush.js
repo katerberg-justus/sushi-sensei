@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { IngredientObject } from './IngredientObject.js';
+import { JAPANESE_NAMES } from './JapaneseNames.js';
 
 const BRUSH_KEY = 'brush-pixel';
 const BRUSH_SHADOW_KEY = 'brush-shadow-pixel';
@@ -8,10 +9,6 @@ const BRUSH_TEXTURE_WIDTH = 7;
 const BRUSH_TEXTURE_HEIGHT = 22;
 const BRUSH_TIP_LOCAL_X = 0;
 const BRUSH_TIP_LOCAL_Y = 8 * PIXEL;
-const HANDLE_HOLD_WIDTH = 11 * PIXEL;
-const HANDLE_HOLD_HEIGHT = 12 * PIXEL;
-const HANDLE_HOLD_OFFSET_Y = -5 * PIXEL;
-const DIPPED_CROP_ROWS = 14;
 
 export class Brush extends IngredientObject {
   constructor(scene, x, y, options = {}) {
@@ -23,12 +20,14 @@ export class Brush extends IngredientObject {
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
       hasIngredientTraits: options.hasIngredientTraits ?? false,
+      japaneseName: options.japaneseName ?? JAPANESE_NAMES.nikiriBrush,
       visualVariation: false,
     });
 
     this.isRotatable = false;
     this.isBrush = true;
     this.isTool = true;
+    this.keepInteractiveInStack = true;
     this.displayName = options.displayName ?? 'Nikiri Brush';
     this.stackCategory = 'tool';
     this.acceptedStackCategories = [];
@@ -54,7 +53,7 @@ export class Brush extends IngredientObject {
     this.sprite.setOrigin(0.5);
     this.addDraggablePart(this.sprite);
 
-    this.setCenteredHitbox(HANDLE_HOLD_WIDTH, HANDLE_HOLD_HEIGHT, 0, HANDLE_HOLD_OFFSET_Y);
+    this.setCenteredHitbox(displayWidth, displayHeight);
     this.refreshCompositionShadow?.();
     this.applyRestingDepth();
 
@@ -62,25 +61,7 @@ export class Brush extends IngredientObject {
   }
 
   setDipped(active) {
-    const next = Boolean(active);
-
-    if (this.isDipped === next) {
-      return;
-    }
-
-    this.isDipped = next;
-
-    if (next) {
-      this.sprite?.setCrop(0, 0, BRUSH_TEXTURE_WIDTH, DIPPED_CROP_ROWS);
-      this.shadow?.setVisible(false);
-      return;
-    }
-
-    if (this.sprite) {
-      this.sprite.setCrop(0, 0, BRUSH_TEXTURE_WIDTH, BRUSH_TEXTURE_HEIGHT);
-      this.sprite.isCropped = false;
-    }
-    this.shadow?.setVisible(true);
+    this.isDipped = Boolean(active);
   }
 
   handleDragStart(pointer) {

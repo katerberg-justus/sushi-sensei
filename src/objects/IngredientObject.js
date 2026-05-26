@@ -51,6 +51,7 @@ export class IngredientObject extends RotatableObject {
 
     this.isIngredient = true;
     this.isTool = false;
+    this.japaneseName = IngredientObject.normalizeJapaneseName(options.japaneseName);
     this.hasIngredientTraits = options.hasIngredientTraits ?? true;
     this._ownWeightGrams = IngredientObject.normalizeWeightGrams(options.weightGrams ?? 0);
     this._freshness = this.hasIngredientTraits
@@ -71,6 +72,7 @@ export class IngredientObject extends RotatableObject {
     this.stackChildren = [];
     this.stackParent = null;
     this.stackLocked = false;
+    this.keepInteractiveInStack = false;
     this.longPressDuration = 400;
     this.longPressMoveTolerance = 6;
     this.longPressTimer = null;
@@ -190,6 +192,26 @@ export class IngredientObject extends RotatableObject {
     });
 
     return normalizedTags;
+  }
+
+  static normalizeJapaneseName(japaneseName) {
+    if (!japaneseName || typeof japaneseName !== 'object') {
+      return null;
+    }
+
+    const kanji = typeof japaneseName.kanji === 'string' ? japaneseName.kanji.trim() : '';
+    const kana = typeof japaneseName.kana === 'string' ? japaneseName.kana.trim() : '';
+
+    if (!kanji || !kana) {
+      return null;
+    }
+
+    return { kanji, kana };
+  }
+
+  setJapaneseName(japaneseName) {
+    this.japaneseName = IngredientObject.normalizeJapaneseName(japaneseName);
+    return this;
   }
 
   static unionFlavorTags(...tagArrays) {
@@ -320,12 +342,17 @@ export class IngredientObject extends RotatableObject {
   }
 
   getIngredientTraitOptions() {
+    const japaneseName = this.japaneseName
+      ? { japaneseName: this.japaneseName }
+      : {};
+
     if (!this.hasIngredientTraits) {
-      return { hasIngredientTraits: false };
+      return { hasIngredientTraits: false, ...japaneseName };
     }
 
     return {
       hasIngredientTraits: true,
+      ...japaneseName,
       quality: this.quality,
       freshness: this.freshness,
       flavorTags: this.flavorTags,
@@ -2376,7 +2403,7 @@ export class IngredientObject extends RotatableObject {
 
     this.hoistShadowInto(target, offsetX, offsetY);
 
-    if (this.input) {
+    if (this.input && !this.keepInteractiveInStack) {
       this.disableInteractive();
     }
 

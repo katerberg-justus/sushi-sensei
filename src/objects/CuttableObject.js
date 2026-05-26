@@ -308,6 +308,9 @@ export class CuttableObject extends SceneObject {
     if (this.displayName) {
       object.displayName = this.displayName;
     }
+    if (this.japaneseName) {
+      object.setJapaneseName?.(this.japaneseName);
+    }
     this.copyCuttableRotationTo(object);
 
     return object;

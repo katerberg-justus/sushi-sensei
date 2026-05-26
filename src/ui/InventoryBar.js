@@ -1,13 +1,17 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { UI_ANIMATION, UI_DEPTHS } from './constants.js';
-import { BITMAP_FONT_PIXEL } from '../game/constants.js';
+import { BITMAP_FONT_MADOU, BITMAP_FONT_PIXEL } from '../game/constants.js';
+import { Bowl } from '../objects/Bowl.js';
+import { CuttableCucumber } from '../objects/CuttableCucumber.js';
 import { CUTTABLE_FISH_STYLES, CuttableFish } from '../objects/CuttableFish.js';
 import { DraggableObject } from '../objects/DraggableObject.js';
 import { Nigiri } from '../objects/Nigiri.js';
 import { NoriSheet } from '../objects/NoriSheet.js';
 import { getCachedFullImageData } from '../objects/ProceduralTexture.js';
 import { RiceBall } from '../objects/RiceBall.js';
+import { Shrimp } from '../objects/Shrimp.js';
 import { SushiRoll } from '../objects/SushiRoll.js';
+import { WasabiDab } from '../objects/WasabiDab.js';
 import { IngredientTraitOverlay } from './IngredientTraitOverlay.js';
 
 const SLOT_COUNT = 10;
@@ -40,22 +44,105 @@ const OVERLAY_MIN_SLOT_SIZE = 13;
 const OVERLAY_PREVIEW_GAP = 12;
 const OVERLAY_PREVIEW_MIN_WIDTH = 148;
 const OVERLAY_PREVIEW_MAX_WIDTH = 196;
-const OVERLAY_CLOSE_HIT_PADDING = 2;
 const INVENTORY_DRAG_THRESHOLD = 4;
 const RECIPE_COLUMNS = 3;
 const RECIPE_CELL_GAP = 0;
-const RECIPE_CELL_HEIGHT = 84;
+const RECIPE_CELL_HEIGHT = 102;
 const RECIPE_SCROLLBAR_WIDTH = 14;
 const RECIPE_SCROLLBAR_GAP = 5;
 const RECIPE_SCROLL_WHEEL_STEP = 24;
 const RECIPE_GRID_ICON_SCALE = 0.75;
+const RECIPE_GRID_LABEL_SIZE = 8;
+const PREVIEW_JAPANESE_LABEL_SIZE = 16;
+const PREVIEW_TRAIT_PLACEHOLDER_HEIGHT = 80;
+const RECIPE_INGREDIENT_GROUP_GAP = 6;
 const RECIPE_PAGE_LABELS = ['NIGIRI', 'HOSOMAKI', 'FUTOMAKI', 'URAMAKI', 'TEMAKI', 'ONIGIRI'];
-const OVERLAY_TAB_LABELS = ['INVENTORY', 'RECIPES'];
+const OVERLAY_TAB_CONFIG = [
+  { label: 'INVENTORY', mode: 'inventory', side: 'left' },
+  { label: 'RECIPES', mode: 'recipes', side: 'left' },
+  { label: 'SETTINGS', mode: 'settings', side: 'right' },
+];
+const OVERLAY_TAB_LABELS = OVERLAY_TAB_CONFIG.map((tab) => tab.label);
 
 const DEFAULT_ICON_COLOR = 0xc99a6b;
 const ICON_PADDING = 5;
 
 const iconVisibleBoundsCache = new Map();
+
+const ICON_SHADOW_OFFSET_X = 0;
+const ICON_SHADOW_OFFSET_Y = 1;
+const ICON_SHADOW_COLOR = 0x10251e;
+const ICON_SHADOW_ALPHA = 0.2625;
+
+function attachPixelShadow(scene, iconObject) {
+  if (!iconObject || iconObject.pixelShadow) {
+    return iconObject;
+  }
+
+  const textureKey = iconObject.texture?.key;
+
+  if (!textureKey || textureKey === '__DEFAULT' || textureKey === '__MISSING') {
+    return iconObject;
+  }
+
+  const shadow = scene.add.image(iconObject.x, iconObject.y, textureKey);
+  shadow.setTintFill(ICON_SHADOW_COLOR);
+  shadow.setAlpha(ICON_SHADOW_ALPHA);
+  shadow.setVisible(iconObject.visible);
+  shadow.setOrigin(iconObject.originX, iconObject.originY);
+  shadow.setScrollFactor(iconObject.scrollFactorX, iconObject.scrollFactorY);
+  shadow.setDepth((iconObject.depth ?? 0) - 1);
+
+  iconObject.pixelShadow = shadow;
+
+  const wrap = (method, propagate) => {
+    const original = iconObject[method]?.bind(iconObject);
+
+    if (!original) {
+      return;
+    }
+
+    iconObject[method] = (...args) => {
+      const result = original(...args);
+
+      if (shadow.scene) {
+        propagate(shadow, ...args);
+      }
+
+      return result;
+    };
+  };
+
+  wrap('setVisible', (s, value) => s.setVisible(value));
+  wrap('setDepth', (s, depth) => s.setDepth((depth ?? 0) - 1));
+  wrap('setScrollFactor', (s, ...args) => s.setScrollFactor(...args));
+  wrap('setOrigin', (s, ...args) => s.setOrigin(...args));
+  wrap('setMask', (s, mask) => s.setMask(mask));
+  wrap('clearMask', (s, ...args) => s.clearMask(...args));
+  wrap('setScale', (s, sx, sy) => s.setScale(sx, sy ?? sx));
+  wrap('setPosition', (s, x, y, z, w) => s.setPosition(
+    (x ?? 0) + ICON_SHADOW_OFFSET_X,
+    (y ?? 0) + ICON_SHADOW_OFFSET_Y,
+    z,
+    w,
+  ));
+  wrap('setX', (s, x) => s.setX((x ?? 0) + ICON_SHADOW_OFFSET_X));
+  wrap('setY', (s, y) => s.setY((y ?? 0) + ICON_SHADOW_OFFSET_Y));
+  wrap('setAlpha', (s, alpha) => s.setAlpha(Math.min(1, (alpha ?? 1) * ICON_SHADOW_ALPHA)));
+  wrap('setTint', () => {});
+  wrap('setTintFill', () => {});
+  wrap('clearTint', () => {});
+
+  const originalDestroy = iconObject.destroy.bind(iconObject);
+  iconObject.destroy = (...args) => {
+    if (shadow.scene) {
+      shadow.destroy();
+    }
+    return originalDestroy(...args);
+  };
+
+  return iconObject;
+}
 
 function snapDisplaySizeToCenter(idealSize, maxSize, center) {
   const rounded = Math.max(1, Math.round(idealSize));
@@ -80,7 +167,6 @@ const COLORS = {
   inner: 0xf1d3a4,
   innerAlt: 0xe9c28b,
   inset: 0xc8955e,
-  occupiedTint: 0xead0a4,
   highlight: 0xfff2a8,
   highlightOuter: 0xc98755,
   backdrop: 0x10251e,
@@ -103,7 +189,6 @@ const COLORS = {
   textDark: 0x5a3427,
   ice: 0xffffff,
   lock: 0x4b352b,
-  closeHover: 0xd94a3a,
 };
 
 export class InventoryBar {
@@ -122,8 +207,8 @@ export class InventoryBar {
     this.overlayHoverSlotIndex = null;
     this.overlayFocusSlotIndex = null;
     this.overlayDragHoverSlotIndex = null;
-    this.overlayCloseHover = false;
     this.hotbarDragHoverIndex = null;
+    this.hotbarFocusIndex = null;
     this.currentOverlayMode = 'inventory';
     this.overlayTabZones = [];
     this.currentRecipePageIndex = 0;
@@ -208,14 +293,30 @@ export class InventoryBar {
     this.previewEmptyLabel.setOrigin(0, 0);
     this.previewEmptyLabelShadow.setText('No item selected');
     this.previewEmptyLabel.setText('No item selected');
+    this.previewJapaneseLabel = this.createOverlayText(
+      0,
+      0,
+      PREVIEW_JAPANESE_LABEL_SIZE,
+      COLORS.textDark,
+      0.42,
+      BITMAP_FONT_MADOU,
+    );
+    this.previewJapaneseLabel.setDepth(UI_DEPTHS.overlay + 5);
+    this.previewJapaneseLabel.setOrigin(0.5, 0);
+    this.previewJapaneseLabel.setCenterAlign?.();
+    this.recipeIngredientGroupLabels = ['REQUIRED', 'OPTIONAL'].map((label) => {
+      const text = this.createOverlayText(0, 0, 8, COLORS.textDark, 0.46);
+
+      text.setDepth(UI_DEPTHS.overlay + 5);
+      text.setOrigin(0, 0);
+      text.setText(label);
+      return text;
+    });
 
     this.overlayTitleShadow = this.createOverlayText(0, 0, 8, 0x10251e, 0.25);
     this.overlayTitle = this.createOverlayText(0, 0, 8, COLORS.text, 1);
     this.overlayColdLabel = this.createOverlayText(0, 0, 8, 0x2e7180, 1);
     this.overlayDryLabel = this.createOverlayText(0, 0, 8, COLORS.textDark, 1);
-    this.overlayCloseText = this.createOverlayText(0, 0, 12, COLORS.text, 1);
-    this.overlayCloseText.setOrigin(0.5);
-    this.overlayCloseText.setText('X');
 
     this.overlayTabTexts = OVERLAY_TAB_LABELS.map((label) => {
       const text = this.createOverlayText(0, 0, 8, COLORS.textDark, 1);
@@ -241,14 +342,14 @@ export class InventoryBar {
       return text;
     });
 
-    OVERLAY_TAB_LABELS.forEach((_label, index) => {
+    OVERLAY_TAB_CONFIG.forEach((tab, index) => {
       const zone = this.scene.add.zone(0, 0, 1, 1);
 
       zone.setOrigin(0, 0);
       zone.setDepth(UI_DEPTHS.overlay + 2);
       zone.setInteractive({ cursor: 'pointer' });
       zone.setVisible(false);
-      zone.on('pointerdown', () => this.setOverlayMode(index === 0 ? 'inventory' : 'recipes'));
+      zone.on('pointerdown', () => this.setOverlayMode(tab.mode));
       this.overlayTabZones.push(zone);
     });
 
@@ -262,15 +363,6 @@ export class InventoryBar {
       zone.on('pointerdown', () => this.setRecipePage(index));
       this.recipePageZones.push(zone);
     });
-
-    this.overlayCloseZone = this.scene.add.zone(0, 0, 24, 24);
-    this.overlayCloseZone.setOrigin(0.5);
-    this.overlayCloseZone.setDepth(UI_DEPTHS.overlay + 2);
-    this.overlayCloseZone.setInteractive({ cursor: 'pointer' });
-    this.overlayCloseZone.setVisible(false);
-    this.overlayCloseZone.on('pointerdown', () => this.closeOverlay());
-    this.overlayCloseZone.on('pointerover', () => this.setOverlayCloseHover(true));
-    this.overlayCloseZone.on('pointerout', () => this.setOverlayCloseHover(false));
 
     this.recipeScrollbarZone = this.scene.add.zone(0, 0, 1, 1);
     this.recipeScrollbarZone.setOrigin(0, 0);
@@ -306,14 +398,23 @@ export class InventoryBar {
     this.setOverlayObjectsVisible(false);
   }
 
-  createOverlayText(x, y, size, tint, alpha) {
-    const text = this.scene.add.bitmapText(x, y, BITMAP_FONT_PIXEL, '', size);
+  createOverlayText(x, y, size, tint, alpha, fontKey = BITMAP_FONT_PIXEL) {
+    const text = this.scene.add.bitmapText(x, y, fontKey, '', size);
 
     text.setDepth(UI_DEPTHS.overlay + 2);
     text.setTint(tint);
     text.setAlpha(alpha);
     text.restAlpha = alpha;
     text.setVisible(false);
+    return text;
+  }
+
+  createRecipeGridLabel(size, alpha, fontKey = BITMAP_FONT_PIXEL) {
+    const text = this.createOverlayText(0, 0, size, COLORS.textDark, alpha, fontKey);
+
+    text.setDepth(UI_DEPTHS.overlay + 3);
+    text.setOrigin(0.5, 0);
+    text.setCenterAlign?.();
     return text;
   }
 
@@ -330,6 +431,13 @@ export class InventoryBar {
         entries: [
           this.createRollRecipeEntry('hosomaki-salmon', 'Salmon Hosomaki', {
             rollStyle: 'hosomaki',
+            cropWidth: 46,
+            cropHeight: 12,
+          }),
+          this.createRollRecipeEntry('hosomaki-cucumber', 'Cucumber Hosomaki', {
+            rollStyle: 'hosomaki',
+            fillingType: 'cucumber',
+            fillingIngredient: { type: 'cucumber', label: 'Cucumber' },
             cropWidth: 46,
             cropHeight: 12,
           }),
@@ -400,7 +508,7 @@ export class InventoryBar {
   }
 
   createNigiriRecipeEntries() {
-    return Object.entries(CUTTABLE_FISH_STYLES).flatMap(([fishType, fishStyle]) => {
+    const fishEntries = Object.entries(CUTTABLE_FISH_STYLES).flatMap(([fishType, fishStyle]) => {
       const baseEntry = this.createNigiriRecipeEntry({
         fishType,
         fishStyle,
@@ -419,9 +527,38 @@ export class InventoryBar {
 
       return [baseEntry, ...subtypeEntries];
     });
+
+    return [
+      ...fishEntries,
+      this.createShrimpNigiriRecipeEntry(),
+    ];
   }
 
-  createNigiriRecipeEntry({ fishType, fishSubtype = null, fishStyle, id, name, unlocked }) {
+  createShrimpNigiriRecipeEntry() {
+    const fishType = 'shrimp';
+    const fishStyle = { displayName: 'Shrimp' };
+
+    return this.createNigiriRecipeEntry({
+      fishType,
+      fishStyle,
+      id: 'nigiri-shrimp',
+      name: 'Shrimp Nigiri',
+      unlocked: true,
+      ingredientType: 'shrimp',
+      ingredientLabel: 'Peeled Shrimp',
+    });
+  }
+
+  createNigiriRecipeEntry({
+    fishType,
+    fishSubtype = null,
+    fishStyle,
+    id,
+    name,
+    unlocked,
+    ingredientType = 'fish',
+    ingredientLabel = fishStyle.displayName,
+  }) {
     const dishObject = new Nigiri(this.scene, 0, 0, {
       fishType,
       fishSubtype,
@@ -437,20 +574,28 @@ export class InventoryBar {
       ingredients: [
         { type: 'rice', label: 'Rice' },
         {
-          type: 'fish',
-          label: fishStyle.displayName,
+          type: ingredientType,
+          label: ingredientLabel,
           fishType,
           fishSubtype,
           fishStyle,
         },
+        { type: 'wasabi', label: 'Wasabi', optional: true },
+        { type: 'nikiri', label: 'Nikiri Sauce', optional: true },
       ],
     });
   }
 
   createRollRecipeEntry(id, name, options = {}) {
-    const fishStyle = CUTTABLE_FISH_STYLES.salmon;
+    const fillingType = options.fillingType ?? 'salmon';
+    const fillingIngredient = options.fillingIngredient ?? {
+      type: 'fish',
+      label: 'Salmon',
+      fishType: 'salmon',
+      fishStyle: CUTTABLE_FISH_STYLES.salmon,
+    };
     const dishObject = new SushiRoll(this.scene, 0, 0, {
-      fillingType: 'salmon',
+      fillingType,
       hasIngredientTraits: false,
       hasQuality: false,
       cropWidth: options.cropWidth,
@@ -469,20 +614,16 @@ export class InventoryBar {
       ingredients: [
         { type: 'rice', label: 'Rice' },
         { type: 'nori', label: 'Nori' },
-        {
-          type: 'fish',
-          label: 'Salmon',
-          fishType: 'salmon',
-          fishStyle,
-        },
+        fillingIngredient,
       ],
     });
   }
 
   prepareRecipeEntry(entry) {
     const dishObject = entry.dishObject;
-    const iconObject = dishObject?.createInventoryIcon?.(this.scene) ?? null;
-    const previewIconObject = dishObject?.createInventoryIcon?.(this.scene) ?? null;
+    const iconObject = attachPixelShadow(this.scene, dishObject?.createInventoryIcon?.(this.scene) ?? null);
+    const previewIconObject = attachPixelShadow(this.scene, dishObject?.createInventoryIcon?.(this.scene) ?? null);
+    const nameText = this.createRecipeGridLabel(RECIPE_GRID_LABEL_SIZE, 0.92);
 
     if (dishObject?.scene) {
       dishObject.setVisible(false);
@@ -507,15 +648,17 @@ export class InventoryBar {
 
     return {
       ...entry,
+      japaneseName: entry.japaneseName ?? dishObject?.japaneseName ?? null,
       ingredients: (entry.ingredients ?? []).map((ingredient) => this.prepareRecipeIngredient(ingredient)),
       iconObject,
       previewIconObject,
+      nameText,
     };
   }
 
   prepareRecipeIngredient(ingredient) {
     const sourceObject = this.createRecipeIngredientSource(ingredient);
-    const iconObject = sourceObject?.createInventoryIcon?.(this.scene) ?? null;
+    const iconObject = attachPixelShadow(this.scene, sourceObject?.createInventoryIcon?.(this.scene) ?? null);
 
     if (sourceObject?.scene) {
       sourceObject.setVisible(false);
@@ -532,6 +675,7 @@ export class InventoryBar {
 
     return {
       ...ingredient,
+      japaneseName: ingredient.japaneseName ?? sourceObject?.japaneseName ?? null,
       sourceObject,
       iconObject,
     };
@@ -551,12 +695,38 @@ export class InventoryBar {
       return new NoriSheet(this.scene, 0, 0, commonOptions);
     }
 
+    if (ingredient.type === 'wasabi') {
+      return new WasabiDab(this.scene, 0, 0, commonOptions);
+    }
+
+    if (ingredient.type === 'nikiri') {
+      return new Bowl(this.scene, 0, 0, {
+        ...commonOptions,
+        preset: 'smallWideBowl',
+        displayName: 'Nikiri Sauce',
+        color: 'black',
+        acceptedStackCategories: [],
+        contents: { style: 'nikiri', fullness: 0.62 },
+      });
+    }
+
     if (ingredient.type === 'fish') {
       return new CuttableFish(this.scene, 0, 0, {
         ...commonOptions,
         fishType: ingredient.fishType ?? 'salmon',
         fishSubtype: ingredient.fishSubtype ?? null,
       });
+    }
+
+    if (ingredient.type === 'shrimp') {
+      return new Shrimp(this.scene, 0, 0, {
+        ...commonOptions,
+        isPeeled: true,
+      });
+    }
+
+    if (ingredient.type === 'cucumber') {
+      return new CuttableCucumber(this.scene, 0, 0, commonOptions);
     }
 
     return null;
@@ -605,13 +775,21 @@ export class InventoryBar {
         }
 
         if (this.isOverlayOpen) {
+          if (this.currentOverlayMode !== 'inventory') {
+            return;
+          }
           this.handleHotbarInventoryPointerDown(index, pointer);
           return;
         }
 
         this.handleSlotPointerDown(index, pointer);
       });
-      zone.on('pointerover', () => this.setHoverIndex(index));
+      zone.on('pointerover', () => {
+        if (this.isOverlayOpen && this.currentOverlayMode !== 'inventory' && index !== EXPAND_SLOT_INDEX) {
+          return;
+        }
+        this.setHoverIndex(index);
+      });
       zone.on('pointerout', () => this.setHoverIndex(null, index));
       this.slotZones.push(zone);
     }
@@ -628,7 +806,8 @@ export class InventoryBar {
     for (let index = 0; index < SLOT_COUNT; index += 1) {
       const slotX = x + index * (slotSize + SLOT_GAP);
       const slotY = y;
-      const isOccupied = Boolean(this.slotItems[index]);
+      const item = this.slotItems[index];
+      const isEmpty = !item || item === this.inventoryDrag?.entry;
       const isHighlighted = this.isSlotHighlighted(index);
       const innerColor = index % 2 === 0 ? COLORS.inner : COLORS.innerAlt;
 
@@ -636,14 +815,14 @@ export class InventoryBar {
       this.graphics.fillRect(slotX + 1, slotY + 2, slotSize, slotSize);
       this.graphics.fillStyle(isHighlighted ? COLORS.highlight : COLORS.outer, 1);
       this.graphics.fillRect(slotX, slotY, slotSize, slotSize);
-      this.graphics.fillStyle(isOccupied ? COLORS.occupiedTint : innerColor, 1);
+      this.graphics.fillStyle(innerColor, 1);
       this.graphics.fillRect(slotX + 2, slotY + 2, slotSize - 4, slotSize - 4);
 
-      if (!isOccupied) {
+      if (isEmpty) {
         this.drawEmptyPlus(slotX, slotY, slotSize);
       }
 
-      this.drawSlotItem(slotX, slotY, slotSize, this.slotItems[index]);
+      this.drawSlotItem(slotX, slotY, slotSize, item);
 
       this.positionSlotZone(index, slotX, slotY, slotSize);
     }
@@ -658,12 +837,12 @@ export class InventoryBar {
     this.overlayTitle.setVisible(isVisible);
     this.overlayColdLabel.setVisible(isVisible);
     this.overlayDryLabel.setVisible(isVisible);
-    this.overlayCloseText.setVisible(isVisible);
     this.overlayTabTexts.forEach((text) => text.setVisible(isVisible));
     this.overlayTabZones.forEach((zone) => zone.setVisible(isVisible));
     this.previewEmptyLabelShadow.setVisible(false);
     this.previewEmptyLabel.setVisible(false);
-    this.overlayCloseZone.setVisible(isVisible);
+    this.hidePreviewJapaneseName();
+    this.hideRecipeIngredientGroupLabels();
     this.overlayPageTexts.forEach((text) => text.setVisible(isVisible && this.currentOverlayMode === 'inventory'));
     this.overlayPageZones.forEach((zone) => zone.setVisible(isVisible && this.currentOverlayMode === 'inventory'));
     this.overlaySlotZones.forEach((zone) => zone.setVisible(isVisible && this.currentOverlayMode === 'inventory'));
@@ -676,6 +855,7 @@ export class InventoryBar {
       this.overlayBackdropZone.setVisible(false);
       this.hidePreviewEntry();
       this.hideRecipePreviewEntry();
+      this.hidePreviewJapaneseName();
       this.syncRecipeIconVisibility();
       this.endRecipeScrollbarDrag();
       this.recipeMaskGraphics.clear();
@@ -691,12 +871,12 @@ export class InventoryBar {
       this.overlayTitle,
       this.overlayColdLabel,
       this.overlayDryLabel,
-      this.overlayCloseText,
       ...this.overlayTabTexts,
       ...this.overlayTabZones,
       this.previewEmptyLabelShadow,
       this.previewEmptyLabel,
-      this.overlayCloseZone,
+      this.previewJapaneseLabel,
+      ...this.recipeIngredientGroupLabels,
       this.recipeScrollbarZone,
       this.recipeMaskGraphics,
       ...this.overlayPageTexts,
@@ -721,11 +901,13 @@ export class InventoryBar {
     }
 
     const iconObjects = [];
+    const draggedEntry = this.inventoryDrag?.entry;
 
     for (let index = 0; index < INVENTORY_SLOTS_PER_PAGE; index += 1) {
-      const iconObject = this.getLargeSlotItem(this.currentOverlayPage, index)?.iconObject;
+      const entry = this.getLargeSlotItem(this.currentOverlayPage, index);
+      const iconObject = entry?.iconObject;
 
-      if (iconObject?.scene) {
+      if (entry !== draggedEntry && iconObject?.scene) {
         iconObjects.push(iconObject);
       }
     }
@@ -741,9 +923,12 @@ export class InventoryBar {
     const page = this.getCurrentRecipePage();
     const objects = [];
 
-    page?.entries?.forEach((entry) => {
+    this.getRecipeEntriesForPage(page).forEach((entry) => {
       if (entry.iconObject?.scene) {
         objects.push(entry.iconObject);
+      }
+      if (entry.nameText?.scene) {
+        objects.push(entry.nameText);
       }
     });
 
@@ -834,7 +1019,7 @@ export class InventoryBar {
     this.overlayFocusSlotIndex = null;
     this.overlayDragHoverSlotIndex = null;
     this.hotbarDragHoverIndex = null;
-    this.setOverlayCloseHover(false);
+    this.hotbarFocusIndex = null;
     this.clearPendingInventoryDrag();
     this.endInventoryDrag(false);
     this.draw();
@@ -888,7 +1073,7 @@ export class InventoryBar {
   }
 
   setOverlayMode(mode) {
-    const nextMode = mode === 'recipes' ? 'recipes' : 'inventory';
+    const nextMode = OVERLAY_TAB_CONFIG.some((tab) => tab.mode === mode) ? mode : 'inventory';
 
     if (this.currentOverlayMode === nextMode) {
       return;
@@ -898,6 +1083,7 @@ export class InventoryBar {
     this.overlayHoverSlotIndex = null;
     this.overlayFocusSlotIndex = null;
     this.overlayDragHoverSlotIndex = null;
+    this.hotbarFocusIndex = null;
     this.recipeHoverIndex = null;
     this.clampCurrentRecipeScrollOffset();
     this.endRecipeScrollbarDrag();
@@ -909,6 +1095,7 @@ export class InventoryBar {
     this.syncInventoryIconVisibility();
     this.syncRecipeIconVisibility();
     this.setOverlayObjectsVisible(this.isOverlayOpen);
+    this.draw();
     this.drawOverlay();
   }
 
@@ -928,15 +1115,6 @@ export class InventoryBar {
     this.drawOverlay();
   }
 
-  setOverlayCloseHover(isHovered) {
-    if (this.overlayCloseHover === isHovered) {
-      return;
-    }
-
-    this.overlayCloseHover = isHovered;
-    this.overlayCloseText.setTint(isHovered ? COLORS.closeHover : COLORS.text);
-  }
-
   drawOverlay() {
     if (!this.isOverlayOpen || !this.visibleArea) {
       return;
@@ -944,7 +1122,8 @@ export class InventoryBar {
 
     const visibleArea = this.visibleArea;
     const isRecipeMode = this.currentOverlayMode === 'recipes';
-    const recipeEntries = this.getCurrentRecipePage()?.entries ?? [];
+    const isSettingsMode = this.currentOverlayMode === 'settings';
+    const recipeEntries = this.getRecipeEntriesForPage();
     const barTop = this.bounds?.y ?? visibleArea.bottom - BAR_MARGIN - MAX_SLOT_SIZE;
     const spaceAboveBar = Math.max(120, barTop - visibleArea.top - OVERLAY_MARGIN * 2);
     const maxPanelWidth = Math.min(visibleArea.width - OVERLAY_MARGIN * 2, 724);
@@ -1038,6 +1217,7 @@ export class InventoryBar {
     this.overlayBackdropZone.input.hitArea.setTo(0, 0, panelWidth, panelHeight + tabOverhang);
 
     this.overlayGraphics.clear();
+    this.hideRecipeIngredientGroupLabels();
     this.overlayGraphics.fillStyle(COLORS.shadow, 0.24);
     this.overlayGraphics.fillRect(panelX + 3, panelY + 4, panelWidth, panelHeight);
     this.overlayGraphics.fillStyle(COLORS.panelOuter, 1);
@@ -1060,6 +1240,9 @@ export class InventoryBar {
       this.drawRecipeGrid(gridX, gridY, recipeViewportWidth, gridHeight, recipeCellWidth, recipeCellHeight, recipeRowCount);
       this.drawRecipePreviewContent(previewX, previewY, previewWidth, previewHeight);
       this.drawRecipePageButtons(pageButtonX, pageButtonY, pageButtonWidth);
+    } else if (isSettingsMode) {
+      this.positionSettingsSectionLabels(gridX, labelY);
+      this.drawSettingsContent(gridX, gridY, gridWidth, gridHeight, previewX, previewY, previewWidth, previewHeight);
     } else {
       this.positionOverlaySectionLabels(gridX, labelY, gridWidth);
       this.drawOverlaySlots(gridX, gridY, slotSize, INVENTORY_ROWS, isPageUnlocked);
@@ -1079,13 +1262,27 @@ export class InventoryBar {
     this.drawOverlayPreviewSpotlight(previewX, previewY, previewWidth, previewHeight);
   }
 
-  drawOverlayPreviewSpotlight(previewX, previewY, previewWidth, previewHeight) {
+  getOverlayPreviewSpotlightMetrics(previewX, previewY, previewWidth, previewHeight) {
     const centerX = Math.round(previewX + previewWidth / 2);
     const spotlightY = Math.round(previewY + previewHeight * 0.34);
     const spotlightWidth = Math.round(previewWidth * 0.66);
     const spotlightHeight = Math.max(10, Math.round(previewHeight * 0.12));
-    const ellipseX = centerX;
-    const ellipseY = spotlightY + Math.round(spotlightHeight / 2);
+
+    return {
+      centerX,
+      centerY: spotlightY + Math.round(spotlightHeight / 2),
+      width: spotlightWidth,
+      height: spotlightHeight,
+    };
+  }
+
+  drawOverlayPreviewSpotlight(previewX, previewY, previewWidth, previewHeight) {
+    const {
+      centerX: ellipseX,
+      centerY: ellipseY,
+      width: spotlightWidth,
+      height: spotlightHeight,
+    } = this.getOverlayPreviewSpotlightMetrics(previewX, previewY, previewWidth, previewHeight);
 
     this.overlayGraphics.fillStyle(COLORS.highlight, 0.1);
     this.overlayGraphics.fillEllipse(
@@ -1122,14 +1319,19 @@ export class InventoryBar {
 
     if (!entry) {
       this.hidePreviewEntry();
+      this.hidePreviewJapaneseName();
       this.showEmptyPreviewMessage(previewX, previewY, previewWidth, previewHeight);
       return;
     }
 
     this.hideEmptyPreviewMessage();
 
-    const centerX = Math.round(previewX + previewWidth / 2);
-    const objectCenterY = Math.round(previewY + previewHeight * 0.34);
+    const { centerX, centerY: objectCenterY } = this.getOverlayPreviewSpotlightMetrics(
+      previewX,
+      previewY,
+      previewWidth,
+      previewHeight,
+    );
 
     this.showPreviewEntry(entry, centerX, objectCenterY);
 
@@ -1144,22 +1346,18 @@ export class InventoryBar {
       const traitY = Math.round(traitBottom - this.previewTraits.displayHeight);
 
       this.previewTraits.showAt(entry.object, traitX, traitY, 1);
+      this.showPreviewJapaneseName(entry.object, previewX, previewY, previewWidth, previewHeight, traitY);
     } else {
       this.previewTraits.hideImmediate();
+      this.hidePreviewJapaneseName();
     }
   }
 
   showEmptyPreviewMessage(previewX, previewY, previewWidth, previewHeight) {
-    const placeholderRawHeight = 80;
-    const placeholderDisplayWidth = this.previewTraits.displayWidth || 0;
-    const placeholderDisplayHeight = placeholderRawHeight * (this.previewTraits.overlayScale ?? 1);
-    const traitX = Math.round(previewX + (previewWidth - placeholderDisplayWidth) / 2);
-    const gridBottom = this.overlayBounds?.gridY + this.overlayBounds?.gridHeight + 4;
-    const fallbackBottom = previewY + previewHeight - 4;
-    const traitBottom = Number.isFinite(gridBottom) ? gridBottom : fallbackBottom;
-    const traitY = Math.round(traitBottom - placeholderDisplayHeight);
+    const panelLayout = this.getPreviewTraitPanelLayout(previewX, previewY, previewWidth, previewHeight);
 
-    this.previewTraits.showPlaceholderAt(traitX, traitY, placeholderRawHeight, 1);
+    this.hidePreviewJapaneseName();
+    this.previewTraits.showPlaceholderAt(panelLayout.x, panelLayout.y, panelLayout.rawHeight, 1);
 
     this.previewEmptyLabel.setText('No item selected');
     this.previewEmptyLabelShadow.setVisible(false);
@@ -1168,10 +1366,29 @@ export class InventoryBar {
 
     const labelWidth = this.previewEmptyLabel.width ?? 0;
     const labelHeight = this.previewEmptyLabel.height ?? 0;
-    const labelX = Math.round(traitX + (placeholderDisplayWidth - labelWidth) / 2);
-    const labelY = Math.round(traitY + (placeholderDisplayHeight - labelHeight) / 2);
+    const labelX = Math.round(panelLayout.x + (panelLayout.width - labelWidth) / 2);
+    const labelY = Math.round(panelLayout.y + (panelLayout.height - labelHeight) / 2);
 
     this.setOverlayRestPosition(this.previewEmptyLabel, labelX, labelY);
+  }
+
+  getPreviewTraitPanelLayout(previewX, previewY, previewWidth, previewHeight, rawHeight = PREVIEW_TRAIT_PLACEHOLDER_HEIGHT) {
+    const scale = this.previewTraits.overlayScale ?? 1;
+    const width = this.previewTraits.displayWidth || 0;
+    const height = rawHeight * scale;
+    const x = Math.round(previewX + (previewWidth - width) / 2);
+    const gridBottom = this.overlayBounds?.gridY + this.overlayBounds?.gridHeight + 4;
+    const fallbackBottom = previewY + previewHeight - 4;
+    const bottom = Number.isFinite(gridBottom) ? gridBottom : fallbackBottom;
+    const y = Math.round(bottom - height);
+
+    return {
+      x,
+      y,
+      width,
+      height,
+      rawHeight,
+    };
   }
 
   hideEmptyPreviewMessage() {
@@ -1179,24 +1396,104 @@ export class InventoryBar {
     this.previewEmptyLabel.setVisible(false);
   }
 
+  getJapaneseNameText(source) {
+    const japaneseName = source?.japaneseName;
+
+    if (!japaneseName) {
+      return '';
+    }
+
+    if (typeof japaneseName === 'string') {
+      return japaneseName;
+    }
+
+    return japaneseName.kanji || japaneseName.kana || '';
+  }
+
+  showPreviewJapaneseName(source, previewX, previewY, previewWidth, previewHeight, panelY = null) {
+    const label = this.previewJapaneseLabel;
+    const japaneseName = this.getJapaneseNameText(source);
+
+    if (!label?.scene || !japaneseName) {
+      this.hidePreviewJapaneseName();
+      return;
+    }
+
+    const maxWidth = Math.max(20, previewWidth - 12);
+    const textFits = this.fitRecipeGridText(label, japaneseName, maxWidth);
+
+    if (!textFits) {
+      this.hidePreviewJapaneseName();
+      return;
+    }
+
+    const {
+      centerX,
+      centerY,
+      height: spotlightHeight,
+    } = this.getOverlayPreviewSpotlightMetrics(previewX, previewY, previewWidth, previewHeight);
+    const fallbackPanelY = this.getPreviewTraitPanelLayout(previewX, previewY, previewWidth, previewHeight).y;
+    const topLimit = Math.round(centerY + spotlightHeight / 2 + 8);
+    const bottomLimit = Math.round((Number.isFinite(panelY) ? panelY : fallbackPanelY) - PREVIEW_JAPANESE_LABEL_SIZE - 6);
+    const labelY = bottomLimit >= topLimit
+      ? Math.round(topLimit + (bottomLimit - topLimit) / 2)
+      : Math.round(bottomLimit);
+
+    label.setTint(COLORS.textDark);
+    label.setVisible(true);
+    this.setOverlayRestAlpha(label, 0.42);
+    this.setOverlayRestPosition(label, centerX, labelY);
+  }
+
+  hidePreviewJapaneseName() {
+    if (this.previewJapaneseLabel?.scene) {
+      this.previewJapaneseLabel.setVisible(false);
+    }
+  }
+
+  hideRecipeIngredientGroupLabels() {
+    this.recipeIngredientGroupLabels?.forEach((text) => text.setVisible(false));
+  }
+
   getOverlayPreviewEntry() {
     if (!this.isInventoryPageUnlocked(this.currentOverlayPage)) {
       return null;
     }
 
+    if (
+      this.isOverlayOpen
+      && this.currentOverlayMode === 'inventory'
+      && this.hoverIndex !== null
+      && this.hoverIndex !== EXPAND_SLOT_INDEX
+    ) {
+      const hotbarEntry = this.slotItems[this.hoverIndex];
+
+      if (hotbarEntry && hotbarEntry !== this.inventoryDrag?.entry) {
+        return hotbarEntry;
+      }
+    }
+
     const slotIndex = this.overlayHoverSlotIndex ?? this.overlayFocusSlotIndex;
 
-    if (slotIndex === null) {
-      return null;
+    if (slotIndex !== null) {
+      const entry = this.getLargeSlotItem(this.currentOverlayPage, slotIndex);
+
+      if (!entry || entry === this.inventoryDrag?.entry) {
+        return null;
+      }
+
+      return entry;
     }
 
-    const entry = this.getLargeSlotItem(this.currentOverlayPage, slotIndex);
+    if (this.hotbarFocusIndex !== null) {
+      const hotbarEntry = this.slotItems[this.hotbarFocusIndex];
 
-    if (!entry || entry === this.inventoryDrag?.entry) {
-      return null;
+      if (hotbarEntry && hotbarEntry !== this.inventoryDrag?.entry) {
+        return hotbarEntry;
+      }
     }
 
-    return entry;
+    return null;
   }
 
   showPreviewEntry(entry, centerX, centerY) {
@@ -1228,6 +1525,7 @@ export class InventoryBar {
       object.setVisible(false);
     }
 
+    this.hidePreviewJapaneseName();
     this.previewEntry = null;
   }
 
@@ -1236,16 +1534,18 @@ export class InventoryBar {
     const titleY = panelY - OVERLAY_TAB_HEIGHT + OVERLAY_TAB_PANEL_OVERLAP;
     const tabWidth = 92;
     const tabBottomY = panelY + OVERLAY_TAB_PANEL_OVERLAP;
+    let leftTabIndex = 0;
 
     this.overlayTitleShadow.setText('');
     this.setOverlayRestPosition(this.overlayTitleShadow, titleX + 1, titleY + 1);
     this.overlayTitle.setText('');
     this.setOverlayRestPosition(this.overlayTitle, titleX, titleY);
 
-    OVERLAY_TAB_LABELS.forEach((_label, index) => {
-      const x = titleX + index * (tabWidth + OVERLAY_TAB_GAP);
-      const isActive = (index === 0 && this.currentOverlayMode === 'inventory')
-        || (index === 1 && this.currentOverlayMode === 'recipes');
+    OVERLAY_TAB_CONFIG.forEach((tab, index) => {
+      const x = tab.side === 'right'
+        ? panelX + panelWidth - OVERLAY_PADDING - tabWidth
+        : titleX + leftTabIndex * (tabWidth + OVERLAY_TAB_GAP);
+      const isActive = this.currentOverlayMode === tab.mode;
       const tabHeight = OVERLAY_TAB_HEIGHT - (isActive ? 0 : 4);
       const tabY = tabBottomY - tabHeight;
 
@@ -1262,20 +1562,12 @@ export class InventoryBar {
       this.setOverlayZoneRestPosition(zone, x, titleY);
       zone.setSize(tabWidth, OVERLAY_TAB_HEIGHT + OVERLAY_TAB_PANEL_OVERLAP);
       zone.input.hitArea.setTo(0, 0, tabWidth, OVERLAY_TAB_HEIGHT + OVERLAY_TAB_PANEL_OVERLAP);
+
+      if (tab.side !== 'right') {
+        leftTabIndex += 1;
+      }
     });
 
-    const closeX = panelX + panelWidth - OVERLAY_PADDING;
-    const closeY = panelY + OVERLAY_PADDING;
-
-    this.setOverlayRestPosition(this.overlayCloseText, closeX, closeY);
-    this.overlayCloseText.setTint(this.overlayCloseHover ? COLORS.closeHover : COLORS.text);
-    this.setOverlayZoneRestPosition(this.overlayCloseZone, closeX, closeY);
-
-    const glyphSize = Math.max(this.overlayCloseText.width ?? 0, this.overlayCloseText.height ?? 0);
-    const zoneSize = Math.ceil(glyphSize) + OVERLAY_CLOSE_HIT_PADDING * 2;
-
-    this.overlayCloseZone.setSize(zoneSize, zoneSize);
-    this.overlayCloseZone.input.hitArea.setTo(0, 0, zoneSize, zoneSize);
   }
 
   drawBinderTab(x, y, width, height, isActive) {
@@ -1452,9 +1744,43 @@ export class InventoryBar {
     this.setOverlayRestPosition(this.overlayDryLabel, gridX, labelY);
   }
 
+  positionSettingsSectionLabels(gridX, labelY) {
+    this.overlayColdLabel.setText('SETTINGS');
+    this.overlayColdLabel.setTint(COLORS.textDark);
+    this.setOverlayRestAlpha(this.overlayColdLabel, 0.68);
+    this.setOverlayRestPosition(this.overlayColdLabel, gridX, labelY);
+
+    this.overlayDryLabel.setText('');
+    this.setOverlayRestAlpha(this.overlayDryLabel, 0);
+    this.setOverlayRestPosition(this.overlayDryLabel, gridX, labelY);
+  }
+
+  drawSettingsContent(gridX, gridY, gridWidth, gridHeight, previewX, previewY, previewWidth, previewHeight) {
+    this.overlayPageTexts.forEach((text) => text.setVisible(false));
+    this.overlayPageZones.forEach((zone) => zone.setVisible(false));
+    this.overlaySlotZones.forEach((zone) => zone.setVisible(false));
+    this.recipePageTexts.forEach((text) => text.setVisible(false));
+    this.recipePageZones.forEach((zone) => zone.setVisible(false));
+    this.recipeEntryZones.forEach((zone) => zone.setVisible(false));
+    this.recipeScrollbarZone.setVisible(false);
+    this.hidePreviewEntry();
+    this.hideRecipePreviewEntry();
+    this.hidePreviewJapaneseName();
+    this.previewTraits.hideImmediate();
+    this.hideEmptyPreviewMessage();
+
+    const contentX = gridX;
+    const contentY = gridY;
+    const contentWidth = previewX + previewWidth - gridX;
+    const contentHeight = Math.max(gridHeight, previewY + previewHeight - gridY);
+
+    this.overlayGraphics.fillStyle(COLORS.slotDryInner, 1);
+    this.overlayGraphics.fillRect(contentX - 4, contentY - 4, contentWidth + 8, contentHeight + 8);
+  }
+
   drawRecipeGrid(gridX, gridY, viewportWidth, viewportHeight, cellWidth, cellHeight, rowCount) {
     const page = this.getCurrentRecipePage();
-    const entries = page?.entries ?? [];
+    const entries = this.getRecipeEntriesForPage(page);
     const contentHeight = rowCount * cellHeight + Math.max(0, rowCount - 1) * RECIPE_CELL_GAP;
     const maxScroll = this.getRecipeMaxScrollOffset();
     const scrollOffset = this.clampCurrentRecipeScrollOffset();
@@ -1470,9 +1796,12 @@ export class InventoryBar {
       const cellX = gridX + column * (cellWidth + RECIPE_CELL_GAP);
       const cellY = gridY + row * (cellHeight + RECIPE_CELL_GAP) - scrollOffset;
       const isActive = this.recipeHoverIndex === index || this.recipeFocusIndex === index;
-      const iconSize = Math.max(18, Math.min(cellWidth - 18, cellHeight - 12) * RECIPE_GRID_ICON_SCALE);
+      const availableIconHeight = entry.unlocked ? cellHeight - 48 : cellHeight - 12;
+      const iconSize = Math.max(18, Math.min(cellWidth - 18, availableIconHeight) * RECIPE_GRID_ICON_SCALE);
       const centerX = Math.round(cellX + cellWidth / 2);
-      const centerY = Math.round(cellY + cellHeight / 2);
+      const centerY = entry.unlocked
+        ? Math.round(cellY + 32)
+        : Math.round(cellY + cellHeight / 2);
       const isVisible = cellY < viewportBottom && cellY + cellHeight > gridY;
 
       if (!isVisible) {
@@ -1480,6 +1809,7 @@ export class InventoryBar {
           entry.iconObject.clearMask?.();
           entry.iconObject.setVisible(false);
         }
+        this.hideRecipeGridLabels(entry);
         this.recipeEntryZones[index]?.setVisible(false);
         return;
       }
@@ -1503,6 +1833,7 @@ export class InventoryBar {
         entry.iconObject.restY = Math.round(centerY);
       }
 
+      this.positionRecipeGridLabels(entry, centerX, cellY, cellWidth, gridY, viewportBottom);
       this.positionRecipeEntryZone(index, cellX, cellY, cellWidth, cellHeight, gridY, viewportBottom);
     });
 
@@ -1514,6 +1845,64 @@ export class InventoryBar {
     this.overlayBounds.recipeRowCount = rowCount;
     this.overlayBounds.recipeContentHeight = contentHeight;
     this.overlayBounds.recipeViewportHeight = viewportHeight;
+  }
+
+  fitRecipeGridText(text, value, maxWidth) {
+    const fullValue = (value ?? '').toString();
+
+    text.setText(fullValue);
+
+    if ((text.width ?? 0) <= maxWidth) {
+      return Boolean(fullValue);
+    }
+
+    let clippedValue = fullValue;
+
+    while (clippedValue.length > 1) {
+      clippedValue = clippedValue.slice(0, -1);
+      text.setText(`${clippedValue}...`);
+
+      if ((text.width ?? 0) <= maxWidth) {
+        return true;
+      }
+    }
+
+    text.setText('');
+    return false;
+  }
+
+  positionRecipeGridLabels(entry, centerX, cellY, cellWidth, viewportTop, viewportBottom) {
+    if (!entry.unlocked) {
+      this.hideRecipeGridLabels(entry);
+      return;
+    }
+
+    const nameText = entry.nameText;
+
+    if (!nameText?.scene) {
+      return;
+    }
+
+    const maxWidth = Math.max(20, cellWidth - 8);
+    const nameY = Math.round(cellY + 66);
+    const isVisible = nameY >= viewportTop && nameY + RECIPE_GRID_LABEL_SIZE <= viewportBottom;
+    const hasName = this.fitRecipeGridText(nameText, entry.name, maxWidth);
+
+    nameText.setTint(COLORS.textDark);
+    nameText.setMask(this.recipeGridMask);
+
+    nameText.setVisible(isVisible && hasName);
+    this.setOverlayRestAlpha(nameText, 0.92);
+    this.setOverlayRestPosition(nameText, centerX, nameY);
+  }
+
+  hideRecipeGridLabels(entry) {
+    [entry?.nameText].forEach((text) => {
+      if (text?.scene) {
+        text.clearMask?.();
+        text.setVisible(false);
+      }
+    });
   }
 
   updateRecipeGridMask(x, y, width, height) {
@@ -1790,7 +2179,7 @@ export class InventoryBar {
 
   getRecipeMaxScrollOffset() {
     const rowCount = this.overlayBounds?.recipeRowCount
-      ?? Math.max(1, Math.ceil((this.getCurrentRecipePage()?.entries?.length ?? 0) / RECIPE_COLUMNS));
+      ?? Math.max(1, Math.ceil(this.getRecipeEntriesForPage().length / RECIPE_COLUMNS));
     const viewportHeight = this.overlayBounds?.recipeViewportHeight ?? this.overlayBounds?.gridHeight ?? 0;
     const contentHeight = rowCount * RECIPE_CELL_HEIGHT + Math.max(0, rowCount - 1) * RECIPE_CELL_GAP;
 
@@ -1798,7 +2187,7 @@ export class InventoryBar {
   }
 
   handleRecipeEntryPointerDown(index) {
-    const entries = this.getCurrentRecipePage()?.entries ?? [];
+    const entries = this.getRecipeEntriesForPage();
 
     if (!entries[index]) {
       return;
@@ -1812,8 +2201,19 @@ export class InventoryBar {
     return this.recipePages[this.currentRecipePageIndex] ?? this.recipePages[0] ?? null;
   }
 
+  getRecipeEntriesForPage(page = this.getCurrentRecipePage()) {
+    return (page?.entries ?? [])
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => {
+        const unlockedOrder = Number(Boolean(b.entry.unlocked)) - Number(Boolean(a.entry.unlocked));
+
+        return unlockedOrder || a.index - b.index;
+      })
+      .map(({ entry }) => entry);
+  }
+
   getRecipePreviewEntry() {
-    const entries = this.getCurrentRecipePage()?.entries ?? [];
+    const entries = this.getRecipeEntriesForPage();
     const index = this.recipeHoverIndex ?? this.recipeFocusIndex;
 
     return entries[index] ?? entries[0] ?? null;
@@ -1827,6 +2227,7 @@ export class InventoryBar {
 
     if (!entry) {
       this.hideRecipePreviewEntry();
+      this.hidePreviewJapaneseName();
       this.showEmptyPreviewMessage(previewX, previewY, previewWidth, previewHeight);
       return;
     }
@@ -1835,9 +2236,15 @@ export class InventoryBar {
 
     const centerX = Math.round(previewX + previewWidth / 2);
     const objectCenterY = Math.round(previewY + previewHeight * 0.34);
+    const panelLayout = this.getPreviewTraitPanelLayout(previewX, previewY, previewWidth, previewHeight);
 
     this.showRecipePreviewEntry(entry, centerX, objectCenterY, previewWidth, previewHeight);
     this.drawRecipeIngredientStrip(entry, previewX, previewY, previewWidth, previewHeight);
+    if (entry.unlocked) {
+      this.showPreviewJapaneseName(entry.dishObject, previewX, previewY, previewWidth, previewHeight, panelLayout.y);
+    } else {
+      this.hidePreviewJapaneseName();
+    }
   }
 
   showRecipePreviewEntry(entry, centerX, centerY, previewWidth, previewHeight) {
@@ -1917,17 +2324,42 @@ export class InventoryBar {
       }
     });
 
+    this.hidePreviewJapaneseName();
     this.recipePreviewEntry = null;
   }
 
   drawRecipeIngredientStrip(entry, previewX, previewY, previewWidth, previewHeight) {
     const ingredients = entry.ingredients ?? [];
+    const panelLayout = this.getPreviewTraitPanelLayout(previewX, previewY, previewWidth, previewHeight);
     const iconSize = 26;
     const iconGap = 8;
-    const totalWidth = ingredients.length * iconSize + Math.max(0, ingredients.length - 1) * iconGap;
-    const startX = Math.round(previewX + (previewWidth - totalWidth) / 2);
-    const iconY = Math.round(previewY + previewHeight - 44);
+    const requiredIngredients = ingredients.filter((ingredient) => !ingredient.optional);
+    const optionalIngredients = ingredients.filter((ingredient) => ingredient.optional);
+    const groupWidth = (group) => group.length * iconSize + Math.max(0, group.length - 1) * iconGap;
+    const requiredWidth = groupWidth(requiredIngredients);
+    const optionalWidth = groupWidth(optionalIngredients);
+    const hasOptionalGroup = optionalIngredients.length > 0;
+    const groupBlockWidth = hasOptionalGroup ? Math.max(requiredWidth, optionalWidth) + 18 : 0;
+    const groupBlockHeight = 50;
+    const groupBlockY = Math.round(panelLayout.y + 22);
+    const totalWidth = hasOptionalGroup
+      ? groupBlockWidth * 2 + RECIPE_INGREDIENT_GROUP_GAP
+      : groupWidth(ingredients);
+    const startX = Math.round(panelLayout.x + (panelLayout.width - totalWidth) / 2);
+    const requiredBlockX = startX;
+    const optionalBlockX = startX + groupBlockWidth + RECIPE_INGREDIENT_GROUP_GAP;
+    const requiredStartX = hasOptionalGroup
+      ? Math.round(requiredBlockX + (groupBlockWidth - requiredWidth) / 2)
+      : startX;
+    const optionalStartX = Math.round(optionalBlockX + (groupBlockWidth - optionalWidth) / 2);
+    const iconY = hasOptionalGroup
+      ? Math.round(groupBlockY + 19)
+      : Math.round(panelLayout.y + panelLayout.height - 44);
+    const nameY = hasOptionalGroup ? Math.round(panelLayout.y + 8) : iconY - 17;
     const name = entry.unlocked ? entry.name : 'LOCKED RECIPE';
+
+    this.overlayGraphics.fillStyle(COLORS.slotDryInner, 1);
+    this.overlayGraphics.fillRect(panelLayout.x, panelLayout.y, panelLayout.width, panelLayout.height);
 
     this.previewEmptyLabel.setText(name);
     this.previewEmptyLabel.setTint(entry.unlocked ? COLORS.textDark : COLORS.lock);
@@ -1935,27 +2367,78 @@ export class InventoryBar {
     this.setOverlayRestAlpha(this.previewEmptyLabel, entry.unlocked ? 0.72 : 0.46);
     this.setOverlayRestPosition(
       this.previewEmptyLabel,
-      Math.round(previewX + (previewWidth - (this.previewEmptyLabel.width ?? 0)) / 2),
-      iconY - 17,
+      Math.round(panelLayout.x + (panelLayout.width - (this.previewEmptyLabel.width ?? 0)) / 2),
+      nameY,
     );
 
-    ingredients.forEach((ingredient, index) => {
+    if (hasOptionalGroup) {
+      this.overlayGraphics.fillStyle(COLORS.panelInset, entry.unlocked ? 0.78 : 0.5);
+      this.overlayGraphics.fillRect(requiredBlockX, groupBlockY, groupBlockWidth, groupBlockHeight);
+      this.overlayGraphics.fillRect(optionalBlockX, groupBlockY, groupBlockWidth, groupBlockHeight);
+
+      this.positionRecipeIngredientGroupLabel(0, 'REQUIRED', requiredBlockX, groupBlockWidth, groupBlockY + 4, entry.unlocked);
+      this.positionRecipeIngredientGroupLabel(
+        1,
+        'OPTIONAL',
+        optionalBlockX,
+        groupBlockWidth,
+        groupBlockY + 4,
+        entry.unlocked,
+      );
+    }
+
+    const positionedIngredients = hasOptionalGroup
+      ? [
+        ...requiredIngredients.map((ingredient, index) => ({
+          ingredient,
+          index,
+          startX: requiredStartX,
+          isOptional: false,
+        })),
+        ...optionalIngredients.map((ingredient, index) => ({
+          ingredient,
+          index,
+          startX: optionalStartX,
+          isOptional: true,
+        })),
+      ]
+      : ingredients.map((ingredient, index) => ({ ingredient, index, startX, isOptional: false }));
+
+    positionedIngredients.forEach(({ ingredient, index, startX: groupStartX, isOptional }) => {
       const iconObject = ingredient.iconObject;
 
       if (!iconObject?.scene) {
         return;
       }
 
-      const centerX = Math.round(startX + index * (iconSize + iconGap) + iconSize / 2);
+      const centerX = Math.round(groupStartX + index * (iconSize + iconGap) + iconSize / 2);
       const centerY = Math.round(iconY + iconSize / 2);
 
       iconObject.setVisible(true);
       iconObject.setDepth(UI_DEPTHS.overlay + 4);
-      iconObject.restAlpha = 1;
+      iconObject.restAlpha = isOptional && entry.unlocked ? 0.62 : 1;
       this.setRecipeObjectSilhouette(iconObject, !entry.unlocked);
       this.positionIcon(iconObject, centerX, centerY, iconSize);
       iconObject.restY = centerY;
     });
+  }
+
+  positionRecipeIngredientGroupLabel(index, label, groupX, groupWidth, y, isUnlocked) {
+    const text = this.recipeIngredientGroupLabels[index];
+
+    if (!text) {
+      return;
+    }
+
+    text.setText(label);
+    text.setTint(COLORS.textDark);
+    text.setVisible(true);
+    this.setOverlayRestAlpha(text, isUnlocked ? 0.46 : 0.28);
+    this.setOverlayRestPosition(
+      text,
+      Math.round(groupX + (groupWidth - (text.width ?? 0)) / 2),
+      Math.round(y),
+    );
   }
 
   setRecipeObjectSilhouette(object, isSilhouette) {
@@ -2006,6 +2489,7 @@ export class InventoryBar {
 
   drawOverlaySlot(slotX, slotY, slotSize, options) {
     const { item, isHovered, isPageUnlocked, isRefrigerated } = options;
+    const isEmpty = !item || item === this.inventoryDrag?.entry;
     const outerColor = isPageUnlocked
       ? (isRefrigerated ? COLORS.slotCold : COLORS.slotDry)
       : COLORS.slotLocked;
@@ -2020,7 +2504,7 @@ export class InventoryBar {
     this.overlayGraphics.fillStyle(innerColor, isPageUnlocked ? 1 : 0.75);
     this.overlayGraphics.fillRect(slotX + 2, slotY + 2, slotSize - 4, slotSize - 4);
 
-    if (isPageUnlocked && !item) {
+    if (isPageUnlocked && isEmpty) {
       this.drawEmptyPlus(slotX, slotY, slotSize, this.overlayGraphics);
     }
 
@@ -2221,13 +2705,29 @@ export class InventoryBar {
 
   handleInventoryClick(source) {
     if (source.type === 'hotbar') {
+      if (!this.isOverlayOpen || this.currentOverlayMode !== 'inventory') {
+        const entry = this.slotItems[source.slotIndex];
+
+        if (!entry?.object) {
+          return;
+        }
+
+        this.handleSlotClick(source.slotIndex, entry);
+        return;
+      }
+
       const entry = this.slotItems[source.slotIndex];
 
       if (!entry?.object) {
         return;
       }
 
-      this.handleSlotClick(source.slotIndex, entry);
+      if (this.hotbarFocusIndex !== source.slotIndex || this.overlayFocusSlotIndex !== null) {
+        this.hotbarFocusIndex = source.slotIndex;
+        this.overlayFocusSlotIndex = null;
+        this.draw();
+        this.drawOverlay();
+      }
       return;
     }
 
@@ -2235,8 +2735,10 @@ export class InventoryBar {
       return;
     }
 
-    if (this.overlayFocusSlotIndex !== source.slotIndex) {
+    if (this.overlayFocusSlotIndex !== source.slotIndex || this.hotbarFocusIndex !== null) {
       this.overlayFocusSlotIndex = source.slotIndex;
+      this.hotbarFocusIndex = null;
+      this.draw();
       this.drawOverlay();
     }
   }
@@ -2282,10 +2784,13 @@ export class InventoryBar {
       return;
     }
 
+    const drag = this.inventoryDrag;
     const target = this.getInventoryDropTargetAt(pointer.x, pointer.y);
 
     if (target) {
-      this.moveInventoryEntry(this.inventoryDrag.source, target);
+      this.moveInventoryEntry(drag.source, target);
+    } else if (this.shouldSpawnInventoryDragInScene(pointer.x, pointer.y)) {
+      this.spawnInventoryEntryInScene(drag.source, drag.entry, pointer.x, pointer.y);
     }
 
     this.endInventoryDrag(true);
@@ -2453,6 +2958,125 @@ export class InventoryBar {
     this.syncInventoryIconVisibility();
   }
 
+  shouldSpawnInventoryDragInScene(x, y) {
+    return this.isPointInsideVisibleArea(x, y)
+      && !this.isPointInsideOverlay(x, y)
+      && !this.isPointInsideInventoryBar(x, y);
+  }
+
+  isPointInsideVisibleArea(x, y) {
+    if (!this.visibleArea) {
+      return false;
+    }
+
+    return x >= this.visibleArea.left
+      && x <= this.visibleArea.right
+      && y >= this.visibleArea.top
+      && y <= this.visibleArea.bottom;
+  }
+
+  spawnInventoryEntryInScene(source, entry, x, y) {
+    const object = entry?.object;
+
+    if (!(object instanceof DraggableObject) || !object.scene) {
+      return false;
+    }
+
+    const spawnPosition = this.findInventorySceneSpawnPosition(object, x, y);
+
+    if (!spawnPosition) {
+      return false;
+    }
+
+    this.hideSlotTraits();
+    this.setInventoryEntryAt(source, null);
+    this.destroyIcon(entry.iconObject);
+    entry.iconObject = null;
+
+    object.detachFromStackParent?.();
+    object.stopSnapBack?.();
+    object.stopDropImpact?.();
+
+    if (object.dragLiftTween) {
+      object.dragLiftTween.stop();
+      object.dragLiftTween = null;
+    }
+
+    object.currentLift = 0;
+    object.setDragLift?.(0);
+    object.setVisible(true);
+    object.setInteractive(object.hitbox, Phaser.Geom.Rectangle.Contains);
+
+    if (object.input) {
+      object.input.cursor = 'grab';
+    }
+
+    this.scene.input.setDraggable(object);
+    object.setPosition(spawnPosition.x, spawnPosition.y);
+    object.lastValidX = spawnPosition.x;
+    object.lastValidY = spawnPosition.y;
+
+    const stackTarget = object.findStackTargetAt?.(spawnPosition.x, spawnPosition.y);
+
+    if (stackTarget && object.attachToStackTarget) {
+      object.attachToStackTarget(stackTarget);
+    } else {
+      object.applyRestingDepth?.();
+    }
+
+    object.refreshOtherRestingDepths?.();
+    object.playDropImpact?.();
+    return true;
+  }
+
+  findInventorySceneSpawnPosition(object, x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+
+    const firstPosition = object.clampDragPositionToScreen?.(x, y) ?? { x, y };
+
+    if (object.canOccupyPosition?.(firstPosition.x, firstPosition.y)) {
+      return firstPosition;
+    }
+
+    const placementRect = object.getPlacementRectAt?.(firstPosition.x, firstPosition.y)
+      ?? object.getWorldHitboxRect?.(firstPosition.x, firstPosition.y);
+    const rectWidth = Number.isFinite(placementRect?.width) ? placementRect.width : 32;
+    const rectHeight = Number.isFinite(placementRect?.height) ? placementRect.height : 32;
+    const step = Math.max(8, Math.min(24, Math.floor(Math.min(rectWidth, rectHeight) / 2) || 12));
+    const maxRadius = Math.max(96, Math.ceil(Math.max(rectWidth, rectHeight) * 3));
+    const checked = new Set([`${Math.round(firstPosition.x)},${Math.round(firstPosition.y)}`]);
+
+    for (let radius = step; radius <= maxRadius; radius += step) {
+      const sampleCount = Math.max(8, Math.ceil((Math.PI * 2 * radius) / step));
+
+      for (let sample = 0; sample < sampleCount; sample += 1) {
+        const angle = (sample / sampleCount) * Math.PI * 2;
+        const candidate = object.clampDragPositionToScreen?.(
+          x + Math.cos(angle) * radius,
+          y + Math.sin(angle) * radius,
+        ) ?? {
+          x: x + Math.cos(angle) * radius,
+          y: y + Math.sin(angle) * radius,
+        };
+        const key = `${Math.round(candidate.x)},${Math.round(candidate.y)}`;
+
+        if (checked.has(key)) {
+          continue;
+        }
+
+        checked.add(key);
+
+        if (object.canOccupyPosition?.(candidate.x, candidate.y)) {
+          return candidate;
+        }
+      }
+    }
+
+    return null;
+  }
+
   getInventoryEntryAt(location) {
     if (location.type === 'hotbar') {
       return this.slotItems[location.slotIndex] ?? null;
@@ -2536,7 +3160,7 @@ export class InventoryBar {
     const visibleEntries = new Set();
 
     if (this.isOverlayOpen && this.currentOverlayMode === 'recipes') {
-      (this.getCurrentRecipePage()?.entries ?? []).forEach((entry) => visibleEntries.add(entry));
+      this.getRecipeEntriesForPage().forEach((entry) => visibleEntries.add(entry));
     }
 
     this.recipePages.forEach((page) => {
@@ -2546,6 +3170,10 @@ export class InventoryBar {
             entry.iconObject.clearMask?.();
           }
           entry.iconObject.setVisible(visibleEntries.has(entry));
+        }
+
+        if (!visibleEntries.has(entry)) {
+          this.hideRecipeGridLabels(entry);
         }
 
         if (entry.dishObject?.scene && entry !== this.recipePreviewEntry) {
@@ -2837,6 +3465,15 @@ export class InventoryBar {
       return true;
     }
 
+    if (
+      this.isOverlayOpen
+      && this.currentOverlayMode === 'inventory'
+      && this.hotbarFocusIndex === index
+      && Boolean(this.slotItems[index])
+    ) {
+      return true;
+    }
+
     return this.dragHoverIndex === null
       && this.hoverIndex === index
       && Boolean(this.slotItems[index]);
@@ -2853,6 +3490,10 @@ export class InventoryBar {
 
     this.hoverIndex = index;
     this.draw();
+
+    if (this.isOverlayOpen && this.currentOverlayMode === 'inventory') {
+      this.drawOverlay();
+    }
   }
 
   setDragHoverIndex(index) {
@@ -2987,7 +3628,7 @@ export class InventoryBar {
     object.setVisible(false);
     object.disableInteractive();
 
-    const iconObject = object.createInventoryIcon?.(this.scene) ?? null;
+    const iconObject = attachPixelShadow(this.scene, object.createInventoryIcon?.(this.scene) ?? null);
 
     if (iconObject) {
       iconObject.setOrigin(0.5);
@@ -3024,7 +3665,7 @@ export class InventoryBar {
     object.setVisible(false);
     object.disableInteractive();
 
-    const iconObject = object.createInventoryIcon?.(this.scene) ?? null;
+    const iconObject = attachPixelShadow(this.scene, object.createInventoryIcon?.(this.scene) ?? null);
 
     if (iconObject) {
       iconObject.setOrigin(0.5);
@@ -3223,6 +3864,7 @@ export class InventoryBar {
       page.entries.forEach((entry) => {
         this.destroyIcon(entry?.iconObject);
         this.destroyIcon(entry?.previewIconObject);
+        entry?.nameText?.destroy?.();
         (entry?.ingredients ?? []).forEach((ingredient) => {
           this.destroyIcon(ingredient?.iconObject);
           ingredient?.sourceObject?.destroy?.();
@@ -3239,12 +3881,13 @@ export class InventoryBar {
     this.slotTraits.destroy();
     this.previewEmptyLabelShadow.destroy();
     this.previewEmptyLabel.destroy();
+    this.previewJapaneseLabel.destroy();
+    this.recipeIngredientGroupLabels.forEach((text) => text.destroy());
+    this.recipeIngredientGroupLabels = [];
     this.overlayTitleShadow.destroy();
     this.overlayTitle.destroy();
     this.overlayColdLabel.destroy();
     this.overlayDryLabel.destroy();
-    this.overlayCloseText.destroy();
-    this.overlayCloseZone.destroy();
     this.graphics.destroy();
   }
 }

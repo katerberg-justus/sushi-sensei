@@ -37,4 +37,6 @@ export const COLORS = {
 
 export const FONT_FAMILY = 'Arial, sans-serif';
 export const FONT_FAMILY_PIXEL = '"Press Start 2P", monospace';
+export const FONT_FAMILY_MADOU = '"Madou Futo Maru Gothic", sans-serif';
 export const BITMAP_FONT_PIXEL = 'press-start-2p';
+export const BITMAP_FONT_MADOU = 'madou-futo-maru-gothic';

@@ -1,4 +1,5 @@
 import { IngredientObject } from './IngredientObject.js';
+import { JAPANESE_NAMES } from './JapaneseNames.js';
 import { toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 1.7;
@@ -14,7 +15,10 @@ export class WasabiDab extends IngredientObject {
     const displayWidth = WASABI_WIDTH * PIXEL;
     const displayHeight = WASABI_HEIGHT * PIXEL;
 
-    super(scene, x, y, displayWidth, displayHeight, options);
+    super(scene, x, y, displayWidth, displayHeight, {
+      ...options,
+      japaneseName: options.japaneseName ?? JAPANESE_NAMES.wasabi,
+    });
 
     this.displayName = options.displayName ?? 'Wasabi';
     this.ownWeightGrams = options.weightGrams ?? WASABI_WEIGHT_GRAMS;

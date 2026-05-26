@@ -8,3 +8,5 @@ Error: [31m  Failed to scan for dependencies from entries:
     at Object.context (C:\Users\justu\sushi-sensei\node_modules\esbuild\lib\main.js:1877:33)
     at prepareEsbuildScanner (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:14266:24)
     at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:47039:28
+[2m10:03:30[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableShrimp.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableShrimp.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?
+[2m10:03:30[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableShrimp.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableShrimp.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?

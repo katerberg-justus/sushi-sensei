@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { CuttableObject } from './CuttableObject.js';
 import { IngredientObject } from './IngredientObject.js';
+import { JAPANESE_NAMES } from './JapaneseNames.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 2;
@@ -42,6 +43,7 @@ export class NoriSheet extends IngredientObject {
 
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
+      japaneseName: options.japaneseName ?? (hasSpreadRice ? JAPANESE_NAMES.riceOnNori : JAPANESE_NAMES.noriSheet),
       visualVariation: false,
     });
     this.setCenteredHitbox(displayWidth, displayHeight);

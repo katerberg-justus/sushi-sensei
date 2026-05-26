@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { IngredientObject } from './IngredientObject.js';
+import { JAPANESE_NAMES } from './JapaneseNames.js';
 import { Nigiri } from './Nigiri.js';
 import { getCachedFullImageData, resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
@@ -22,7 +23,10 @@ export class RiceBall extends IngredientObject {
       shapeNoise: { chipChance: 0.026, bumpChance: 0.018 },
     });
 
-    super(scene, x, y, 54, 46, options);
+    super(scene, x, y, 54, 46, {
+      ...options,
+      japaneseName: options.japaneseName ?? JAPANESE_NAMES.riceBall,
+    });
     this.setCenteredHitbox(54, 46, 0, 3);
     this.ownWeightGrams = options.weightGrams ?? RICE_BALL_WEIGHT_GRAMS;
     this.variantIndex = variantIndex;
@@ -82,12 +86,20 @@ export class RiceBall extends IngredientObject {
       return false;
     }
 
+    if (other?.fishType === 'shrimp' && !other.isPeeled) {
+      return false;
+    }
+
     return this.fishSizeFitsRice(other);
   }
 
   getStackPlacementRejectionReason(other, placement = {}) {
+    if (other?.fishType === 'shrimp' && !other.isPeeled) {
+      return 'peel shrimp before placing on rice';
+    }
+
     if (other?.stackCategory === 'fish' && !this.fishSizeFitsRice(other)) {
-      return 'fish piece must be within 30% of rice ball size';
+      return 'fish piece must be within 35% of rice ball size';
     }
 
     return super.getStackPlacementRejectionReason?.(other, placement) ?? 'stack OK';
@@ -108,8 +120,8 @@ export class RiceBall extends IngredientObject {
     const widthRatio = fishRect.width / riceSize.width;
     const heightRatio = fishRect.height / riceSize.height;
 
-    return widthRatio >= 0.7 && widthRatio <= 1.3
-      && heightRatio >= 0.7 && heightRatio <= 1.3;
+    return widthRatio >= 0.65 && widthRatio <= 1.35
+      && heightRatio >= 0.65 && heightRatio <= 1.35;
   }
 
   getVisibleSize() {
@@ -182,6 +194,10 @@ export class RiceBall extends IngredientObject {
 
   createKneadedStackResult(topping) {
     if (topping?.stackCategory !== 'fish') {
+      return null;
+    }
+
+    if (topping?.fishType === 'shrimp' && !topping.isPeeled) {
       return null;
     }
 

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS, SCENE_KEYS } from '../game/constants.js';
 import { Bowl } from '../objects/Bowl.js';
 import { Brush } from '../objects/Brush.js';
+import { CuttableCucumber } from '../objects/CuttableCucumber.js';
 import { CuttableFish } from '../objects/CuttableFish.js';
 import { CuttableSalmon } from '../objects/CuttableSalmon.js';
 import { CuttableTamago } from '../objects/CuttableTamago.js';
@@ -13,11 +14,13 @@ import { Nakiri } from '../objects/Nakiri.js';
 import { Takohiki } from '../objects/Takohiki.js';
 import { Usuba } from '../objects/Usuba.js';
 import { Yanagiba } from '../objects/Yanagiba.js';
+import { JAPANESE_KNIFE_NAMES } from '../objects/JapaneseNames.js';
 import { Nigiri } from '../objects/Nigiri.js';
 import { NoriSheet } from '../objects/NoriSheet.js';
 import { Plate } from '../objects/Plate.js';
 import { RiceBall } from '../objects/RiceBall.js';
 import { RollingMat } from '../objects/RollingMat.js';
+import { Shrimp } from '../objects/Shrimp.js';
 import { SushiRoll } from '../objects/SushiRoll.js';
 import { DraggableObject } from '../objects/DraggableObject.js';
 import { RotatableObject } from '../objects/RotatableObject.js';
@@ -87,6 +90,16 @@ export class GameScene extends Phaser.Scene {
       flavorTags: ['Sweet', 'Umami', 'Delicate'],
     });
     this.cuttableTamago.displayName = 'Tamago';
+    this.cuttableCucumber = new CuttableCucumber(this, 0, 0, {
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Clean', 'Cooling', 'Sweet'],
+    });
+    this.shrimp = new Shrimp(this, 0, 0, {
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Sweet', 'Briny', 'Oceanic'],
+    });
     this.rollingMat = new RollingMat(this, width * 0.22, height * 0.62, { quality: 2 });
     this.noriSheet = new NoriSheet(this, 0, 0, {
       quality: 2,
@@ -148,24 +161,26 @@ export class GameScene extends Phaser.Scene {
       this.cuttableTai,
       this.cuttableUnagi,
       this.cuttableTamago,
+      this.cuttableCucumber,
       this.noriSheet,
       this.sushiRoll,
     ];
 
     this.knives = [
-      { Class: Knife, name: 'Knife', spawn: true },
-      { Class: Yanagiba, name: 'Yanagiba' },
-      { Class: Deba, name: 'Deba' },
-      { Class: Usuba, name: 'Usuba' },
-      { Class: Nakiri, name: 'Nakiri' },
-      { Class: Takohiki, name: 'Takohiki' },
-      { Class: Fuguhiki, name: 'Fuguhiki' },
-      { Class: Kiritsuke, name: 'Kiritsuke' },
-    ].map(({ Class, name, spawn }) => {
+      { Class: Knife, name: 'Knife', japaneseName: JAPANESE_KNIFE_NAMES.knife, spawn: true },
+      { Class: Yanagiba, name: 'Yanagiba', japaneseName: JAPANESE_KNIFE_NAMES.yanagiba },
+      { Class: Deba, name: 'Deba', japaneseName: JAPANESE_KNIFE_NAMES.deba },
+      { Class: Usuba, name: 'Usuba', japaneseName: JAPANESE_KNIFE_NAMES.usuba },
+      { Class: Nakiri, name: 'Nakiri', japaneseName: JAPANESE_KNIFE_NAMES.nakiri },
+      { Class: Takohiki, name: 'Takohiki', japaneseName: JAPANESE_KNIFE_NAMES.takohiki },
+      { Class: Fuguhiki, name: 'Fuguhiki', japaneseName: JAPANESE_KNIFE_NAMES.fuguhiki },
+      { Class: Kiritsuke, name: 'Kiritsuke', japaneseName: JAPANESE_KNIFE_NAMES.kiritsuke },
+    ].map(({ Class, name, japaneseName, spawn }) => {
       const x = spawn ? width * 0.85 : -1000;
       const y = spawn ? height * 0.40 : -1000;
       const blade = new Class(this, x, y, { quality: 2 });
       blade.displayName = name;
+      blade.japaneseName = japaneseName;
       blade.on('cutstroke', this.handleCutStroke, this);
       return blade;
     });
@@ -195,11 +210,55 @@ export class GameScene extends Phaser.Scene {
     this.ui.inventoryBar.storeObjectInSlot(4, this.cuttableTai);
     this.ui.inventoryBar.storeObjectInSlot(5, this.cuttableUnagi);
     this.ui.inventoryBar.storeObjectInSlot(6, this.cuttableTamago);
-    this.ui.inventoryBar.storeObjectInSlot(7, this.noriSheet);
-    this.ui.inventoryBar.storeObjectInSlot(8, this.nigiri);
-    this.ui.inventoryBar.storeObjectInSlot(9, this.sushiRoll);
+    this.ui.inventoryBar.storeObjectInSlot(7, this.cuttableCucumber);
+    this.ui.inventoryBar.storeObjectInSlot(8, this.noriSheet);
+    this.ui.inventoryBar.storeObjectInSlot(9, this.shrimp);
     this.knives.slice(1).forEach((blade, index) => {
       this.ui.inventoryBar.storeObjectInLargeSlot(0, index, blade);
+    });
+    this.ui.inventoryBar.storeObjectInLargeSlot(0, this.knives.length - 1, this.nigiri);
+    this.ui.inventoryBar.storeObjectInLargeSlot(0, this.knives.length, this.sushiRoll);
+
+    const REFRIGERATED_INVENTORY_COLUMNS = 12;
+    const refrigeratedFishLayout = [
+      { fishType: 'salmon', fishSubtype: 'taiseiyou-salmon', row: 1, col: 0 },
+      { fishType: 'salmon', fishSubtype: 'king-salmon', row: 1, col: 1 },
+      { fishType: 'salmon', fishSubtype: 'benizake', row: 1, col: 2 },
+      { fishType: 'maguro', fishSubtype: 'akami', row: 2, col: 0 },
+      { fishType: 'maguro', fishSubtype: 'chutoro', row: 2, col: 1 },
+      { fishType: 'maguro', fishSubtype: 'otoro', row: 2, col: 2 },
+      { fishType: 'maguro', fishSubtype: 'kihada', row: 2, col: 3 },
+      { fishType: 'maguro', fishSubtype: 'mebachi', row: 2, col: 4 },
+      { fishType: 'hamachi', fishSubtype: 'hamachi', row: 3, col: 0 },
+      { fishType: 'hamachi', fishSubtype: 'buri', row: 3, col: 1 },
+      { fishType: 'hamachi', fishSubtype: 'kanpachi', row: 3, col: 2 },
+      { fishType: 'tai', fishSubtype: 'madai', row: 4, col: 0 },
+      { fishType: 'tai', fishSubtype: 'kurodai', row: 4, col: 1 },
+      { fishType: 'tai', fishSubtype: 'kinmedai', row: 4, col: 2 },
+      { fishType: 'hirame', fishSubtype: 'hirame', row: 5, col: 0 },
+      { fishType: 'hirame', fishSubtype: 'ohyo', row: 5, col: 1 },
+      { fishType: 'hirame', fishSubtype: 'engawa', row: 5, col: 2 },
+      { fishType: 'suzuki', fishSubtype: 'suzuki', row: 6, col: 0 },
+      { fishType: 'saba', fishSubtype: 'masaba', row: 6, col: 1 },
+      { fishType: 'saba', fishSubtype: 'gomasaba', row: 6, col: 2 },
+      { fishType: 'aji', fishSubtype: 'ma-aji', row: 6, col: 3 },
+      { fishType: 'aji', fishSubtype: 'shima-aji', row: 6, col: 4 },
+      { fishType: 'iwashi', fishSubtype: 'maiwashi', row: 7, col: 0 },
+      { fishType: 'iwashi', fishSubtype: 'katakuchi-iwashi', row: 7, col: 1 },
+      { fishType: 'unagi', fishSubtype: 'unagi', row: 7, col: 2 },
+      { fishType: 'unagi', fishSubtype: 'anago', row: 7, col: 3 },
+    ];
+
+    refrigeratedFishLayout.forEach(({ fishType, fishSubtype, row, col }) => {
+      const fish = new CuttableFish(this, 0, 0, {
+        fishType,
+        fishSubtype,
+        quality: 2,
+        freshness: 'fresh',
+      });
+      this.cuttableObjects.push(fish);
+      const slotIndex = row * REFRIGERATED_INVENTORY_COLUMNS + col;
+      this.ui.inventoryBar.storeObjectInLargeSlot(0, slotIndex, fish);
     });
     this.scale.on('resize', this.positionUi, this);
     this.scale.on('resize', this.resizeBoardBackground, this);

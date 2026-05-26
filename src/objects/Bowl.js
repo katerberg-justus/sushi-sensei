@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { IngredientObject } from './IngredientObject.js';
+import { JAPANESE_NAMES } from './JapaneseNames.js';
 import { toHexColor } from './ProceduralTexture.js';
 import { WasabiDab } from './WasabiDab.js';
 
@@ -367,6 +368,23 @@ function normalizeFixedContents(contents) {
   };
 }
 
+function resolveVesselJapaneseName(options = {}) {
+  if (options.japaneseName) {
+    return options.japaneseName;
+  }
+
+  const contents = options.contents ?? options.content;
+  const contentStyle = typeof contents === 'string'
+    ? contents
+    : contents?.style ?? contents?.type;
+
+  if (contentStyle === 'nikiri' || options.dispensedIngredientStyle === 'nikiri' || options.dispenses === 'nikiri') {
+    return JAPANESE_NAMES.nikiriSauce;
+  }
+
+  return null;
+}
+
 export class ContainerVessel extends IngredientObject {
   constructor(scene, x, y, options = {}) {
     const profile = resolveVesselPreset(options);
@@ -379,6 +397,7 @@ export class ContainerVessel extends IngredientObject {
     super(scene, x, y, displayWidth, displayHeight, {
       ...options,
       hasIngredientTraits: options.hasIngredientTraits ?? false,
+      japaneseName: resolveVesselJapaneseName(options),
       visualVariation: false,
     });
 

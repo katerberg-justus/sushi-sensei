@@ -1,3 +1,9 @@
+@font-face {
+  font-family: 'Madou Futo Maru Gothic';
+  src: url('/assets/MadouFutoMaruGothic.ttf') format('truetype');
+  font-display: block;
+}
+
 * {
   box-sizing: border-box;
 }

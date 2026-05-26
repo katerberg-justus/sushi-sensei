@@ -2,6 +2,7 @@ import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS } from '../game/constants.js';
 import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
 import { IngredientObject } from './IngredientObject.js';
+import { composeJapaneseName, JAPANESE_FISH_NAMES, JAPANESE_NAMES } from './JapaneseNames.js';
 import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
 
 const PIXEL = 1.8;
@@ -15,9 +16,21 @@ const NIGIRI_FISH_REGION = { x: 3, y: 5, width: 26, height: 13 };
 
 const FISH_STYLES = {
   ...CUTTABLE_FISH_STYLES,
-  tuna: { ...CUTTABLE_FISH_STYLES.maguro, displayName: 'Tuna' },
+  shrimp: {
+    displayName: 'Shrimp',
+    japaneseName: JAPANESE_NAMES.shrimp,
+    kind: 'shrimp',
+    shell: 0xffd5c4,
+    shellDark: 0xd88e7d,
+    base: 0xfff4ed,
+    shadow: 0xf6c4b5,
+    highlight: 0xffffff,
+    tail: 0xf0825d,
+  },
+  tuna: { ...CUTTABLE_FISH_STYLES.maguro, displayName: 'Tuna', japaneseName: JAPANESE_FISH_NAMES.maguro },
   tamago: {
     displayName: 'Tamago',
+    japaneseName: JAPANESE_NAMES.tamago,
     base: 0xf1c35b,
     stroke: 0xd49d3f,
     highlight: 0xf6d56d,
@@ -43,7 +56,12 @@ export class Nigiri extends IngredientObject {
     const displayWidth = NIGIRI_WIDTH * PIXEL;
     const displayHeight = NIGIRI_HEIGHT * PIXEL;
 
-    super(scene, x, y, displayWidth, displayHeight, options);
+    const fishJapaneseName = fishSubtypeStyle?.japaneseName ?? fishStyle.japaneseName ?? null;
+
+    super(scene, x, y, displayWidth, displayHeight, {
+      ...options,
+      japaneseName: options.japaneseName ?? composeJapaneseName(fishJapaneseName, JAPANESE_NAMES.nigiri),
+    });
     this.setCenteredHitbox(54, 44, 0, 3);
     this.ownWeightGrams = options.weightGrams ?? NIGIRI_WEIGHT_GRAMS;
     this.displayName = `${fishDisplayName} Nigiri`;
@@ -51,6 +69,8 @@ export class Nigiri extends IngredientObject {
     this.fishSubtype = fishSubtype;
     this.fishDisplayName = fishStyle.displayName;
     this.fishSubtypeDisplayName = fishSubtypeStyle?.displayName ?? null;
+    this.fishJapaneseName = fishStyle.japaneseName ?? null;
+    this.fishSubtypeJapaneseName = fishSubtypeStyle?.japaneseName ?? null;
     this.stackCategory = 'sushi';
     this.variantIndex = variantIndex;
     this.isRotatable = false;
@@ -103,7 +123,11 @@ export class Nigiri extends IngredientObject {
     this.isGlazed = true;
     this.glazeSprite?.setVisible(true);
     const baseName = `${this.fishSubtypeDisplayName ?? this.fishDisplayName} Nigiri`;
+    const baseJapaneseName = this.fishSubtypeJapaneseName ?? this.fishJapaneseName;
     this.displayName = `Nikiri-Glazed ${baseName}`;
+    this.setJapaneseName(baseJapaneseName
+      ? { kanji: `煮切り${baseJapaneseName.kanji}握り`, kana: `にきり${baseJapaneseName.kana}にぎり` }
+      : null);
     return true;
   }
 
@@ -286,6 +310,11 @@ export class Nigiri extends IngredientObject {
   }
 
   static paintTexture(context, rng, fishStyle) {
+    if (fishStyle.kind === 'shrimp') {
+      Nigiri.paintShrimpTexture(context, rng, fishStyle);
+      return;
+    }
+
     const baseColor = fishStyle.base ?? COLORS.salmon;
     const highlightColor = fishStyle.highlight ?? baseColor;
     const fatColor = fishStyle.fat ?? highlightColor;
@@ -394,5 +423,96 @@ export class Nigiri extends IngredientObject {
         context.fillRect(8 + Math.floor(rng() * 17), 7 + Math.floor(rng() * 9), 1, 1);
       }
     }
+  }
+
+  static paintShrimpTexture(context, rng, fishStyle) {
+    const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
+    const chance = (probability) => rng() < probability;
+
+    context.fillStyle = toHexColor(COLORS.riceStroke);
+    context.fillRect(9, 14, 14, 2);
+    context.fillRect(6, 16, 21, 4);
+    context.fillRect(5, 20, 23, 4);
+    context.fillRect(8, 24, 17, 2);
+
+    context.fillStyle = toHexColor(COLORS.riceWhite);
+    context.fillRect(10, 15, 12, 2);
+    context.fillRect(7, 17, 19, 4);
+    context.fillRect(7, 21, 19, 3);
+    context.fillRect(10, 24, 12, 1);
+
+    context.fillStyle = toHexColor(0xfffbef);
+    context.fillRect(11, 15, 8, 1);
+    context.fillRect(9, 17, 13, 3);
+    context.fillRect(10, 21, 10, 2);
+
+    context.fillStyle = toHexColor(COLORS.riceGrain);
+    [
+      { x: 10, y: 18 },
+      { x: 16, y: 22 },
+      { x: 23, y: 20 },
+    ].forEach((grain) => {
+      if (chance(0.7)) {
+        context.fillRect(grain.x + jitter(1), grain.y + jitter(1), 1, 1);
+      }
+    });
+
+    // Butterflied body silhouette — mirrors the original peeled shrimp sprite
+    const silhouette = [
+      [7, 9, 21],
+      [8, 7, 24],
+      [9, 6, 25],
+      [10, 5, 26],
+      [11, 5, 26],
+      [12, 5, 26],
+      [13, 5, 26],
+      [14, 5, 26],
+      [15, 6, 25],
+      [16, 7, 24],
+      [17, 9, 21],
+    ];
+    context.fillStyle = toHexColor(fishStyle.base);
+    silhouette.forEach(([y, x0, x1]) => context.fillRect(x0, y, x1 - x0 + 1, 1));
+
+    // Inner body (one pixel inside the silhouette)
+    const inner = [
+      [8, 10, 20],
+      [9, 8, 23],
+      [10, 7, 24],
+      [11, 6, 25],
+      [12, 6, 25],
+      [13, 6, 25],
+      [14, 6, 25],
+      [15, 7, 24],
+      [16, 8, 23],
+    ];
+    context.fillStyle = toHexColor(fishStyle.base);
+    inner.forEach(([y, x0, x1]) => context.fillRect(x0, y, x1 - x0 + 1, 1));
+
+    // Segment dividers — alternating shell stripes
+    const segments = [
+      [10, 8, 15],
+      [13, 7, 16],
+      [16, 7, 16],
+      [19, 8, 15],
+      [22, 9, 14],
+    ];
+    context.fillStyle = toHexColor(fishStyle.shadow);
+    segments.forEach(([x, y0, y1]) => context.fillRect(x, y0, 1, y1 - y0 + 1));
+
+    // Splayed tail fan on the right
+    context.fillStyle = toHexColor(fishStyle.tail);
+    context.fillRect(26, 11, 2, 4);
+    context.fillRect(27, 10, 2, 2);
+    context.fillRect(27, 14, 2, 2);
+    context.fillRect(28, 9, 2, 3);
+    context.fillRect(28, 14, 2, 3);
+    context.fillRect(28, 12, 3, 2);
+
+    // Subtle highlights along the back
+    context.fillStyle = toHexColor(fishStyle.highlight);
+    if (chance(0.85)) context.fillRect(15 + jitter(1), 9, 3, 1);
+    if (chance(0.8)) context.fillRect(18 + jitter(1), 10, 4, 1);
+    if (chance(0.75)) context.fillRect(11 + jitter(1), 11, 3, 1);
   }
 }
