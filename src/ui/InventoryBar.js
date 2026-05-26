@@ -1,20 +1,20 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { UI_ANIMATION, UI_DEPTHS } from './constants.js';
 import { BITMAP_FONT_MADOU, BITMAP_FONT_PIXEL } from '../game/constants.js';
-import { Bowl } from '../objects/Bowl.js';
-import { CuttableCucumber } from '../objects/CuttableCucumber.js';
-import { CUTTABLE_FISH_STYLES, CuttableFish } from '../objects/CuttableFish.js';
-import { DraggableObject } from '../objects/DraggableObject.js';
-import { Nigiri } from '../objects/Nigiri.js';
-import { NoriSheet } from '../objects/NoriSheet.js';
+import { Bowl } from '../objects/vessels/Bowl.js';
+import { CuttableCucumber } from '../objects/ingredients/CuttableCucumber.js';
+import { CUTTABLE_FISH_STYLES, CuttableFish } from '../objects/ingredients/CuttableFish.js';
+import { DraggableObject } from '../objects/base/DraggableObject.js';
+import { Nigiri } from '../objects/creations/Nigiri.js';
+import { NoriSheet } from '../objects/ingredients/NoriSheet.js';
 import { getCachedFullImageData } from '../objects/ProceduralTexture.js';
-import { RiceBall } from '../objects/RiceBall.js';
-import { Shrimp } from '../objects/Shrimp.js';
-import { SushiRoll } from '../objects/SushiRoll.js';
-import { WasabiDab } from '../objects/WasabiDab.js';
+import { RiceBall } from '../objects/creations/RiceBall.js';
+import { SHRIMP_STYLE, Shrimp } from '../objects/ingredients/Shrimp.js';
+import { SushiRoll } from '../objects/creations/SushiRoll.js';
+import { WasabiDab } from '../objects/ingredients/WasabiDab.js';
 import { IngredientTraitOverlay } from './IngredientTraitOverlay.js';
 
-const SLOT_COUNT = 10;
+const SLOT_COUNT = 11;
 const EXPAND_SLOT_INDEX = SLOT_COUNT;
 const DISPLAY_SLOT_COUNT = SLOT_COUNT + 1;
 const MAX_SLOT_SIZE = 35;
@@ -530,15 +530,14 @@ export class InventoryBar {
 
     return [
       ...fishEntries,
-      this.createShrimpNigiriRecipeEntry(),
+      ...this.createShrimpNigiriRecipeEntries(),
     ];
   }
 
-  createShrimpNigiriRecipeEntry() {
+  createShrimpNigiriRecipeEntries() {
     const fishType = 'shrimp';
-    const fishStyle = { displayName: 'Shrimp' };
-
-    return this.createNigiriRecipeEntry({
+    const fishStyle = SHRIMP_STYLE;
+    const baseEntry = this.createNigiriRecipeEntry({
       fishType,
       fishStyle,
       id: 'nigiri-shrimp',
@@ -547,6 +546,19 @@ export class InventoryBar {
       ingredientType: 'shrimp',
       ingredientLabel: 'Peeled Shrimp',
     });
+
+    const subtypeEntries = SHRIMP_STYLE.subtypes.map((subtype) => this.createNigiriRecipeEntry({
+      fishType,
+      fishSubtype: subtype.key,
+      fishStyle,
+      id: `nigiri-shrimp-${subtype.key}`,
+      name: `${subtype.displayName} Nigiri`,
+      unlocked: false,
+      ingredientType: 'shrimp',
+      ingredientLabel: `Peeled ${subtype.displayName}`,
+    }));
+
+    return [baseEntry, ...subtypeEntries];
   }
 
   createNigiriRecipeEntry({
@@ -722,6 +734,7 @@ export class InventoryBar {
       return new Shrimp(this.scene, 0, 0, {
         ...commonOptions,
         isPeeled: true,
+        fishSubtype: ingredient.fishSubtype ?? null,
       });
     }
 

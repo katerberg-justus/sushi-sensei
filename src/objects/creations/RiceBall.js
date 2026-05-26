@@ -1,9 +1,9 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { COLORS } from '../game/constants.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
+import { COLORS } from '../../game/constants.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
 import { Nigiri } from './Nigiri.js';
-import { getCachedFullImageData, resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { getCachedFullImageData, resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 1.8;
 const RICE_BALL_BASE_KEY = 'rice-ball-pixel';

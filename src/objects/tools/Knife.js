@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { CuttingObject } from './CuttingObject.js';
+import { CuttingObject } from '../base/CuttingObject.js';
 
 const MANUAL_CUT_STROKE_DISTANCE = 120;
 const MANUAL_CUT_STROKE_DURATION = 88;

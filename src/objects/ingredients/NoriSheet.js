@@ -1,8 +1,8 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { CuttableObject } from './CuttableObject.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { CuttableObject } from '../base/CuttableObject.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
+import { resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 2;
 const NORI_BASE_KEY = 'nori-sheet-pixel';

@@ -1,9 +1,9 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { COLORS } from '../game/constants.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
-import { toHexColor } from './ProceduralTexture.js';
-import { WasabiDab } from './WasabiDab.js';
+import { COLORS } from '../../game/constants.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
+import { toHexColor } from '../ProceduralTexture.js';
+import { WasabiDab } from '../ingredients/WasabiDab.js';
 
 const PIXEL = 2.25;
 const BOWL_TEXTURE_WIDTH = 60;

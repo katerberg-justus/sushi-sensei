@@ -1,9 +1,9 @@
-import { COLORS } from '../game/constants.js';
-import { CuttableObject } from './CuttableObject.js';
-import { FishFlipBehavior, setupFishFlip } from './FishFlipBehavior.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_FISH_NAMES, JAPANESE_FISH_SUBTYPE_NAMES } from './JapaneseNames.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { COLORS } from '../../game/constants.js';
+import { CuttableObject } from '../base/CuttableObject.js';
+import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_FISH_NAMES, JAPANESE_FISH_SUBTYPE_NAMES } from '../JapaneseNames.js';
+import { resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 2.25;
 const DEFAULT_VARIANT_POOL = 6;
@@ -438,6 +438,23 @@ export const CUTTABLE_FISH_STYLES = {
     glint: 0xffffff,
     edgeAccent: 0x53677a,
   },
+  ika: {
+    displayName: 'Squid',
+    japaneseName: JAPANESE_FISH_NAMES.ika,
+    baseKey: 'cuttable-ika-pixel',
+    kind: 'squid',
+    base: 0xf8f2eb,
+    shadow: 0xd2c9c3,
+    highlight: 0xfffcf7,
+    fat: 0xffffff,
+    glint: 0xffffff,
+    edgeAccent: 0xdba8b2,
+    fatDensity: 0.35,
+    width: 42,
+    height: 56,
+    weightGrams: 48,
+    shapeNoise: { chipChance: 0.006, bumpChance: 0.004 },
+  },
   unagi: {
     displayName: 'Unagi',
     japaneseName: JAPANESE_FISH_NAMES.unagi,
@@ -589,6 +606,11 @@ export class CuttableFish extends IngredientObject {
   }
 
   static paintTexture(context, rng, fishStyle) {
+    if (fishStyle.kind === 'squid') {
+      CuttableFish.paintSquidTexture(context, rng, fishStyle);
+      return;
+    }
+
     if (fishStyle.glaze) {
       CuttableFish.paintUnagiTexture(context, rng, fishStyle);
       return;
@@ -680,6 +702,95 @@ export class CuttableFish extends IngredientObject {
         context.fillRect(8 + Math.floor(rng() * 40), 6 + Math.floor(rng() * 17), 1, 1);
       }
     }
+  }
+
+  static paintSquidTexture(context, rng, fishStyle) {
+    const jitter = (range) => Math.floor(rng() * (range * 2 + 1)) - range;
+    const base = toHexColor(fishStyle.base);
+    const shadow = toHexColor(fishStyle.shadow);
+    const highlight = toHexColor(fishStyle.highlight);
+    const glint = toHexColor(fishStyle.glint);
+    const accent = toHexColor(fishStyle.edgeAccent);
+
+    context.fillStyle = shadow;
+    context.fillRect(17, 4, 8, 2);
+    context.fillRect(14, 6, 14, 4);
+    context.fillRect(11, 10, 20, 7);
+    context.fillRect(9, 17, 24, 11);
+    context.fillRect(11, 28, 20, 9);
+    context.fillRect(16, 37, 10, 5);
+    context.fillRect(14, 40, 14, 5);
+    context.fillRect(10, 15, 4, 7);
+    context.fillRect(28, 15, 4, 7);
+    context.fillRect(11, 25, 3, 5);
+    context.fillRect(28, 25, 3, 5);
+
+    context.fillStyle = base;
+    context.fillRect(18, 3, 6, 2);
+    context.fillRect(15, 6, 12, 4);
+    context.fillRect(12, 10, 18, 7);
+    context.fillRect(10, 17, 22, 10);
+    context.fillRect(12, 27, 18, 9);
+    context.fillRect(17, 36, 8, 5);
+    context.fillRect(15, 40, 12, 4);
+
+    context.fillStyle = accent;
+    context.fillRect(10, 15, 2, 8);
+    context.fillRect(30, 15, 2, 8);
+    context.fillRect(12, 12, 3, 1);
+    context.fillRect(27, 12, 3, 1);
+    context.fillRect(13, 35, 16, 1);
+
+    context.fillStyle = highlight;
+    context.fillRect(17, 8, 8, 1);
+    context.fillRect(14, 13, 11, 1);
+    context.fillRect(13, 19, 15, 1);
+    context.fillRect(14, 25, 13, 1);
+    context.fillRect(16, 31, 10, 1);
+
+    context.fillStyle = glint;
+    for (let i = 0; i < 7; i += 1) {
+      const x = 14 + Math.floor(rng() * 14);
+      const y = 9 + Math.floor(rng() * 23);
+
+      context.fillRect(x, y, 1, 1);
+    }
+
+    const tentacles = [
+      { x: 7, y: 39, w: 2, h: 15, tip: -4 },
+      { x: 33, y: 39, w: 2, h: 15, tip: 4 },
+      { x: 10, y: 41, w: 2, h: 11, tip: -3 },
+      { x: 13, y: 43, w: 2, h: 11, tip: -2 },
+      { x: 16, y: 43, w: 2, h: 12, tip: -1 },
+      { x: 19, y: 43, w: 2, h: 12, tip: 0 },
+      { x: 22, y: 43, w: 2, h: 12, tip: 1 },
+      { x: 25, y: 43, w: 2, h: 11, tip: 2 },
+      { x: 28, y: 41, w: 2, h: 11, tip: 3 },
+      { x: 31, y: 41, w: 2, h: 10, tip: 3 },
+    ];
+
+    tentacles.forEach((tentacle, index) => {
+      const wiggle = jitter(1);
+      const x = tentacle.x + wiggle;
+
+      context.fillStyle = shadow;
+      context.fillRect(x, tentacle.y, tentacle.w, tentacle.h);
+      context.fillRect(x + tentacle.tip, tentacle.y + tentacle.h - 1, tentacle.w + 1, 2);
+
+      context.fillStyle = base;
+      context.fillRect(x, tentacle.y, Math.max(1, tentacle.w - 1), tentacle.h - 1);
+      context.fillRect(x + tentacle.tip, tentacle.y + tentacle.h - 1, tentacle.w, 1);
+
+      if (index % 2 === 0) {
+        context.fillStyle = highlight;
+        context.fillRect(x, tentacle.y + 2, 1, Math.max(3, tentacle.h - 5));
+      }
+    });
+
+    context.fillStyle = accent;
+    context.fillRect(11, 43, 20, 1);
+    context.fillRect(14, 48, 1, 2);
+    context.fillRect(26, 48, 1, 2);
   }
 
   static paintUnagiTexture(context, rng, fishStyle) {

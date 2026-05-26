@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { COLORS } from '../game/constants.js';
+import { COLORS } from '../../game/constants.js';
 
 export class Sushi extends Phaser.GameObjects.Container {
   constructor(scene, x, y) {

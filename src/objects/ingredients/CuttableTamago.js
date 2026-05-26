@@ -1,8 +1,8 @@
-import { CuttableObject } from './CuttableObject.js';
-import { FishFlipBehavior, setupFishFlip } from './FishFlipBehavior.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { CuttableObject } from '../base/CuttableObject.js';
+import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
+import { resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 2.25;
 const TAMAGO_BASE_KEY = 'cuttable-tamago-pixel';

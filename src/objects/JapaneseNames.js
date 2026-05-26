@@ -21,6 +21,7 @@ export const JAPANESE_FISH_NAMES = Object.freeze({
   hamachi: name('魬', 'はまち'),
   hirame: name('平目', 'ひらめ'),
   iwashi: name('鰯', 'いわし'),
+  ika: name('烏賊', 'いか'),
   maguro: name('鮪', 'まぐろ'),
   saba: name('鯖', 'さば'),
   salmon: name('鮭', 'サーモン'),

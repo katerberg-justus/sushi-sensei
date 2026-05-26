@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { IngredientObject } from './IngredientObject.js';
-import { toHexColor } from './ProceduralTexture.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { toHexColor } from '../ProceduralTexture.js';
 
 const PLATE_TEXTURE_WIDTH = 78;
 const PLATE_TEXTURE_HEIGHT = 42;

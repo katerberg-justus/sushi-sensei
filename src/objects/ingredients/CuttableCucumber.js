@@ -1,7 +1,7 @@
-import { CuttableObject } from './CuttableObject.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { CuttableObject } from '../base/CuttableObject.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
+import { resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 2.25;
 const CUCUMBER_BASE_KEY = 'cuttable-cucumber-strip-thick-pixel';

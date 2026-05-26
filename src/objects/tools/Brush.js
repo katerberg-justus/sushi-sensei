@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
 
 const BRUSH_KEY = 'brush-pixel';
 const BRUSH_SHADOW_KEY = 'brush-shadow-pixel';

@@ -10,3 +10,360 @@ Error: [31m  Failed to scan for dependencies from entries:
     at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:47039:28
 [2m10:03:30[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableShrimp.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableShrimp.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?
 [2m10:03:30[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableShrimp.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableShrimp.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Bowl.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Bowl.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Bowl.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Bowl.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Brush.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Brush.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableSalmon.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableSalmon.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableCucumber.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableCucumber.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableCucumber.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableCucumber.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableFish.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableFish.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableFish.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableFish.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/CuttableTamago.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/CuttableTamago.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Deba.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Deba.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Fuguhiki.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Fuguhiki.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Kiritsuke.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Kiritsuke.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Knife.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Knife.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Nakiri.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Nakiri.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Takohiki.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Takohiki.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Usuba.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Usuba.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Yanagiba.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Yanagiba.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Nigiri.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Nigiri.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Nigiri.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Nigiri.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/NoriSheet.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/NoriSheet.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/NoriSheet.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/NoriSheet.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Plate.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Plate.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/RiceBall.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/RiceBall.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/RiceBall.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/RiceBall.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/RollingMat.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/RollingMat.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Shrimp.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Shrimp.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/Shrimp.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/Shrimp.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/SushiRoll.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/SushiRoll.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/SushiRoll.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/SushiRoll.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/DraggableObject.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/DraggableObject.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/DraggableObject.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/DraggableObject.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/RotatableObject.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/RotatableObject.js) in C:/Users/justu/sushi-sensei/src/scenes/GameScene.js. Does the file exist?
+[2m17:53:44[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to load url /src/objects/WasabiDab.js (resolved id: C:/Users/justu/sushi-sensei/src/objects/WasabiDab.js) in C:/Users/justu/sushi-sensei/src/ui/InventoryBar.js. Does the file exist?
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/vessels/Bowl.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/vessels/Bowl.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { IngredientObject } from '../base/IngredientObject.js';
+  4  |  import { JAPANESE_NAMES } from '../JapaneseNames.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/Nigiri.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/Nigiri.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+  4  |  import { IngredientObject } from '../base/IngredientObject.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/RiceBall.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/RiceBall.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { IngredientObject } from '../base/IngredientObject.js';
+  4  |  import { JAPANESE_NAMES } from '../JapaneseNames.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../ui/viewport.js" from "src/objects/base/DraggableObject.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/base/DraggableObject.js[39m:4:37
+[33m  2  |  import { SceneObject } from './SceneObject.js';
+  3  |  import { getCachedFullImageData, sliceCachedImageData } from '../ProceduralTexture.js';
+  4  |  import { getVisibleGameArea } from '../ui/viewport.js';
+     |                                      ^
+  5  |  
+  6  |  let shadowTextureId = 0;[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../ui/viewport.js" from "src/objects/base/DraggableObject.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/base/DraggableObject.js[39m:4:37
+[33m  2  |  import { SceneObject } from './SceneObject.js';
+  3  |  import { getCachedFullImageData, sliceCachedImageData } from '../ProceduralTexture.js';
+  4  |  import { getVisibleGameArea } from '../ui/viewport.js';
+     |                                      ^
+  5  |  
+  6  |  let shadowTextureId = 0;[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./Shrimp.js" from "src/objects/creations/SushiRoll.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/SushiRoll.js[39m:6:39
+[33m  4  |  import { composeJapaneseName, JAPANESE_NAMES } from '../JapaneseNames.js';
+  5  |  import { toHexColor } from '../ProceduralTexture.js';
+  6  |  import { SHRIMP_STYLE, Shrimp } from './Shrimp.js';
+     |                                        ^
+  7  |  
+  8  |  const PIXEL = 2;[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./Shrimp.js" from "src/objects/creations/SushiRoll.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/SushiRoll.js[39m:6:39
+[33m  4  |  import { composeJapaneseName, JAPANESE_NAMES } from '../JapaneseNames.js';
+  5  |  import { toHexColor } from '../ProceduralTexture.js';
+  6  |  import { SHRIMP_STYLE, Shrimp } from './Shrimp.js';
+     |                                        ^
+  7  |  
+  8  |  const PIXEL = 2;[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../objects/WasabiDab.js" from "src/ui/InventoryBar.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/ui/InventoryBar.js[39m:14:28
+[33m  12 |  import { SHRIMP_STYLE, Shrimp } from '../objects/ingredients/Shrimp.js';
+  13 |  import { SushiRoll } from '../objects/creations/SushiRoll.js';
+  14 |  import { WasabiDab } from '../objects/WasabiDab.js';
+     |                             ^
+  15 |  import { IngredientTraitOverlay } from './IngredientTraitOverlay.js';
+  16 |  [39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/Nigiri.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/Nigiri.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+  4  |  import { IngredientObject } from '../base/IngredientObject.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/Nigiri.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/Nigiri.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+  4  |  import { IngredientObject } from '../base/IngredientObject.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./Shrimp.js" from "src/objects/creations/SushiRoll.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/SushiRoll.js[39m:6:39
+[33m  4  |  import { composeJapaneseName, JAPANESE_NAMES } from '../JapaneseNames.js';
+  5  |  import { toHexColor } from '../ProceduralTexture.js';
+  6  |  import { SHRIMP_STYLE, Shrimp } from './Shrimp.js';
+     |                                        ^
+  7  |  
+  8  |  const PIXEL = 2;[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/vessels/Bowl.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/vessels/Bowl.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { IngredientObject } from '../base/IngredientObject.js';
+  4  |  import { JAPANESE_NAMES } from '../JapaneseNames.js';[39m
+[2m17:56:35[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/RiceBall.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/RiceBall.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { IngredientObject } from '../base/IngredientObject.js';
+  4  |  import { JAPANESE_NAMES } from '../JapaneseNames.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../ui/viewport.js" from "src/objects/base/DraggableObject.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/base/DraggableObject.js[39m:4:37
+[33m  2  |  import { SceneObject } from './SceneObject.js';
+  3  |  import { getCachedFullImageData, sliceCachedImageData } from '../ProceduralTexture.js';
+  4  |  import { getVisibleGameArea } from '../ui/viewport.js';
+     |                                      ^
+  5  |  
+  6  |  let shadowTextureId = 0;[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../ui/viewport.js" from "src/objects/base/DraggableObject.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/base/DraggableObject.js[39m:4:37
+[33m  2  |  import { SceneObject } from './SceneObject.js';
+  3  |  import { getCachedFullImageData, sliceCachedImageData } from '../ProceduralTexture.js';
+  4  |  import { getVisibleGameArea } from '../ui/viewport.js';
+     |                                      ^
+  5  |  
+  6  |  let shadowTextureId = 0;[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/Nigiri.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/Nigiri.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+  4  |  import { IngredientObject } from '../base/IngredientObject.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "../game/constants.js" from "src/objects/vessels/Bowl.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/vessels/Bowl.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { IngredientObject } from '../base/IngredientObject.js';
+  4  |  import { JAPANESE_NAMES } from '../JapaneseNames.js';[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41)
+      at TransformPluginContext.error (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16)
+      at normalizeUrl (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23)
+      at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+      at async Promise.all (index 1)
+      at async TransformPluginContext.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18)
+      at async loadAndTransform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27)
+      at async viteTransformMiddleware (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:37264:24)
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41)
+      at TransformPluginContext.error (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16)
+      at normalizeUrl (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23)
+      at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+      at async Promise.all (index 0)
+      at async TransformPluginContext.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18)
+      at async loadAndTransform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27)
+      at async viteTransformMiddleware (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:37264:24)
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "../game/constants.js" from "src/objects/creations/Nigiri.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/Nigiri.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+  4  |  import { IngredientObject } from '../base/IngredientObject.js';[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41)
+      at TransformPluginContext.error (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16)
+      at normalizeUrl (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23)
+      at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+      at async Promise.all (index 1)
+      at async TransformPluginContext.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18)
+      at async loadAndTransform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27)
+      at async viteTransformMiddleware (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:37264:24)
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "../game/constants.js" from "src/objects/creations/RiceBall.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/RiceBall.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { IngredientObject } from '../base/IngredientObject.js';
+  4  |  import { JAPANESE_NAMES } from '../JapaneseNames.js';[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41)
+      at TransformPluginContext.error (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16)
+      at normalizeUrl (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23)
+      at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+      at async Promise.all (index 1)
+      at async TransformPluginContext.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18)
+      at async loadAndTransform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27)
+      at async viteTransformMiddleware (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:37264:24)
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/creations/Nigiri.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/Nigiri.js[39m:2:25
+[33m  1  |  import * as Phaser from 'phaser/dist/phaser.esm.js';
+  2  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  3  |  import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+  4  |  import { IngredientObject } from '../base/IngredientObject.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./Shrimp.js" from "src/objects/creations/SushiRoll.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/creations/SushiRoll.js[39m:6:39
+[33m  4  |  import { composeJapaneseName, JAPANESE_NAMES } from '../JapaneseNames.js';
+  5  |  import { toHexColor } from '../ProceduralTexture.js';
+  6  |  import { SHRIMP_STYLE, Shrimp } from './Shrimp.js';
+     |                                        ^
+  7  |  
+  8  |  const PIXEL = 2;[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41)
+      at TransformPluginContext.error (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16)
+      at normalizeUrl (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23)
+      at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+      at async Promise.all (index 5)
+      at async TransformPluginContext.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18)
+      at async loadAndTransform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27)
+      at async viteTransformMiddleware (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:37264:24)
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../game/constants.js" from "src/objects/ingredients/CuttableFish.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/ingredients/CuttableFish.js[39m:1:25
+[33m  1  |  import { COLORS } from '../game/constants.js';
+     |                          ^
+  2  |  import { CuttableObject } from '../base/CuttableObject.js';
+  3  |  import { FishFlipBehavior, setupFishFlip } from '../base/FishFlipBehavior.js';[39m
+[2m17:56:37[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "../ui/viewport.js" from "src/objects/base/DraggableObject.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/justu/sushi-sensei/src/objects/base/DraggableObject.js[39m:4:37
+[33m  2  |  import { SceneObject } from './SceneObject.js';
+  3  |  import { getCachedFullImageData, sliceCachedImageData } from '../ProceduralTexture.js';
+  4  |  import { getVisibleGameArea } from '../ui/viewport.js';
+     |                                      ^
+  5  |  
+  6  |  let shadowTextureId = 0;[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41)
+      at TransformPluginContext.error (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16)
+      at normalizeUrl (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23)
+      at async file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+      at async Promise.all (index 3)
+      at async TransformPluginContext.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18)
+      at async loadAndTransform (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27)
+      at async viteTransformMiddleware (file:///C:/Users/justu/sushi-sensei/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:37264:24)

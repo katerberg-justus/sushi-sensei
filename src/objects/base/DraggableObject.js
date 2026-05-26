@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { SceneObject } from './SceneObject.js';
-import { getCachedFullImageData, sliceCachedImageData } from './ProceduralTexture.js';
-import { getVisibleGameArea } from '../ui/viewport.js';
+import { getCachedFullImageData, sliceCachedImageData } from '../ProceduralTexture.js';
+import { getVisibleGameArea } from '../../ui/viewport.js';
 
 let shadowTextureId = 0;
 

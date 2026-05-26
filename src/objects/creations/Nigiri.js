@@ -1,9 +1,10 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { COLORS } from '../game/constants.js';
-import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
-import { IngredientObject } from './IngredientObject.js';
-import { composeJapaneseName, JAPANESE_FISH_NAMES, JAPANESE_NAMES } from './JapaneseNames.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { COLORS } from '../../game/constants.js';
+import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { composeJapaneseName, JAPANESE_FISH_NAMES, JAPANESE_NAMES } from '../JapaneseNames.js';
+import { resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
+import { SHRIMP_STYLE, Shrimp } from '../ingredients/Shrimp.js';
 
 const PIXEL = 1.8;
 const NIGIRI_BASE_KEY = 'nigiri';
@@ -16,17 +17,7 @@ const NIGIRI_FISH_REGION = { x: 3, y: 5, width: 26, height: 13 };
 
 const FISH_STYLES = {
   ...CUTTABLE_FISH_STYLES,
-  shrimp: {
-    displayName: 'Shrimp',
-    japaneseName: JAPANESE_NAMES.shrimp,
-    kind: 'shrimp',
-    shell: 0xffd5c4,
-    shellDark: 0xd88e7d,
-    base: 0xfff4ed,
-    shadow: 0xf6c4b5,
-    highlight: 0xffffff,
-    tail: 0xf0825d,
-  },
+  shrimp: SHRIMP_STYLE,
   tuna: { ...CUTTABLE_FISH_STYLES.maguro, displayName: 'Tuna', japaneseName: JAPANESE_FISH_NAMES.maguro },
   tamago: {
     displayName: 'Tamago',
@@ -45,12 +36,18 @@ export class Nigiri extends IngredientObject {
     const fishStyle = FISH_STYLES[fishType] ?? FISH_STYLES.salmon;
     const fishSubtypeStyle = Nigiri.getFishSubtypeStyle(fishStyle, options.fishSubtype);
     const fishSubtype = fishSubtypeStyle?.key ?? null;
+    const mergedFishStyle = fishType === 'shrimp'
+      ? Shrimp.mergeSubtypeStyle(fishStyle, fishSubtypeStyle)
+      : Nigiri.mergeSubtypeStyle(fishStyle, fishSubtypeStyle);
     const fishDisplayName = fishSubtypeStyle?.displayName ?? fishStyle.displayName;
-    const { textureKey, variantIndex } = resolveVariantTexture(scene, `${NIGIRI_BASE_KEY}-${fishType}-pixel`, options, {
+    const subtypeBaseKey = fishSubtype
+      ? `${NIGIRI_BASE_KEY}-${fishType}-${fishSubtype}-pixel`
+      : `${NIGIRI_BASE_KEY}-${fishType}-pixel`;
+    const { textureKey, variantIndex } = resolveVariantTexture(scene, subtypeBaseKey, options, {
       width: NIGIRI_WIDTH,
       height: NIGIRI_HEIGHT,
       pool: NIGIRI_VARIANT_POOL,
-      paint: (context, rng) => Nigiri.paintTexture(context, rng, fishStyle),
+      paint: (context, rng) => Nigiri.paintTexture(context, rng, mergedFishStyle),
       shapeNoise: { chipChance: 0.026, bumpChance: 0.018 },
     });
     const displayWidth = NIGIRI_WIDTH * PIXEL;
@@ -113,6 +110,18 @@ export class Nigiri extends IngredientObject {
 
     return (fishStyle.subtypes ?? [])
       .find((subtype) => subtype.key === normalizedSubtype) ?? null;
+  }
+
+  static mergeSubtypeStyle(fishStyle, subtypeStyle) {
+    if (!subtypeStyle) {
+      return fishStyle;
+    }
+
+    return {
+      ...fishStyle,
+      ...(subtypeStyle.palette ?? {}),
+      fatDensity: subtypeStyle.fatDensity ?? fishStyle.fatDensity ?? 1,
+    };
   }
 
   setGlazed() {

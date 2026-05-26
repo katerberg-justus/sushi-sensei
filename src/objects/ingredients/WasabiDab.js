@@ -1,6 +1,6 @@
-import { IngredientObject } from './IngredientObject.js';
-import { JAPANESE_NAMES } from './JapaneseNames.js';
-import { toHexColor } from './ProceduralTexture.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { JAPANESE_NAMES } from '../JapaneseNames.js';
+import { toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 1.7;
 const WASABI_KEY = 'wasabi-dab-pixel';

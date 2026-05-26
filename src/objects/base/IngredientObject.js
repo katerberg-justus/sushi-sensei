@@ -1181,6 +1181,10 @@ export class IngredientObject extends RotatableObject {
   }
 
   isSpreadStartPointer(pointer) {
+    return this.isGestureStartPointer(pointer);
+  }
+
+  isGestureStartPointer(pointer) {
     return this.isRightButtonPointer(pointer) || this.isTwoFingerTouchPointer(pointer);
   }
 
@@ -1226,15 +1230,17 @@ export class IngredientObject extends RotatableObject {
       this.handleSpreadPointerUp(upPointer);
     };
 
-    this.scene.input.on('pointermove', this.spreadPointerMoveHandler);
-    this.scene.input.on('pointerup', this.spreadPointerUpHandler);
-    this.scene.input.on('pointerupoutside', this.spreadPointerUpHandler);
+    this.bindGestureHandlers(this.spreadPointerMoveHandler, this.spreadPointerUpHandler);
 
     return true;
   }
 
   getSpreadPointerPosition(pointer) {
-    if (this.spreadUsesTouch || this.isTouchPointer(pointer)) {
+    return this.getGesturePointerPosition(pointer, this.spreadUsesTouch);
+  }
+
+  getGesturePointerPosition(pointer, usesTouch = false) {
+    if (usesTouch || this.isTouchPointer(pointer)) {
       const touchPointers = this.getActiveTouchPointers();
 
       if (touchPointers.length >= 2) {
@@ -1324,19 +1330,35 @@ export class IngredientObject extends RotatableObject {
   }
 
   handleSpreadPointerUp(pointer) {
-    if (!this.isSpreading) {
-      return;
-    }
-
-    if (this.spreadUsesTouch) {
-      if (this.getActiveTouchPointers().length < 2) {
-        this.finishSpreading();
-      }
-      return;
-    }
-
-    if (this.getDragPointerId(pointer) === this.spreadPointerId) {
+    if (this.isSpreading && this.shouldEndGesture(pointer, this.spreadUsesTouch, this.spreadPointerId)) {
       this.finishSpreading();
+    }
+  }
+
+  shouldEndGesture(pointer, usesTouch, pointerId) {
+    if (usesTouch) {
+      return this.getActiveTouchPointers().length < 2;
+    }
+
+    return this.getDragPointerId(pointer) === pointerId;
+  }
+
+  bindGestureHandlers(moveHandler, upHandler) {
+    this.scene.input.on('pointermove', moveHandler);
+    this.scene.input.on('pointerup', upHandler);
+    this.scene.input.on('pointerupoutside', upHandler);
+  }
+
+  unbindGestureHandlers(moveKey, upKey) {
+    if (this[moveKey]) {
+      this.scene.input.off('pointermove', this[moveKey]);
+      this[moveKey] = null;
+    }
+
+    if (this[upKey]) {
+      this.scene.input.off('pointerup', this[upKey]);
+      this.scene.input.off('pointerupoutside', this[upKey]);
+      this[upKey] = null;
     }
   }
 
@@ -1386,16 +1408,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   finishSpreading() {
-    if (this.spreadPointerMoveHandler) {
-      this.scene.input.off('pointermove', this.spreadPointerMoveHandler);
-      this.spreadPointerMoveHandler = null;
-    }
-
-    if (this.spreadPointerUpHandler) {
-      this.scene.input.off('pointerup', this.spreadPointerUpHandler);
-      this.scene.input.off('pointerupoutside', this.spreadPointerUpHandler);
-      this.spreadPointerUpHandler = null;
-    }
+    this.unbindGestureHandlers('spreadPointerMoveHandler', 'spreadPointerUpHandler');
 
     this.isSpreading = false;
     this.spreadPointerId = null;
@@ -1437,7 +1450,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   isKneadStartPointer(pointer) {
-    return this.isRightButtonPointer(pointer) || this.isTwoFingerTouchPointer(pointer);
+    return this.isGestureStartPointer(pointer);
   }
 
   isRightButtonPointer(pointer) {
@@ -1526,9 +1539,7 @@ export class IngredientObject extends RotatableObject {
       this.handleKneadPointerUp(upPointer);
     };
 
-    this.scene.input.on('pointermove', this.kneadPointerMoveHandler);
-    this.scene.input.on('pointerup', this.kneadPointerUpHandler);
-    this.scene.input.on('pointerupoutside', this.kneadPointerUpHandler);
+    this.bindGestureHandlers(this.kneadPointerMoveHandler, this.kneadPointerUpHandler);
 
     return true;
   }
@@ -1558,27 +1569,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   getKneadPointerPosition(pointer) {
-    if (this.kneadUsesTouch || this.isTouchPointer(pointer)) {
-      const touchPointers = this.getActiveTouchPointers();
-
-      if (touchPointers.length >= 2) {
-        const total = touchPointers.reduce((sum, touchPointer) => ({
-          x: sum.x + touchPointer.x,
-          y: sum.y + touchPointer.y,
-        }), { x: 0, y: 0 });
-
-        return {
-          x: total.x / touchPointers.length,
-          y: total.y / touchPointers.length,
-        };
-      }
-    }
-
-    if (!pointer) {
-      return null;
-    }
-
-    return { x: pointer.x, y: pointer.y };
+    return this.getGesturePointerPosition(pointer, this.kneadUsesTouch);
   }
 
   handleKneadPointerMove(pointer) {
@@ -1732,18 +1723,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   handleKneadPointerUp(pointer) {
-    if (!this.isKneading) {
-      return;
-    }
-
-    if (this.kneadUsesTouch) {
-      if (this.getActiveTouchPointers().length < 2) {
-        this.finishKneading();
-      }
-      return;
-    }
-
-    if (this.getDragPointerId(pointer) === this.kneadPointerId) {
+    if (this.isKneading && this.shouldEndGesture(pointer, this.kneadUsesTouch, this.kneadPointerId)) {
       this.finishKneading();
     }
   }
@@ -1805,16 +1785,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   finishKneading() {
-    if (this.kneadPointerMoveHandler) {
-      this.scene.input.off('pointermove', this.kneadPointerMoveHandler);
-      this.kneadPointerMoveHandler = null;
-    }
-
-    if (this.kneadPointerUpHandler) {
-      this.scene.input.off('pointerup', this.kneadPointerUpHandler);
-      this.scene.input.off('pointerupoutside', this.kneadPointerUpHandler);
-      this.kneadPointerUpHandler = null;
-    }
+    this.unbindGestureHandlers('kneadPointerMoveHandler', 'kneadPointerUpHandler');
 
     this.isKneading = false;
     this.kneadPointerId = null;
@@ -2119,21 +2090,18 @@ export class IngredientObject extends RotatableObject {
     });
   }
 
-  shouldSuppressDragStart(pointer) {
+  isGestureActiveOrStarting(pointer) {
     return this.isKneading
       || this.isSpreading
-      || (this.canStartKneading() && this.isKneadStartPointer(pointer))
-      || (this.canStartSpreading() && this.isSpreadStartPointer(pointer))
-      || super.shouldSuppressDragStart(pointer);
+      || ((this.canStartKneading() || this.canStartSpreading()) && this.isGestureStartPointer(pointer));
+  }
+
+  shouldSuppressDragStart(pointer) {
+    return this.isGestureActiveOrStarting(pointer) || super.shouldSuppressDragStart(pointer);
   }
 
   handleDragStart(pointer) {
-    if (
-      this.isKneading
-      || this.isSpreading
-      || (this.canStartKneading() && this.isKneadStartPointer(pointer))
-      || (this.canStartSpreading() && this.isSpreadStartPointer(pointer))
-    ) {
+    if (this.isGestureActiveOrStarting(pointer)) {
       this.suppressedDragPointerId = this.getDragPointerId(pointer);
       this.isDragging = false;
       return false;
@@ -2159,12 +2127,7 @@ export class IngredientObject extends RotatableObject {
   }
 
   handleStackLongPressDown(pointer) {
-    if (
-      this.isKneading
-      || this.isSpreading
-      || this.isKneadStartPointer(pointer)
-      || this.isSpreadStartPointer(pointer)
-    ) {
+    if (this.isKneading || this.isSpreading || this.isGestureStartPointer(pointer)) {
       return;
     }
 

@@ -1,29 +1,30 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
 import { COLORS, SCENE_KEYS } from '../game/constants.js';
-import { Bowl } from '../objects/Bowl.js';
-import { Brush } from '../objects/Brush.js';
-import { CuttableCucumber } from '../objects/CuttableCucumber.js';
-import { CuttableFish } from '../objects/CuttableFish.js';
-import { CuttableSalmon } from '../objects/CuttableSalmon.js';
-import { CuttableTamago } from '../objects/CuttableTamago.js';
-import { Deba } from '../objects/Deba.js';
-import { Fuguhiki } from '../objects/Fuguhiki.js';
-import { Kiritsuke } from '../objects/Kiritsuke.js';
-import { Knife } from '../objects/Knife.js';
-import { Nakiri } from '../objects/Nakiri.js';
-import { Takohiki } from '../objects/Takohiki.js';
-import { Usuba } from '../objects/Usuba.js';
-import { Yanagiba } from '../objects/Yanagiba.js';
+import { Bowl } from '../objects/vessels/Bowl.js';
+import { Brush } from '../objects/tools/Brush.js';
+import { CuttableCucumber } from '../objects/ingredients/CuttableCucumber.js';
+import { CuttableFish } from '../objects/ingredients/CuttableFish.js';
+import { CuttableSalmon } from '../objects/ingredients/CuttableSalmon.js';
+import { CuttableSquid } from '../objects/ingredients/CuttableSquid.js';
+import { CuttableTamago } from '../objects/ingredients/CuttableTamago.js';
+import { Deba } from '../objects/tools/Deba.js';
+import { Fuguhiki } from '../objects/tools/Fuguhiki.js';
+import { Kiritsuke } from '../objects/tools/Kiritsuke.js';
+import { Knife } from '../objects/tools/Knife.js';
+import { Nakiri } from '../objects/tools/Nakiri.js';
+import { Takohiki } from '../objects/tools/Takohiki.js';
+import { Usuba } from '../objects/tools/Usuba.js';
+import { Yanagiba } from '../objects/tools/Yanagiba.js';
 import { JAPANESE_KNIFE_NAMES } from '../objects/JapaneseNames.js';
-import { Nigiri } from '../objects/Nigiri.js';
-import { NoriSheet } from '../objects/NoriSheet.js';
-import { Plate } from '../objects/Plate.js';
-import { RiceBall } from '../objects/RiceBall.js';
-import { RollingMat } from '../objects/RollingMat.js';
-import { Shrimp } from '../objects/Shrimp.js';
-import { SushiRoll } from '../objects/SushiRoll.js';
-import { DraggableObject } from '../objects/DraggableObject.js';
-import { RotatableObject } from '../objects/RotatableObject.js';
+import { Nigiri } from '../objects/creations/Nigiri.js';
+import { NoriSheet } from '../objects/ingredients/NoriSheet.js';
+import { Plate } from '../objects/vessels/Plate.js';
+import { RiceBall } from '../objects/creations/RiceBall.js';
+import { RollingMat } from '../objects/vessels/RollingMat.js';
+import { SHRIMP_STYLE, Shrimp } from '../objects/ingredients/Shrimp.js';
+import { SushiRoll } from '../objects/creations/SushiRoll.js';
+import { DraggableObject } from '../objects/base/DraggableObject.js';
+import { RotatableObject } from '../objects/base/RotatableObject.js';
 import { GameUi } from '../ui/GameUi.js';
 
 const INGREDIENT_TRAIT_CLICK_MAX_DURATION = 220;
@@ -95,6 +96,11 @@ export class GameScene extends Phaser.Scene {
       freshness: 'fresh',
       flavorTags: ['Clean', 'Cooling', 'Sweet'],
     });
+    this.cuttableSquid = new CuttableSquid(this, 0, 0, {
+      quality: 2,
+      freshness: 'fresh',
+      flavorTags: ['Sweet', 'Clean', 'Oceanic'],
+    });
     this.shrimp = new Shrimp(this, 0, 0, {
       quality: 2,
       freshness: 'fresh',
@@ -162,6 +168,7 @@ export class GameScene extends Phaser.Scene {
       this.cuttableUnagi,
       this.cuttableTamago,
       this.cuttableCucumber,
+      this.cuttableSquid,
       this.noriSheet,
       this.sushiRoll,
     ];
@@ -213,6 +220,7 @@ export class GameScene extends Phaser.Scene {
     this.ui.inventoryBar.storeObjectInSlot(7, this.cuttableCucumber);
     this.ui.inventoryBar.storeObjectInSlot(8, this.noriSheet);
     this.ui.inventoryBar.storeObjectInSlot(9, this.shrimp);
+    this.ui.inventoryBar.storeObjectInSlot(10, this.cuttableSquid);
     this.knives.slice(1).forEach((blade, index) => {
       this.ui.inventoryBar.storeObjectInLargeSlot(0, index, blade);
     });
@@ -259,6 +267,23 @@ export class GameScene extends Phaser.Scene {
       this.cuttableObjects.push(fish);
       const slotIndex = row * REFRIGERATED_INVENTORY_COLUMNS + col;
       this.ui.inventoryBar.storeObjectInLargeSlot(0, slotIndex, fish);
+    });
+
+    const refrigeratedShrimpLayout = SHRIMP_STYLE.subtypes.map((subtype, index) => ({
+      fishSubtype: subtype.key,
+      row: 1,
+      col: index + 3,
+    }));
+
+    refrigeratedShrimpLayout.forEach(({ fishSubtype, row, col }) => {
+      const shrimp = new Shrimp(this, 0, 0, {
+        fishSubtype,
+        quality: 2,
+        freshness: 'fresh',
+        flavorTags: ['Sweet', 'Briny', 'Oceanic'],
+      });
+      const slotIndex = row * REFRIGERATED_INVENTORY_COLUMNS + col;
+      this.ui.inventoryBar.storeObjectInLargeSlot(0, slotIndex, shrimp);
     });
     this.scale.on('resize', this.positionUi, this);
     this.scale.on('resize', this.resizeBoardBackground, this);

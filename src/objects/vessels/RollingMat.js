@@ -1,8 +1,8 @@
 import * as Phaser from 'phaser/dist/phaser.esm.js';
-import { IngredientObject } from './IngredientObject.js';
-import { NoriSheet } from './NoriSheet.js';
-import { SushiRoll } from './SushiRoll.js';
-import { resolveVariantTexture, toHexColor } from './ProceduralTexture.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { NoriSheet } from '../ingredients/NoriSheet.js';
+import { SushiRoll } from '../creations/SushiRoll.js';
+import { resolveVariantTexture, toHexColor } from '../ProceduralTexture.js';
 
 const PIXEL = 2;
 const MAT_BASE_KEY = 'rolling-mat-pixel';

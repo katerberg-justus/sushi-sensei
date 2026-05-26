@@ -1,8 +1,9 @@
-import { CUTTABLE_FISH_STYLES } from './CuttableFish.js';
-import { CuttableObject } from './CuttableObject.js';
-import { IngredientObject } from './IngredientObject.js';
-import { composeJapaneseName, JAPANESE_NAMES } from './JapaneseNames.js';
-import { toHexColor } from './ProceduralTexture.js';
+import { CUTTABLE_FISH_STYLES } from '../ingredients/CuttableFish.js';
+import { CuttableObject } from '../base/CuttableObject.js';
+import { IngredientObject } from '../base/IngredientObject.js';
+import { composeJapaneseName, JAPANESE_NAMES } from '../JapaneseNames.js';
+import { toHexColor } from '../ProceduralTexture.js';
+import { SHRIMP_STYLE, Shrimp } from '../ingredients/Shrimp.js';
 
 const PIXEL = 2;
 const ROLL_LENGTH = 60;
@@ -27,7 +28,9 @@ const FILLING_STYLES = {
   saba: { displayName: 'Saba', japaneseName: CUTTABLE_FISH_STYLES.saba.japaneseName, subtypes: CUTTABLE_FISH_STYLES.saba.subtypes, base: CUTTABLE_FISH_STYLES.saba.base, highlight: CUTTABLE_FISH_STYLES.saba.highlight, fat: CUTTABLE_FISH_STYLES.saba.fat },
   aji: { displayName: 'Aji', japaneseName: CUTTABLE_FISH_STYLES.aji.japaneseName, subtypes: CUTTABLE_FISH_STYLES.aji.subtypes, base: CUTTABLE_FISH_STYLES.aji.base, highlight: CUTTABLE_FISH_STYLES.aji.highlight, fat: CUTTABLE_FISH_STYLES.aji.fat },
   iwashi: { displayName: 'Iwashi', japaneseName: CUTTABLE_FISH_STYLES.iwashi.japaneseName, subtypes: CUTTABLE_FISH_STYLES.iwashi.subtypes, base: CUTTABLE_FISH_STYLES.iwashi.base, highlight: CUTTABLE_FISH_STYLES.iwashi.highlight, fat: CUTTABLE_FISH_STYLES.iwashi.fat },
+  ika: { displayName: 'Ika', japaneseName: CUTTABLE_FISH_STYLES.ika.japaneseName, subtypes: CUTTABLE_FISH_STYLES.ika.subtypes, base: CUTTABLE_FISH_STYLES.ika.base, highlight: CUTTABLE_FISH_STYLES.ika.highlight, fat: CUTTABLE_FISH_STYLES.ika.fat },
   unagi: { displayName: 'Unagi', japaneseName: CUTTABLE_FISH_STYLES.unagi.japaneseName, subtypes: CUTTABLE_FISH_STYLES.unagi.subtypes, base: CUTTABLE_FISH_STYLES.unagi.base, highlight: CUTTABLE_FISH_STYLES.unagi.highlight, fat: CUTTABLE_FISH_STYLES.unagi.fat },
+  shrimp: { displayName: SHRIMP_STYLE.displayName, japaneseName: SHRIMP_STYLE.japaneseName, subtypes: SHRIMP_STYLE.subtypes, base: SHRIMP_STYLE.base, highlight: SHRIMP_STYLE.highlight, fat: SHRIMP_STYLE.shadow },
   tamago: { displayName: 'Tamago', japaneseName: JAPANESE_NAMES.tamago, base: 0xf1c35b, highlight: 0xf6d56d, fat: 0xfadf85 },
   cucumber: { displayName: 'Cucumber', japaneseName: JAPANESE_NAMES.cucumber, base: 0x53a848, highlight: 0x8fcd5f, fat: 0xb8dc79 },
 };
@@ -148,7 +151,7 @@ function interpolateValue(startValue, endValue, progress) {
   return startValue + (endValue - startValue) * progress;
 }
 
-function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
+function ensureFrameTextures(scene, fillingTextureKey, fillingStyle, rollLength = ROLL_LENGTH, rollDiameter = ROLL_DIAMETER) {
   const frames = [];
   const frameKeySuffix = `${Math.round(rollLength * 100)}x${Math.round(rollDiameter * 100)}`;
 
@@ -160,7 +163,7 @@ function ensureFrameTextures(scene, fillingType, fillingStyle, rollLength = ROLL
     const axisCapDepth = rollDiameter * ROLL_DISC_DEPTH_PERSPECTIVE * sinT;
     const w = Math.max(2, Math.round(axisBodyLength * cosT + rollDiameter * sinT));
     const h = Math.max(2, Math.round(axisBodyLength * sinT + rollDiameter * cosT + axisCapDepth));
-    const key = `sushi-roll-${fillingType}-${frameKeySuffix}-q19-${i}`;
+    const key = `sushi-roll-${fillingTextureKey}-${frameKeySuffix}-q19-${i}`;
 
     if (!scene.textures.exists(key)) {
       const texture = scene.textures.createCanvas(key, w, h);
@@ -266,13 +269,17 @@ export class SushiRoll extends IngredientObject {
     const fillingStyle = FILLING_STYLES[fillingType] ?? FILLING_STYLES.salmon;
     const fillingSubtypeStyle = SushiRoll.getFillingSubtypeStyle(fillingStyle, options.fillingSubtype);
     const fillingSubtype = fillingSubtypeStyle?.key ?? null;
+    const mergedFillingStyle = fillingType === 'shrimp'
+      ? SushiRoll.createShrimpFillingStyle(fillingStyle, fillingSubtypeStyle)
+      : SushiRoll.mergeSubtypeStyle(fillingStyle, fillingSubtypeStyle);
     const fillingDisplayName = fillingSubtypeStyle?.displayName ?? fillingStyle.displayName;
     const fillingJapaneseName = fillingSubtypeStyle?.japaneseName ?? fillingStyle.japaneseName ?? null;
     const cropX = options.cropX ?? 0;
     const cropY = options.cropY ?? 0;
     const cropWidth = options.cropWidth ?? ROLL_LENGTH;
     const cropHeight = options.cropHeight ?? ROLL_DIAMETER;
-    const frames = ensureFrameTextures(scene, fillingType, fillingStyle, cropWidth, cropHeight);
+    const fillingTextureKey = fillingSubtype ? `${fillingType}-${fillingSubtype}` : fillingType;
+    const frames = ensureFrameTextures(scene, fillingTextureKey, mergedFillingStyle, cropWidth, cropHeight);
 
     const displayWidth = cropWidth * PIXEL;
     const displayHeight = cropHeight * PIXEL;
@@ -341,6 +348,27 @@ export class SushiRoll extends IngredientObject {
 
     return (fillingStyle.subtypes ?? [])
       .find((subtype) => subtype.key === normalizedSubtype) ?? null;
+  }
+
+  static mergeSubtypeStyle(fillingStyle, subtypeStyle) {
+    if (!subtypeStyle) {
+      return fillingStyle;
+    }
+
+    return {
+      ...fillingStyle,
+      ...(subtypeStyle.palette ?? {}),
+      fatDensity: subtypeStyle.fatDensity ?? fillingStyle.fatDensity ?? 1,
+    };
+  }
+
+  static createShrimpFillingStyle(fillingStyle, subtypeStyle) {
+    const mergedStyle = Shrimp.mergeSubtypeStyle(fillingStyle, subtypeStyle);
+
+    return {
+      ...mergedStyle,
+      fat: mergedStyle.shadow ?? mergedStyle.fat,
+    };
   }
 
   handleFlipPointerDown(pointer) {
